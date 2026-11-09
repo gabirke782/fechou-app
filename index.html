@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html lang="pt-BR">
+<html data-fechou-version="V279" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-v215-core">
@@ -94,7 +94,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" name="viewport"/>
 <title>FECHOU · Serviços</title>
-<meta content="V275" name="fechou-build"/>
+<meta content="V280" name="fechou-build"/>
 <style>
       :root {
         --bg: #090c10;
@@ -999,7 +999,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
         display: inline-grid !important; place-items: center !important;
       }
     </style>
-<meta content="V275" name="exylon-hub-version"/>
+<meta content="V280" name="exylon-hub-version"/>
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
@@ -2483,7 +2483,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
         color: #4f7fb8;
       }
     </style>
-<meta content="V232" name="fechou-build"/>
+<meta content="V280" name="fechou-build"/>
 <style id="fechou-v133-chat-contract-polish">
       :root {
         --fechou-nav-height: 70px;
@@ -2745,16 +2745,11 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
       (function () {
         "use strict";
         function checkStartup() {
-          const app = document.getElementById("app");
           const placeholder = document.getElementById("fechou-local-boot-placeholder");
-          if (!app || !placeholder) return;
-          app.innerHTML = `
-            <section class="panel" role="alert">
-              <h2>A rede não conseguiu iniciar</h2>
-              <p>O navegador abriu o arquivo, mas a interface não terminou de carregar.</p>
-              <p>Abra este arquivo diretamente no Google Chrome (fora da pré-visualização do Google Drive) e mantenha a internet ligada para carregar o serviço de autenticação.</p>
-              <button class="btn" type="button" onclick="location.reload()">Tentar novamente</button>
-            </section>`;
+          if (!placeholder || !placeholder.isConnected) return;
+          const hint = placeholder.querySelector("p");
+          if (hint) hint.textContent = "O carregamento está demorando mais que o esperado. A tela foi preservada; verifique a conexão e consulte o console para identificar a etapa pendente.";
+          placeholder.dataset.slowStartup = "1";
         }
         document.addEventListener("DOMContentLoaded", function () {
           window.setTimeout(checkStartup, 8000);
@@ -2953,7 +2948,7 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini{position:fixed!important;inset:a
 #app#app .fc-plan-track .pill{align-self:flex-start!important;font-size:10px!important;letter-spacing:.05em!important;color:#bfddff!important;background:#264565!important;border:1px solid #476b90!important;padding:6px 10px!important;border-radius:8px!important}
 .fc-plan-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 14px;color:#a9bfd6;font:12px/1.5 system-ui}.fc-plan-controls button{min-height:38px;min-width:42px;padding:8px 12px;border:1px solid #4e7094;border-radius:10px;background:#1e3854;color:#d9ecff;cursor:pointer}.fc-plan-controls div{display:flex;gap:8px}.fc-contract-progress{display:block;margin:0 0 12px;font-size:12px;color:#b9d9f9}.fc-legacy-test-note{display:block;font-size:12px;color:#ffd09a;margin:7px 0;line-height:1.6}
 </style>
-<meta name="fechou-local-build" content="V243-front-end-security-audit-layout-only">
+<meta content="V243-front-end-security-audit-layout-only" name="fechou-local-build"/>
 </head>
 <body>
 <script id="fechou-v163-early-chat-menu-controller">
@@ -3205,6 +3200,7 @@ window.addEventListener("click",async function(ev){
           "Refrigeração", "Outro",
         ],
       };
+      window.FECHOU_SERVICE_CATALOG = CATS;
       
       const SERVICE_EXAMPLES = {
         "Pedreiro e alvenaria": {
@@ -3890,13 +3886,16 @@ window.addEventListener("click",async function(ev){
                 !o.contract?.accepted &&
                 !(o.proposals || []).some((q) => String(q.professional_id || "") === String(state.supabaseUser?.id || ""))
             );
-            const mineCompleted = state.orders.filter(
-              (o) =>
-                ["Serviço concluído", "Concluído"].includes(o.status) &&
-                String(
-                  o.professional_id || o.selectedProposal?.professional_id || ""
-                ) === String(state.supabaseUser?.id || "")
-            );
+            const mineCompleted = state.orders.filter((o) => {
+              const serviceState = String(o?.service_state || o?.metadata?.service_state || o?.serviceState || "").toLowerCase();
+              const legacyStatus = String(o?.status || "").toLowerCase();
+              const isCancelled = legacyStatus.includes("cancel");
+              const isCompleted = serviceState === "completed" || serviceState === "complete" ||
+                ["serviço concluído", "concluído", "completed", "complete", "concluido"].includes(legacyStatus);
+              return !isCancelled && isCompleted && String(
+                o.professional_id || o.selectedProposal?.professional_id || ""
+              ) === String(state.supabaseUser?.id || "");
+            });
             const earnedTotal = mineCompleted.reduce(
               (sum, o) =>
                 sum + Number(o.selectedProposal?.price || o.total || 0),
@@ -5069,7 +5068,7 @@ ${
                 .join("")}</div>`,
             ],
             safety: [
-              "Segurança e confiança",
+              "Segurança e confidencialidade",
               `<p>A confiança na plataforma depende de informações claras, registros verificáveis e limites bem definidos. O FECHOU oferece recursos digitais para organizar perfis, propostas, conversas, documentos, pagamentos e acompanhamento do serviço. Esses recursos ajudam a documentar a relação, mas não substituem a avaliação das partes nem eliminam todos os riscos de uma contratação.</p><h3>Pagamentos de assinatura</h3><p>A assinatura contratada é do FECHOU. O pagamento da assinatura é processado pelo ambiente seguro do aplicativo. Confira o nome do plano, o valor e a periodicidade antes de confirmar.</p><p>As comunicações de cobrança podem identificar o prestador responsável pelo processamento. Em caso de dúvida, consulte a assinatura no aplicativo ou entre em contato pelo e-mail exyloncompany@gmail.com. Nunca informe senha ou código de autenticação em resposta a mensagens.</p><h3>Boas práticas ao contratar</h3><ul><li>Confira as informações do perfil e a proposta recebida.</li><li>Combine por escrito o escopo, o preço, os materiais e os prazos.</li><li>Registre alterações antes de autorizar serviços adicionais.</li><li>Guarde propostas, mensagens e comprovantes.</li><li>Compartilhe somente os dados pessoais necessários.</li></ul><p>O FECHOU não promete risco zero, contratação, renda ou qualidade absoluta. Os indicadores de perfil e verificação só devem ser interpretados conforme seu significado e disponibilidade na tela. Em caso de divergência, suspeita de fraude, cobrança desconhecida ou descumprimento, registre o ocorrido no suporte, preserve mensagens, propostas, comprovantes e evidências e evite pagamentos fora das condições aceitas.</p>`,
             ],
             pricing: [
@@ -5460,13 +5459,10 @@ ${
                       }</div>`
                     : ""
                 }<div class="form">${field(
-                  "Valor da mão de obra (R$)",
-                  `<input type="number" min="0" step="0.01" data-input="proposalPrice" value="${esc(
-                    state.proposalPrice ||
-                      o.laborAverage ||
-                      o.referencePrice ||
-                      o.total
-                  )}">`
+                  "Valor total da proposta (R$)",
+                  `<input type="number" min="0" step="0.01" inputmode="decimal" data-input="proposalPrice" value="${esc(
+                    state.proposalPrice || o.referencePrice || o.total || o.laborAverage || 0
+                  )}" max="${esc(o.metadata?.regionalPriceHigh || o.regionalPriceHigh || "")}" data-regional-high="${esc(o.metadata?.regionalPriceHigh || o.regionalPriceHigh || "")}"><small class="v277-proposal-warning" role="status" aria-live="polite" hidden></small>`
                 )}${field(
                   "Forma de pagamento proposta",
                   `<select data-change="proposalPaymentMethod"><option value="Pagamento protegido" selected>Pagamento protegido</option></select><span class="helper-text">O pagamento é concluído no ambiente seguro do aplicativo. O total e as opções disponíveis serão apresentados antes de confirmar.</span>`,
@@ -5808,14 +5804,19 @@ ${
           service: state.service,
           description: state.description,
           location: state.location,
-          regionApprox:
-            state.clientProfile.city || "Região aproximada informada no pedido",
+          regionApprox: [
+            state.clientProfile?.neighborhood || state.clientProfile?.bairro || state.neighborhood || state.bairro || "",
+            state.clientProfile?.city || state.clientProfile?.cidade || state.city || state.cidade || ""
+          ].map(v => String(v || "").trim()).filter(Boolean).join(" · ") || "",
           radius: state.radius,
           urgency: state.urgency,
           urgencyAdd,
           weekendAdd,
           weekendSurcharge: weekendAdd > 0,
           laborAverage,
+          regionalPriceLow: Number(state.budgetEstimate?.low ?? state.calculated?.low ?? 0) || 0,
+          regionalPriceAverage: Number(state.budgetEstimate?.average ?? state.calculated?.total ?? laborAverage) || laborAverage,
+          regionalPriceHigh: Number(state.budgetEstimate?.high ?? state.calculated?.high ?? 0) || 0,
           includeMaterialsEstimate: !!state.materialsEstimateRequested,
           materialsEstimate: state.materialsEstimateRequested
             ? state.materialsEstimateData
@@ -6197,7 +6198,7 @@ ${
           }
           state.activeOrderId = o.id;
           state.budget = o;
-          state.proposalPrice = String(o.laborAverage || o.metadata?.laborAverage || o.laborBase || o.referencePrice || o.total);
+          state.proposalPrice = String(o.referencePrice || o.total || o.laborAverage || o.metadata?.laborAverage || 0);
           state.proposalConditions = "";
           state.proposalPaymentMethod = "";
           state.proposalGenerateContract = false;
@@ -8039,20 +8040,37 @@ ${
             : [];
         }
 
+        window.FECHOU_ORDER_SAFE_SELECT = "id,client_id,title,description,category,status,created_at,service,radius,urgency,desired_date,quantity,total,reference_price,client_discount,photos,metadata,selected_proposal_id,professional_id,contract_accepted,updated_at,payment_status,payment_id,paid_at,payment_preference_id,payment_provider,refund_status,refund_due_at,refund_at,platform_fee,professional_net,payout_status,payout_id,payment_metadata,payment_method,payment_flow,payment_state,service_state,service_started_at,completion_requested_at,completion_deadline_at,completed_at,released_at,payout_transfer_id,cancellation_requested_at,cancel_reason,gross_reference_price,labor_reference_price,requested_price,materials_estimate_average,client_payment_preference,payment_link_id,completion_submitted_at,payout_requested_at,payout_release_ready_at,payout_lock_at,payout_error,archived_at";
         async function ewLoadOrders() {
           if (!ewSupabase || !state.supabaseUser) return;
-          const orderQuery =
-            state.currentRole === "Profissional"
-              ? ewSupabase.from("orders").select("*").is("archived_at", null)
-              : ewSupabase.from("orders").select("*").is("archived_at", null);
-          const { data, error } = await orderQuery.order("created_at", {
-            ascending: false,
-          });
+          const { data, error } = await ewSupabase
+            .from("orders")
+            .select(window.FECHOU_ORDER_SAFE_SELECT)
+            .is("archived_at", null)
+            .order("created_at", { ascending: false });
           if (error) {
             console.error("ewLoadOrders", error);
             return;
           }
-          state.orders = (data || []).map(ewNormalizeOrder);
+          const ids = (data || []).map(row => row.id).filter(Boolean);
+          let locations = new Map();
+          if (ids.length) {
+            try {
+              const result = await ewSupabase.rpc("fechou_get_order_locations", { p_order_ids: ids });
+              if (result.error) throw result.error;
+              for (const item of (result.data || [])) locations.set(String(item.order_id), item);
+            } catch (locationError) {
+              console.warn("FECHOU: dados de localidade privada indisponíveis; mantendo endereço oculto.", locationError?.message || locationError);
+            }
+          }
+          state.orders = (data || []).map(row => {
+            const location = locations.get(String(row.id));
+            return ewNormalizeOrder({
+              ...row,
+              location: location?.location || "",
+              region_approx: location?.region_approx || ""
+            });
+          });
           if (
             state.activeOrderId &&
             !state.orders.some(
@@ -8086,7 +8104,7 @@ ${
           return {
             ...r,
             description: r.description || meta.description || "",
-            location: r.location || meta.location || "",
+            location: r.location || "",
             regionApprox: r.region_approx || meta.regionApprox || "",
             radius: Number(r.radius || meta.radius || 10),
             urgency: r.urgency || meta.urgency || "Normal",
@@ -8316,8 +8334,9 @@ ${
             metadata: {
               createdAt: o.createdAt,
               description,
-              location: String(o.location || "").trim(),
-              regionApprox: o.regionApprox || "",
+              regionalPriceLow: Number(o.regionalPriceLow || 0),
+              regionalPriceAverage: Number(o.regionalPriceAverage || o.laborAverage || 0),
+              regionalPriceHigh: Number(o.regionalPriceHigh || 0),
               radius: Number(o.radius) || 10,
               urgency: o.urgency || "Normal",
               urgencyAdd: Number(o.urgencyAdd) || 0,
@@ -8409,7 +8428,7 @@ ${
           const { data, error } = await ewSupabase
             .from("orders")
             .insert(row)
-            .select("*")
+            .select(window.FECHOU_ORDER_SAFE_SELECT)
             .single();
           if (error) {
             console.error("FECHOU insert orders falhou", {
@@ -8422,7 +8441,7 @@ ${
             });
             throw error;
           }
-          return ewNormalizeOrder(data);
+          return ewNormalizeOrder({ ...data, location: row.location || "", region_approx: row.region_approx || "" });
         }
         window.ewCreateOrderRemote = ewCreateOrderRemote;
         async function ewCreateProposalRemote(o, q) {
@@ -8469,11 +8488,7 @@ ${
             p_metadata: metadata,
           });
           if (error)
-            throw new Error(
-              "O banco não conseguiu salvar a proposta sem duplicar registros: " +
-                error.message +
-                ". Aplique a migração FECHOU V139 Parte 2."
-            );
+            throw new Error(String(error.message || "O banco não conseguiu salvar a proposta.") + (error.code ? " [" + error.code + "]" : ""));
           const saved = Array.isArray(data) ? data[0] : data;
           if (!saved?.id)
             throw new Error(
@@ -8526,179 +8541,87 @@ ${
         async function ewCreateContractRemote(o) {
           if (!ewSupabase || !state.supabaseUser)
             throw new Error("Conta não conectada.");
-          const q = o.selectedProposal;
-          if (!q || !q.id)
-            throw new Error(
-              "Selecione uma proposta salva no banco antes de criar o contrato."
-            );
-          if (state.currentRole !== "Cliente")
-            throw new Error(
-              "Somente o cliente pode iniciar o contrato neste fluxo."
-            );
-          const { data: existing, error: findError } = await ewSupabase
+          const q = o?.selectedProposal || o?.selected_proposal || null;
+          if (!q?.id)
+            throw new Error("Selecione uma proposta salva no banco antes de criar o contrato.");
+          if (state.currentRole !== "Cliente" || String(o.client_id || state.supabaseUser.id) !== String(state.supabaseUser.id))
+            throw new Error("Somente o cliente que publicou o pedido pode aceitar o contrato.");
+          const mode = String(
+            o.payment_method || o.payment_flow || o.client_payment_preference ||
+            state.v134PaymentMethod || q.paymentMethod || q.metadata?.payment_method ||
+            state.paymentMethod || "direct"
+          ).trim().toLowerCase();
+          if (["contract_prepaid", "prepaid", "asaas", "fechou"].includes(mode))
+            throw new Error("Esta contratação usa pagamento pelo aplicativo. A assinatura precisa ser concluída pela Clicksign dentro da conversa; o aceite interno não substitui a assinatura eletrônica.");
+          const { data: existing, error: existingError } = await ewSupabase
             .from("contracts")
-            .select("*")
-            .eq("order_id", o.id)
+            .select("id,proposal_id,document_text,client_accepted_at,status")
+            .eq("order_id", String(o.id))
             .neq("status", "cancelled")
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
-          if (findError) throw findError;
+          if (existingError) throw existingError;
+          if (existing && String(existing.proposal_id) !== String(q.id))
+            throw new Error("Já existe um contrato para outra proposta neste pedido.");
           const now = new Date().toISOString();
-          let contract = existing;
-          if (existing) {
-            if (String(existing.proposal_id) !== String(q.id))
-              throw new Error(
-                "Já existe um contrato para outra proposta neste pedido."
-              );
-            if (existing.client_accepted_at) return existing;
-            const { data, error } = await ewSupabase
-              .from("contracts")
-              .update({
-                client_accepted_at: now,
-                contract_type:
-                  state.contractType ||
-                  existing.contract_type ||
-                  "Convencional",
-                signature_method:
-                  state.signatureMethod || state.signatureChoice,
-                payment_method:
-                  o.payment_method ||
-                  o.payment_flow ||
-                  state.v134PaymentMethod ||
-                  q.paymentMethod ||
-                  q.metadata?.payment_method ||
-                  state.paymentMethod,
-                document_text: JSON.stringify({
-                  service: o.service,
-                  category: o.category,
-                  price: q.price,
-                  date: o.date || null,
-                  conditions: q.conditions || "",
-                  payment_method:
-                    o.payment_method ||
-                    o.payment_flow ||
-                    state.v134PaymentMethod ||
-                    q.paymentMethod ||
-                    q.metadata?.payment_method ||
-                    state.paymentMethod,
-                  payment_method_label:
-                    o.payment_method === "contract_prepaid"
-                      ? "Pagamento pelo aplicativo + contrato"
-                      : "Pagamento direto entre as partes",
-                  updated_at: now,
-                }),
-              })
-              .eq("id", existing.id)
-              .select("*")
-              .single();
-            if (error) throw error;
-            contract = data;
-          } else {
-            const { data, error } = await ewSupabase
-              .from("contracts")
-              .insert({
-                order_id: o.id,
-                client_id: o.client_id || state.supabaseUser.id,
-                professional_id: q.professional_id,
-                proposal_id: q.id,
-                status: "pending",
-                contract_type: state.contractType || "Convencional",
-                signature_method:
-                  state.signatureMethod || state.signatureChoice,
-                payment_method:
-                  o.payment_method ||
-                  o.payment_flow ||
-                  state.v134PaymentMethod ||
-                  q.paymentMethod ||
-                  q.metadata?.payment_method ||
-                  state.paymentMethod,
-                accepted: false,
-                client_accepted_at: now,
-                document_text: JSON.stringify({
-                  service: o.service,
-                  category: o.category,
-                  price: q.price,
-                  date: o.date || null,
-                  conditions: q.conditions || "",
-                  payment_method:
-                    o.payment_method ||
-                    o.payment_flow ||
-                    state.v134PaymentMethod ||
-                    q.paymentMethod ||
-                    q.metadata?.payment_method ||
-                    state.paymentMethod,
-                  payment_method_label:
-                    o.payment_method === "contract_prepaid"
-                      ? "Pagamento pelo aplicativo + contrato"
-                      : "Pagamento direto entre as partes",
-                  created_at: now,
-                }),
-              })
-              .select("*")
-              .single();
-            if (error) throw error;
-            contract = data;
-          }
-          const { error: oe } = await ewSupabase
-            .from("orders")
-            .update({
-              contract_accepted: false,
-              metadata: {
-                ...(o.metadata || {}),
-                contract_state: "awaiting_professional",
-                service_status_label: "Aguardando aceite do profissional",
-              },
-              updated_at: now,
-            })
-            .eq("id", o.id);
-          if (oe) throw oe;
+          const documentText = existing?.client_accepted_at && existing?.document_text
+            ? String(existing.document_text)
+            : JSON.stringify({
+                version: "FECHOU-DIRECT-CONTRACT-1",
+                service: String(o.service || o.title || "Serviço contratado"),
+                category: String(o.category || ""),
+                description: String(o.description || ""),
+                price: Number(q.price || o.total || 0),
+                date: o.date || o.desired_date || null,
+                conditions: String(q.conditions || ""),
+                materials: String(q.materials || ""),
+                payment_method: "direct",
+                payment_method_label: "Pagamento direto entre as partes",
+                client_accepted_at: now
+              });
+          const { data, error } = await ewSupabase.rpc("fechou_create_and_accept_direct_contract", {
+            p_order_id: String(o.id),
+            p_proposal_id: String(q.id),
+            p_contract_type: String(state.contractType || "Convencional"),
+            p_signature_method: String(state.signatureMethod || state.signatureChoice || "aceite_interno"),
+            p_payment_method: "direct",
+            p_document_text: documentText
+          });
+          if (error) throw error;
+          const result = Array.isArray(data) ? data[0] : data;
+          const contract = result?.contract || result;
+          if (!contract?.id)
+            throw new Error("O banco não confirmou o contrato. Atualize a conversa e tente novamente.");
+          o.contract = { ...(o.contract || {}), ...contract };
+          o.metadata = { ...(o.metadata || {}), contract_state: "awaiting_professional" };
+          o.status = "Aguardando aceite do profissional";
           return contract;
         }
         async function ewAcceptContractAsProfessional(o) {
           if (!ewSupabase || !state.supabaseUser)
             throw new Error("Conta não conectada.");
           if (state.currentRole !== "Profissional")
-            throw new Error(
-              "Esta confirmação é exclusiva do profissional selecionado."
-            );
-          const c = o.contract;
-          if (!c || !c.id)
+            throw new Error("Esta confirmação é exclusiva do profissional selecionado.");
+          const c = o?.contract;
+          if (!c?.id)
             throw new Error("O contrato ainda não foi criado pelo cliente.");
           if (String(c.professional_id) !== String(state.supabaseUser.id))
-            throw new Error(
-              "Somente o profissional selecionado pode aceitar este contrato."
-            );
+            throw new Error("Somente o profissional selecionado pode aceitar este contrato.");
           if (!c.client_accepted_at)
             throw new Error("O cliente ainda não aceitou as condições.");
-          const now = new Date().toISOString();
-          const { data, error } = await ewSupabase
-            .from("contracts")
-            .update({
-              professional_accepted_at: now,
-              accepted: true,
-              accepted_at: now,
-              status: "active",
-              updated_at: now,
-            })
-            .eq("id", c.id)
-            .select("*")
-            .single();
+          const { data, error } = await ewSupabase.rpc("fechou_accept_contract", {
+            p_order_id: String(o.id)
+          });
           if (error) throw error;
-          const { error: oe } = await ewSupabase
-            .from("orders")
-            .update({
-              contract_accepted: true,
-              metadata: {
-                ...(o.metadata || {}),
-                contract_state: "awaiting_payment",
-                service_status_label: "Contrato aceito — aguardando pagamento",
-              },
-              updated_at: now,
-            })
-            .eq("id", o.id);
-          if (oe) throw oe;
-          return data;
+          const result = Array.isArray(data) ? data[0] : data;
+          const contract = result?.contract || result;
+          if (!contract?.id)
+            throw new Error("O banco não confirmou o aceite do profissional. Atualize a conversa e tente novamente.");
+          o.contract = { ...(o.contract || {}), ...contract };
+          o.contract_accepted = String(result?.status || contract.status || "").toLowerCase() === "active";
+          o.metadata = { ...(o.metadata || {}), contract_state: result?.status === "active" ? "active" : "awaiting_client" };
+          return contract;
         }
         async function ewLoadChat(orderId) {
           if (!ewSupabase || !state.supabaseUser) return;
@@ -11343,6 +11266,8 @@ ${
                   : f.type.startsWith("video/")
                   ? "video"
                   : "file",
+                mime_type: f.type || "application/octet-stream",
+                size: Number(f.size) || 0,
                 path,
                 url: su.data?.signedUrl || "",
               });
@@ -11352,27 +11277,25 @@ ${
             }
           }
           if (uploaded.length) {
-            const merged = {
-              ...(created.metadata || {}),
-              attachments: uploaded,
-            };
-            const savedMedia = await ewSupabase
-              .from("orders")
-              .update({
-                photos: uploaded.filter((x) => x.type === "image"),
-                metadata: merged,
-              })
-              .eq("id", created.id);
-            if (savedMedia.error) {
-              console.error(
-                "Não foi possível vincular os anexos ao pedido salvo",
-                savedMedia.error
-              );
+            try {
+              if (typeof window.ewApi !== "function")
+                throw new Error("A API segura de anexos não está disponível.");
+              const savedMedia = await window.ewApi("orders/update-media", {
+                order_id: String(created.id),
+                attachments: uploaded.map((x) => ({
+                  name: x.name || "Arquivo",
+                  type: x.type || "file",
+                  mime_type: x.mime_type || "application/octet-stream",
+                  path: x.path,
+                  size: Number(x.size) || 0
+                }))
+              });
+              created.photos = savedMedia.photos || uploaded.filter((x) => x.type === "image");
+              created.attachments = savedMedia.attachments || uploaded;
+              created.metadata = { ...(created.metadata || {}), attachments: created.attachments };
+            } catch (savedMediaError) {
+              console.error("Não foi possível vincular os anexos ao pedido salvo", savedMediaError);
               uploadFailures += uploaded.length;
-            } else {
-              created.photos = uploaded.filter((x) => x.type === "image");
-              created.attachments = uploaded;
-              created.metadata = merged;
             }
           }
           state._requestPhotoFiles = [];
@@ -15845,14 +15768,14 @@ ${
                 const { data, error } = await ewSupabase
                   .from("orders")
                   .insert(row)
-                  .select("*")
+                  .select(window.FECHOU_ORDER_SAFE_SELECT)
                   .single();
                 if (!error) {
                   console.warn(
                     "Pedido criado usando esquema compatível reduzido; revise as colunas opcionais da tabela orders."
                   );
                   return typeof window.ewNormalizeOrder === "function"
-                    ? window.ewNormalizeOrder(data)
+                    ? window.ewNormalizeOrder({ ...data, location: o.location || "", region_approx: o.regionApprox || "" })
                     : { ...o, ...data };
                 }
                 last = error;
@@ -16559,7 +16482,7 @@ ${
             const { data, error } = await ewSupabase
               .from("orders")
               .select(
-                "id,title,category,service,description,location,status,created_at"
+                "id,title,category,service,description,status,created_at"
               )
               .eq("id", id)
               .maybeSingle();
@@ -16589,7 +16512,7 @@ ${
               "</p><p>" +
               esc(data.description || "Sem descrição adicional.") +
               "</p><p><b>Região:</b> " +
-              esc(data.location || "Consulte após entrar") +
+              esc("Localidade disponível apenas para profissionais com assinatura ativa") +
               "</p><p><b>Status:</b> " +
               esc(data.status || "Disponível") +
               '</p><button type="button" class="btn" id="v51SharedContinue">Abrir na rede</button>';
@@ -17432,12 +17355,13 @@ ${
         }
         async function runRegionalAnalysis() {
           if (workflowBusy) return;
-          const read = (key, selector) =>
-            String(
-              (typeof state !== "undefined" && state[key]) ||
-                document.querySelector(selector)?.value ||
-                ""
-            ).trim();
+          const read = (key, selector) => {
+            const field = document.querySelector(selector);
+            const value = field
+              ? field.value
+              : (typeof state !== "undefined" ? state[key] : "");
+            return String(value ?? "").trim();
+          };
           const category = read(
             "category",
             '#app select[data-change="category"]'
@@ -17460,9 +17384,7 @@ ${
             state.category = category;
             state.service = service;
             state.location = locationValue;
-            state.description =
-              read("description", '[data-input="description"]') ||
-              state.description;
+            state.description = read("description", '[data-input="description"]');
           }
           workflowBusy = true;
           const b = q("#v58-price-analysis"),
@@ -21674,10 +21596,10 @@ ${
             order_id: String(o.id), rating: Number(rating), comment: String(note || "").trim()
           });
           if (result?.ok === false) throw new Error(result.error || "Não foi possível confirmar a conclusão.");
-          const { data, error } = await ewSupabase.from("orders").select("*").eq("id", String(o.id)).maybeSingle();
+          const { data, error } = await ewSupabase.from("orders").select(window.FECHOU_ORDER_SAFE_SELECT).eq("id", String(o.id)).maybeSingle();
           if (error) throw error;
           if (!data) throw new Error("A conclusão foi registrada no servidor, mas o pedido não pôde ser atualizado na tela.");
-          return ewNormalizeOrder(data);
+          return ewNormalizeOrder({ ...data, location: o.location || "", region_approx: o.regionApprox || "" });
         }
         async function confirmCompletion(orderId) {
           const o = state.orders.find((x) => String(x.id) === String(orderId));
@@ -21685,12 +21607,8 @@ ${
           if (state.currentRole !== "Cliente")
             return toast("A confirmação do serviço é feita pelo cliente.");
           if (
-            [
-              "Serviço concluído",
-              "Concluído",
-              "completed",
-              "concluido",
-            ].includes(String(o.status || "").toLowerCase())
+            String(o?.service_state || o?.metadata?.service_state || o?.serviceState || "").toLowerCase() === "completed" ||
+            ["Serviço concluído", "Concluído", "completed", "complete", "concluido"].includes(String(o.status || "").toLowerCase())
           )
             return toast("Este serviço já foi concluído.");
           document.querySelector("#fechou-v132-completion-modal")?.remove();
@@ -21761,11 +21679,10 @@ ${
             const id = String(b.dataset.act).split(":")[1],
               o = state.orders.find((x) => String(x.id) === id);
             if (!o) return;
+            const canonicalCompleted = String(o?.service_state || o?.metadata?.service_state || o?.serviceState || "").toLowerCase() === "completed";
             if (
-              [
-                "Contrato aceito — aguardando pagamento",
-                "Serviço em execução",
-              ].includes(o.status) &&
+              !canonicalCompleted &&
+              ["Contrato aceito — aguardando pagamento", "Serviço em execução"].includes(o.status) &&
               !card.querySelector(".v63-complete")
             ) {
               const n = document.createElement("button");
@@ -21775,7 +21692,7 @@ ${
               b.parentNode?.appendChild(n);
             }
             if (
-              ["Serviço concluído", "Concluído"].includes(o.status) &&
+              (canonicalCompleted || ["Serviço concluído", "Concluído", "completed", "complete"].includes(String(o.status || "").toLowerCase())) &&
               !card.querySelector(".v63-review-done")
             ) {
               const n = document.createElement("span");
@@ -22697,69 +22614,14 @@ ${
                 throw new Error("Escolha uma forma de recebimento antes de enviar a proposta.");
               const laborPrice = Number(state.proposalPrice);
               if (!Number.isFinite(laborPrice) || laborPrice <= 0)
-                throw new Error("Informe um preço válido para a proposta.");
-              const urgencyKind = String(o.urgency || "Normal").toLowerCase();
-              const urgencyFee =
-                urgencyKind === "urgente"
-                  ? Math.max(25, laborPrice * 0.22)
-                  : urgencyKind === "hoje"
-                  ? Math.max(15, laborPrice * 0.1)
-                  : 0;
-              let weekendDate = null;
-              const rawWeekendDate = String(
-                o.date || o.desired_date || ""
-              ).trim();
-              if (/^\d{4}-\d{2}-\d{2}/.test(rawWeekendDate))
-                weekendDate = new Date(
-                  rawWeekendDate.slice(0, 10) + "T12:00:00"
-                );
-              else {
-                const weekendMatch = rawWeekendDate.match(
-                  /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/
-                );
-                if (weekendMatch)
-                  weekendDate = new Date(
-                    Number(weekendMatch[3]),
-                    Number(weekendMatch[2]) - 1,
-                    Number(weekendMatch[1]),
-                    12
-                  );
-              }
-              const hasRequestedDate =
-                !!rawWeekendDate && !!weekendDate && !isNaN(weekendDate);
-              const majorHoliday =
-                hasRequestedDate &&
-                ((weekendDate.getMonth() === 11 &&
-                  weekendDate.getDate() === 25) ||
-                  (weekendDate.getMonth() === 0 &&
-                    weekendDate.getDate() === 1));
-              const nationalHoliday =
-                hasRequestedDate &&
-                [
-                  [3, 21],
-                  [4, 1],
-                  [8, 7],
-                  [9, 12],
-                  [10, 2],
-                  [10, 15],
-                  [10, 20],
-                ].some(
-                  ([m, d]) =>
-                    weekendDate.getMonth() === m && weekendDate.getDate() === d
-                );
-              const weekendFee =
-                hasRequestedDate &&
-                !majorHoliday &&
-                !nationalHoliday &&
-                (weekendDate.getDay() === 0 || weekendDate.getDay() === 6)
-                  ? Math.max(15, laborPrice * 0.1)
-                  : 0;
-              const holidayFee = majorHoliday
-                ? Math.max(60, laborPrice * 0.3)
-                : nationalHoliday
-                ? Math.max(25, laborPrice * 0.15)
-                : 0;
-              const priceBeforeClientDiscount = Math.round((laborPrice + urgencyFee + weekendFee + holidayFee) * 100) / 100;
+                throw new Error("Informe um valor total válido para a proposta.");
+              const regionalHigh = Number(o.metadata?.regionalPriceHigh || o.regionalPriceHigh || 0);
+              if (regionalHigh > 0 && laborPrice > regionalHigh + 0.009)
+                throw new Error(`O valor total não pode superar o limite alto estimado pela IA (${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(regionalHigh)}).`);
+              const urgencyFee = 0;
+              const weekendFee = 0;
+              const holidayFee = 0;
+              const priceBeforeClientDiscount = Math.round(laborPrice * 100) / 100;
               const requestedDiscountPercent = Math.min(20, Math.max(0, Number(o.clientDiscount || o.metadata?.clientDiscount || 0) || 0));
               const requestedDiscountAmount = Math.round(priceBeforeClientDiscount * requestedDiscountPercent) / 100;
               const priceAfterRequestedDiscount = Math.round((priceBeforeClientDiscount - requestedDiscountAmount) * 100) / 100;
@@ -22773,30 +22635,28 @@ ${
               const price = clientDiscountGranted ? priceAfterRequestedDiscount : priceBeforeClientDiscount;
               const proposalPriceBreakdown = {
                 labor_base: Math.round(laborPrice * 100) / 100,
-                urgency: Math.round(urgencyFee * 100) / 100,
-                weekend: Math.round(weekendFee * 100) / 100,
-                holiday: Math.round(holidayFee * 100) / 100,
+                urgency: 0,
+                weekend: 0,
+                holiday: 0,
                 price_before_client_discount: priceBeforeClientDiscount,
                 client_discount_requested_percent: requestedDiscountPercent,
                 client_discount_granted_percent: clientDiscountGranted ? requestedDiscountPercent : 0,
                 client_discount_amount: appliedDiscountAmount,
                 price_after_client_discount: price,
                 materials_included: false,
+                total_entered_by_professional: true,
                 calculated_once: true
               };
               const proposalConditionsFinal = [
                 String(state.proposalConditions || "").trim(),
-                `Composição: mão de obra ${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(laborPrice)}; urgência ${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(urgencyFee)}; fim de semana ${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(weekendFee)}; feriado especial ${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(holidayFee)}.`,
+                "O valor informado corresponde ao total da proposta. Não foram acrescentados valores automáticos de urgência, fim de semana ou feriado.",
                 requestedDiscountPercent > 0 && clientDiscountGranted
-                  ? `Boa notícia! O profissional concedeu o desconto solicitado de ${requestedDiscountPercent}% (${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(appliedDiscountAmount)}). Total após desconto: ${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(price)}.`
+                  ? `Desconto concedido de ${requestedDiscountPercent}% (${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(appliedDiscountAmount)}). Total após desconto: ${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(price)}.`
                   : requestedDiscountPercent > 0
-                    ? `O desconto solicitado de ${requestedDiscountPercent}% não foi aplicado; a proposta foi enviada pelo valor informado pelo profissional.`
+                    ? `O desconto solicitado de ${requestedDiscountPercent}% não foi aplicado; a proposta foi enviada pelo valor total informado.`
                     : "",
-                "Materiais não inclusos no total estimado do pedido."
+                "Materiais não inclusos no valor total, salvo indicação expressa nas condições."
               ].filter(Boolean).join("\n");
-              o.urgencyAdd = urgencyFee;
-              o.weekendAdd = weekendFee;
-              o.holidayAdd = holidayFee;
               const duplicate = (o.proposals || []).some(
                 (q) => String(q.professional_id || "") === String(state.supabaseUser?.id || "")
               );
@@ -22851,18 +22711,6 @@ ${
               )
                 o.proposals.push(localSaved);
               o.status = "Recebendo propostas";
-              try {
-                await ewSupabase
-                  .from("orders")
-                  .update({
-                    metadata: {
-                      ...(o.metadata || {}),
-                      service_status_label: "Recebendo propostas",
-                    },
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq("id", o.id);
-              } catch (_) {}
               let persistentProposalNotice = false;
               if (clientDiscountGranted && typeof window.ewApi === "function") {
                 try {
@@ -26398,19 +26246,7 @@ ${
                 weekendAdd: fee.weekend,
                 weekendSurcharge: fee.weekend > 0,
               };
-              try {
-                if (o.id && !String(o.id).startsWith("demo-") && ewSupabase)
-                  await ewSupabase
-                    .from("orders")
-                    .update({
-                      total: o.total,
-                      reference_price: o.referencePrice,
-                      metadata: o.metadata,
-                    })
-                    .eq("id", o.id);
-              } catch (err) {
-                console.warn("V113 atualização do adicional no pedido", err);
-              }
+              // A composição persistida é atualizada apenas pela RPC validada fechou_update_request_pricing.
             }
             return result;
           };
@@ -28245,18 +28081,7 @@ ${
           }
           q.metadata = meta;
           q.negotiationHistory = meta.negotiation_history;
-          const { error: oe } = await db
-            .from("orders")
-            .update({
-              metadata: {
-                ...(o.metadata || {}),
-                service_status_label: "Em negociação",
-              },
-              updated_at: isoNow(),
-            })
-            .eq("id", o.id);
-          if (oe)
-            console.warn("Status da negociação não atualizado:", oe.message);
+          // O estado da negociação é derivado da proposta persistida; não gravar rótulos diretamente em orders.
           o.status = "Em negociação";
           await notifyEvent(
             o,
@@ -30292,6 +30117,10 @@ body #app .fechou-profile-progress>div:first-child b {
   ev.preventDefault();ev.stopPropagation();ev.stopImmediatePropagation();
   const orderId=String(button.dataset.v178WalletRefund||"");
   if(!orderId)return;
+  if(typeof window.FECHOU_V280_OPEN_CANCEL === "function"){
+   window.FECHOU_V280_OPEN_CANCEL(button,orderId,"wallet");
+   return;
+  }
   const ok=window.confirm("Solicitar o cancelamento deste serviço? Se ainda não houver profissional vinculado nem contrato ou execução iniciada, o sistema poderá processar o reembolso automático após a confirmação do Asaas. Se já houver aceite, contrato ou execução, o caso seguirá para análise, com registro das informações e evidências. O cancelamento, por si só, não confirma que o dinheiro já foi devolvido.");if(!ok)return;
   button.disabled=true;
   try{
@@ -30999,6 +30828,10 @@ body #app .fechou-profile-progress>div:first-child b {
               ev.stopPropagation();
               ev.stopImmediatePropagation();
               const id = act.split(":")[1];
+              if (typeof window.FECHOU_V280_OPEN_CANCEL === "function") {
+                window.FECHOU_V280_OPEN_CANCEL(ev.target?.closest?.('[data-act^="v121-cancel-order:"]'), id, "order");
+                return;
+              }
               const approved = await showAppConfirm({
                 title: "Cancelar serviço",
                 message:
@@ -31512,13 +31345,12 @@ body #app .fechou-profile-progress>div:first-child b {
         const isCancelledV132 = (o) => statusV132(o).includes("cancel");
         const isCompletedV132 = (o) => {
           const s = statusV132(o);
+          const serviceState = String(o?.service_state || o?.metadata?.service_state || o?.serviceState || "").trim().toLowerCase();
           return (
             !isCancelledV132(o) &&
-            (s.includes("conclu") ||
-              s === "completed" ||
-              s === "complete" ||
-              !!o?.completedAtISO ||
-              !!o?.completed_at)
+            (serviceState === "completed" || serviceState === "complete" ||
+              s.includes("conclu") || s === "completed" || s === "complete" ||
+              !!o?.completedAtISO || !!o?.completed_at)
           );
         };
         const isAcceptedV132 = (o) => {
@@ -31543,10 +31375,10 @@ body #app .fechou-profile-progress>div:first-child b {
         };
         const friendlyStatusV132 = (o) => {
           const s = statusV132(o);
+          if (isCancelledV132(o)) return "Cancelado";
+          if (isCompletedV132(o)) return "Serviço concluído";
           if (s === "open" || s === "novo" || s === "nova solicitação")
             return "Recebendo propostas";
-          if (s.includes("conclu")) return "Serviço concluído";
-          if (s.includes("cancel")) return "Cancelado";
           return String(o?.status || "Em andamento");
         };
         function apiClient() {
@@ -32913,31 +32745,18 @@ body #app .fechou-profile-progress>div:first-child b {
                 throw new Error(
                   "O pedido foi criado, mas não há conexão para registrar a forma de pagamento."
                 );
-              const meta = {
-                ...(saved.metadata || {}),
-                ...(next.metadata || {}),
-              };
-              const { data, error } = await db
-                .from("orders")
-                .update({
-                  payment_method: mode,
-                  payment_flow: mode,
-                  client_payment_preference: mode,
-                  metadata: meta,
-                })
-                .eq("id", String(saved.id))
-                .eq("client_id", currentUid())
-                .select("*")
-                .maybeSingle();
-              if (error)
-                throw new Error(
-                  "A solicitação foi criada, mas a forma de pagamento não foi registrada. Execute a migração SQL V134 e sincronize o pedido antes de continuar."
-                );
-              Object.assign(saved, data || {}, {
+              if (typeof window.ewApi !== "function")
+                throw new Error("A API segura para registrar a modalidade de pagamento não está disponível.");
+              const persisted = await window.ewApi("orders/set-payment-mode", {
+                order_id: String(saved.id),
+                mode
+              });
+              if (!persisted?.ok || !persisted?.order?.id)
+                throw new Error("A solicitação foi criada, mas o servidor não confirmou a modalidade de pagamento.");
+              Object.assign(saved, persisted.order, {
                 payment_method: mode,
                 payment_flow: mode,
-                client_payment_preference: mode,
-                metadata: meta,
+                client_payment_preference: mode
               });
             }
             return saved;
@@ -34329,11 +34148,15 @@ body #app .fechou-profile-progress>div:first-child b {
             const b = ev.target.closest('[data-act^="v121-cancel-order:"]');
             if (!b) return;
             const id = String(b.dataset.act).split(":")[1];
-            const o = (state.orders || []).find((x) => String(x.id) === id);
-            if (!o) return;
             ev.preventDefault();
             ev.stopPropagation();
             ev.stopImmediatePropagation();
+            if (typeof window.FECHOU_V280_OPEN_CANCEL === "function") {
+              window.FECHOU_V280_OPEN_CANCEL(b, id, "order");
+              return;
+            }
+            const o = (state.orders || []).find((x) => String(x.id) === id);
+            if (!o) return;
             const yes = window.confirm(
               "Cancelar esta contratação? Se o profissional ainda não aceitou o contrato, o aplicativo solicitará o reembolso de um pagamento antecipado confirmado, quando elegível. Se o contrato já estiver ativo ou o serviço tiver começado, será aberta uma solicitação de cancelamento/revisão, sem prometer estorno imediato."
             );
@@ -40772,9 +40595,9 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v121-chat-window{position:relat
  },true);
  document.addEventListener('pointerdown',()=>state.lastActivity=Date.now(),{capture:true,passive:true});document.addEventListener('keydown',()=>state.lastActivity=Date.now(),true);
  // Minimizar o chat flutuante quando o toque/click for fora dele; tocar no cabeçalho restaura.
- if(!window.__FECHOU_V212_CHAT_OUTSIDE__){window.__FECHOU_V212_CHAT_OUTSIDE__=true;document.addEventListener('pointerdown',e=>{const overlay=$('#v121ChatOverlay'),win=overlay?.querySelector('.v121-chat-window');if(!overlay||!win||!overlay.classList.contains('v134-floating-overlay'))return;const visible=getComputedStyle(overlay).display!=='none'&&getComputedStyle(overlay).visibility!=='hidden';if(!visible)return;const miniButton=e.target?.closest?.('[data-v189-chat-mini]'),inside=win.contains(e.target);if(overlay.classList.contains('v189-mini')){if(inside&&!miniButton&&e.target.closest('.v121-chat-head')){overlay.classList.remove('v189-mini');const b=overlay.querySelector('[data-v189-chat-mini]');if(b){b.textContent='−';b.setAttribute('aria-label','Minimizar conversa')}window.__fechouV222SyncMiniChat?.()}return}if(!inside){overlay.classList.add('v189-mini');const b=overlay.querySelector('[data-v189-chat-mini]');if(b){b.textContent='□';b.setAttribute('aria-label','Restaurar conversa')}window.__fechouV222SyncMiniChat?.()}},true)}
+ /* FECHOU V277: não minimizar o chat por clique fora; somente os controles explícitos fecham/minimizam. */
  const observer=new MutationObserver(()=>decorate());if(document.body)observer.observe(document.body,{childList:true,subtree:true});
- const initial=()=>{decorate();setInterval(decorate,1800)};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initial,{once:true});else initial();
+ const initial=()=>{decorate()};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initial,{once:true});else initial();
  window.FECHOU_Teams={open:openTeam,inbox:openInbox,refresh:async()=>state.orderId?api('team/list',{order_id:state.orderId}):api('team/inbox',{}),version:'V212-reconstructed-backend-V216'};
 })();
 </script>
@@ -41506,7 +41329,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v134-evidence .v148-fold-
  }
 })();
 </script>
-
 <script id="fechou-v222-final-patch">
 /* FECHOU V222 — ajustes globais finais de interface, chat e liberação de seleção direta. */
 (() => {
@@ -41654,7 +41476,7 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v134-evidence .v148-fold-
       let toolbar=anchor.nextElementSibling?.classList.contains("v222-grid-toolbar")?anchor.nextElementSibling:null;
       if(toolbar&&toolbar.dataset.gridFor!==id)toolbar.dataset.gridFor=id;
       if(!toolbar){toolbar=anchor.parentElement?.querySelector(`.v222-grid-toolbar[data-grid-for="${id}"]`)||null;}
-      if(!toolbar){toolbar=document.createElement("div");toolbar.className="v222-grid-toolbar";toolbar.dataset.gridFor=grid.dataset.v222GridId;toolbar.innerHTML='<button type="button" class="v222-grid-toggle" aria-pressed="false" title="Exibir três serviços por linha"><span aria-hidden="true">▦</span><span>Visualização compacta</span></button>';anchor.insertAdjacentElement("afterend",toolbar);}
+      if(!toolbar){toolbar=document.createElement("div");toolbar.className="v222-grid-toolbar";toolbar.dataset.gridFor=grid.dataset.v222GridId;toolbar.innerHTML='<button type="button" class="v222-grid-toggle" aria-label="Alternar visualização dos serviços" aria-pressed="false" title="Alternar visualização dos serviços"><span aria-hidden="true">▦</span><span>Visualização compacta</span></button>';anchor.insertAdjacentElement("afterend",toolbar);}
       const key=`fechou:grid3:${uid()}:${grid.dataset.v222GridId}`;let active=false;try{active=localStorage.getItem(key)==="1"}catch(_){}
       if (grid.classList.contains("v222-services-grid-3") !== active) grid.classList.toggle("v222-services-grid-3", active);
       const button=toolbar.querySelector("button");
@@ -41670,7 +41492,7 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v134-evidence .v148-fold-
     const help=e.target.closest("[data-v222-contract-help]");if(help){e.preventDefault();e.stopPropagation();showContractHelp();return;}
     const toggle=e.target.closest(".v222-grid-toggle");if(toggle){
       const bar=toggle.closest(".v222-grid-toolbar"),gridId=bar?.dataset.gridFor||"available";
-      const target=bar?.nextElementSibling?.classList.contains("grid")?bar.nextElementSibling:bar?.parentElement?.querySelector(":scope > .grid");
+      const target=toggle.__fechouV274Grid?.isConnected ? toggle.__fechouV274Grid : (bar?.nextElementSibling?.classList.contains("grid")?bar.nextElementSibling:bar?.parentElement?.querySelector(":scope > .grid"));
       if(!target)return;
       const active=target.classList.toggle("v222-services-grid-3");
       if(toggle.getAttribute("aria-pressed")!==String(active))toggle.setAttribute("aria-pressed",String(active));
@@ -41750,7 +41572,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v134-evidence .v148-fold-
   } catch (error) { console.warn("FECHOU: cache de carregamento do perfil indisponível",error); }
 })();
 </script>
-
 <script id="fechou-v223-final-patch">
 (()=>{'use strict';if(window.__FECHOU_V223_PATCH__)return;window.__FECHOU_V223_PATCH__=true;window.FECHOU_BUILD_VERSION='V223';window.FECHOU_BUILD_ID='FECHOU_V223_INTEGRATED';document.documentElement.setAttribute('data-fechou-build','V223');
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)],st=()=>window.__fechouAppState||window.state||{},uid=()=>String(st().supabaseUser?.id||'');
@@ -41775,7 +41596,7 @@ const originalSync=window.__fechouV222SyncMiniChat;if(typeof originalSync==='fun
 // Order/proposal collections are idempotently deduplicated after refresh; archived work is never shown in the public feed.
 function dedupe(){const s=st();for(const key of ['orders','v189Pending','availableOrders','publicOrders','jobs'])if(Array.isArray(s[key])){const seen=new Set();s[key]=s[key].filter(o=>{const id=String(o?.id||'');if(!id||seen.has(id)||o.archived_at)return false;seen.add(id);return true})}for(const o of s.orders||[]){if(Array.isArray(o.proposals)){const seen=new Set();o.proposals=o.proposals.filter(p=>{const id=String(p?.id||'');if(!id||seen.has(id))return false;seen.add(id);return true})}}}
 const baseSync=window.ewSyncOrders;if(typeof baseSync==='function'&&!baseSync.__v223){const wrapped=async function(){const r=await baseSync.apply(this,arguments);dedupe();return r};wrapped.__v223=true;window.ewSyncOrders=wrapped;}
-const obs=new MutationObserver(()=>{ensurePhotoButton();dedupe();makeChipDraggable()});if(document.body)obs.observe(document.body,{childList:true,subtree:true});setInterval(()=>{ensurePhotoButton();makeChipDraggable();dedupe()},2500);
+const obs=new MutationObserver(records=>{if(records.some(r=>r.addedNodes.length||r.removedNodes.length)){ensurePhotoButton();dedupe();makeChipDraggable()}});const appRoot=document.getElementById('app');if(appRoot)obs.observe(appRoot,{childList:true,subtree:true});
 })();
 </script>
 <style id="fechou-v224-fixes">
@@ -42034,7 +41855,6 @@ button:disabled,.btn:disabled{transform:none!important;filter:none!important;cur
  window.FechouV224={isCancelledOrder:cancelled,refreshWallet,ensureProposalPhotos};
 })();
 </script>
-
 <style id="fechou-v224-contract-fields">
 #v121ChatOverlay .v121-chat-messages{pointer-events:auto!important}
 #v121ChatOverlay .v121-contract-card,
@@ -42045,13 +41865,11 @@ button:disabled,.btn:disabled{transform:none!important;filter:none!important;cur
 }
 #v121ChatOverlay .v220-contract-fields textarea{cursor:text!important;user-select:text!important;-webkit-user-select:text!important}
 </style>
-
 <style id="fechou-v224-order-chat-action">
 #app .order .actions{display:flex!important;flex-wrap:wrap!important;gap:6px!important;align-items:stretch!important}
 #app .order .actions [data-v224-open-chat]{flex:1 1 155px!important;white-space:normal!important}
 </style>
-<script type="application/json" id="fechou-v223-build-manifest">{"version":"V232","base_source":"FECHOU V231 — base local entregue anteriormente; correção de navegação inferior nesta revisão","backend":{"eworkers-api":281,"asaas-webhook":69,"clicksign-webhook":44,"fechou-ops-api":11,"fechou-auto-refund":12},"migrations":["fechou_v223_reconcile_confirmed_review_payments","fechou_v223_realtime_wallet_reserved_payout","fechou_v223_notifications_seen_without_reading","fechou_v223_chat_message_idempotency","fechou_v225_server_owned_order_financial_fields","fechou_ops_realtime_audit_events","fechou_v226_block_prepaid_internal_contract_acceptance","fechou_v227_block_contract_generation_after_cancellation","fechou_v228_harden_client_price_update","fechou_v229_lock_paid_order_counterproposal","fechou_v230_allow_validated_definer_rpcs_in_financial_guard","fechou_v231_lock_search_path_definer_rpcs"],"payments":{"card":"FECHOU-branded in-app card form; direct Asaas payment API; existing Asaas customer document reused when available","bank_slip":"Display Asaas bankSlipUrl PDF in an in-app document viewer","payment_state":"Webhook confirmado; reconciliação por externalReference e checkoutSession, com detecção de pagamentos confirmados distintos para o mesmo pedido.","debit_card":"Asaas: cartão de débito não é processado diretamente pela API; a documentação orienta uso da invoiceUrl hospedada. Não foi ativado para preservar checkout totalmente interno.","google_pay":"Não suportado no Asaas Checkout/API consultados; requer outro PSP compatível ou mudança de requisito. Não há botão inerte no front-end."},"contracts":{"signing":"Single Clicksign envelope with client and professional signers; either party may sign first","draft_fields":"Professional may edit deadline, materials, steps, warranty, labor and conditions before signing begins","signed_document":"One final PDF with both signatures attached to the order chat"},"database":{"cancellation":"fechou_cancel_order records the actor, reason and cancellation timestamp","chat_rls":"Restrictive insert guard blocks messages after cancellation or while cancellation is under review","security_hardening":["Contratos pré-pagos não podem ser aceitos pela RPC interna antiga; Clicksign continua obrigatório.","Geração de contrato bloqueada para contratação cancelada ou em análise de cancelamento.","Atualização de preço valida a aritmética do desconto, bloqueia cobranças vinculadas e aceita apenas metadados de composição autorizados.","Contraproposta não altera contratação pré-paga ou com cobrança vinculada.","Proteção financeira distingue gravação direta de usuário de RPCs SECURITY DEFINER validadas.","search_path vazio aplicado às RPCs SECURITY DEFINER que usam objetos qualificados.","Auditoria registra alterações de estado sem gravar conteúdo privado das mensagens."]},"notes":"A revisão corrigiu a estabilidade da navegação inferior e atualizou o registro das versões do backend. O usuário confirmou que realizou intencionalmente dois pagamentos de teste de R$ 6,00: um com cartão de crédito e outro via Pix. Esses dois pagamentos não devem ser classificados como duplicidade indevida. Não foi executado estorno ou repasse nesta revisão. A Central de Controle ainda precisa ser publicada em hospedagem separada. Não foi possível executar teste visual autenticado ou transação real nesta sessão. Outras formas de pagamento permanecem fora do escopo desta revisão, conforme decisão do usuário. A Central de Controle V2 inclui consulta administrativa somente leitura de pagamentos e conciliação. A Central de Controle V3 inclui conciliação de checkouts antigos, com consulta ao provedor e sem movimentação financeira.","deployments":["eworkers-api v281: aceita audio/x-m4a no upload e normaliza o MIME para audio/mp4 na análise multimodal.","asaas-webhook v67: concilia eventos PAYMENT_* pela checkoutSession quando externalReference não vem no payload; detecta segunda cobrança confirmada para pedido já publicado e registra revisão sem publicar novamente nem movimentar dinheiro.","front-end V232: remove reescrita redundante do rodapé em cada render e sincroniza destinos/estado ativo sem recriar botões quando já estão corretos.","asaas-webhook v69: reconhece tanto o prefixo legado fechou-subscription: quanto o prefixo curto fechou-sub: nas renovações de assinatura.","fechou-ops-api v9: rota administrativa somente leitura para consultar no Asaas dois pagamentos sinalizados; a Central de Controle V2 exibe o resultado sem permitir estorno ou alteração financeira.","front-end V232: ação de anexos no chat renomeada para “Ver anexos”, mantendo o modal de documentos, fotos e vídeos.","fechou-ops-api v10: diferencia Sandbox consultado e encontrado de consulta Sandbox incompleta, sem classificar cobranças não localizadas como pagamentos de teste.","fechou-ops-api v11: conciliação administrativa de checkouts de assinatura vencidos; consulta pagamentos no Asaas e só marca expirado quando não há cobrança após o TTL, sem movimentar dinheiro. Central de Controle V3 oferece a ação com confirmação explícita."]}</script>
-
+<script id="fechou-v223-build-manifest" type="application/json">{"version":"V232","base_source":"FECHOU V231 — base local entregue anteriormente; correção de navegação inferior nesta revisão","backend":{"eworkers-api":281,"asaas-webhook":69,"clicksign-webhook":44,"fechou-ops-api":11,"fechou-auto-refund":12},"migrations":["fechou_v223_reconcile_confirmed_review_payments","fechou_v223_realtime_wallet_reserved_payout","fechou_v223_notifications_seen_without_reading","fechou_v223_chat_message_idempotency","fechou_v225_server_owned_order_financial_fields","fechou_ops_realtime_audit_events","fechou_v226_block_prepaid_internal_contract_acceptance","fechou_v227_block_contract_generation_after_cancellation","fechou_v228_harden_client_price_update","fechou_v229_lock_paid_order_counterproposal","fechou_v230_allow_validated_definer_rpcs_in_financial_guard","fechou_v231_lock_search_path_definer_rpcs"],"payments":{"card":"FECHOU-branded in-app card form; direct Asaas payment API; existing Asaas customer document reused when available","bank_slip":"Display Asaas bankSlipUrl PDF in an in-app document viewer","payment_state":"Webhook confirmado; reconciliação por externalReference e checkoutSession, com detecção de pagamentos confirmados distintos para o mesmo pedido.","debit_card":"Asaas: cartão de débito não é processado diretamente pela API; a documentação orienta uso da invoiceUrl hospedada. Não foi ativado para preservar checkout totalmente interno.","google_pay":"Não suportado no Asaas Checkout/API consultados; requer outro PSP compatível ou mudança de requisito. Não há botão inerte no front-end."},"contracts":{"signing":"Single Clicksign envelope with client and professional signers; either party may sign first","draft_fields":"Professional may edit deadline, materials, steps, warranty, labor and conditions before signing begins","signed_document":"One final PDF with both signatures attached to the order chat"},"database":{"cancellation":"fechou_cancel_order records the actor, reason and cancellation timestamp","chat_rls":"Restrictive insert guard blocks messages after cancellation or while cancellation is under review","security_hardening":["Contratos pré-pagos não podem ser aceitos pela RPC interna antiga; Clicksign continua obrigatório.","Geração de contrato bloqueada para contratação cancelada ou em análise de cancelamento.","Atualização de preço valida a aritmética do desconto, bloqueia cobranças vinculadas e aceita apenas metadados de composição autorizados.","Contraproposta não altera contratação pré-paga ou com cobrança vinculada.","Proteção financeira distingue gravação direta de usuário de RPCs SECURITY DEFINER validadas.","search_path vazio aplicado às RPCs SECURITY DEFINER que usam objetos qualificados.","Auditoria registra alterações de estado sem gravar conteúdo privado das mensagens."]},"notes":"A revisão corrigiu a estabilidade da navegação inferior e atualizou o registro das versões do backend. O usuário confirmou que realizou intencionalmente dois pagamentos de teste de R$ 6,00: um com cartão de crédito e outro via Pix. Esses dois pagamentos não devem ser classificados como duplicidade indevida. Não foi executado estorno ou repasse nesta revisão. A Central de Controle ainda precisa ser publicada em hospedagem separada. Não foi possível executar teste visual autenticado ou transação real nesta sessão. Outras formas de pagamento permanecem fora do escopo desta revisão, conforme decisão do usuário. A Central de Controle V2 inclui consulta administrativa somente leitura de pagamentos e conciliação. A Central de Controle V3 inclui conciliação de checkouts antigos, com consulta ao provedor e sem movimentação financeira.","deployments":["eworkers-api v281: aceita audio/x-m4a no upload e normaliza o MIME para audio/mp4 na análise multimodal.","asaas-webhook v67: concilia eventos PAYMENT_* pela checkoutSession quando externalReference não vem no payload; detecta segunda cobrança confirmada para pedido já publicado e registra revisão sem publicar novamente nem movimentar dinheiro.","front-end V232: remove reescrita redundante do rodapé em cada render e sincroniza destinos/estado ativo sem recriar botões quando já estão corretos.","asaas-webhook v69: reconhece tanto o prefixo legado fechou-subscription: quanto o prefixo curto fechou-sub: nas renovações de assinatura.","fechou-ops-api v9: rota administrativa somente leitura para consultar no Asaas dois pagamentos sinalizados; a Central de Controle V2 exibe o resultado sem permitir estorno ou alteração financeira.","front-end V232: ação de anexos no chat renomeada para “Ver anexos”, mantendo o modal de documentos, fotos e vídeos.","fechou-ops-api v10: diferencia Sandbox consultado e encontrado de consulta Sandbox incompleta, sem classificar cobranças não localizadas como pagamentos de teste.","fechou-ops-api v11: conciliação administrativa de checkouts de assinatura vencidos; consulta pagamentos no Asaas e só marca expirado quando não há cobrança após o TTL, sem movimentar dinheiro. Central de Controle V3 oferece a ação com confirmação explícita."]}</script>
 <style id="fechou-v225-ui-fixes">
 /* Asaas: aviso visual de atenção, sem sugerir que o Banco Central processa a cobrança. */
 .v224-asaas-trust{border-color:#a86c32!important;background:linear-gradient(145deg,#382819,#241b15)!important;color:#ffe6c8!important;box-shadow:inset 3px 0 0 #d28a43!important}
@@ -42159,7 +41977,6 @@ const walletRenderObserver=new MutationObserver(()=>{const root=document.querySe
 window.FechouV225={opsApi,heartbeat,groupEvidence,openEvidenceGallery,enhanceWallet};
 })();
 </script>
-
 <style id="fechou-v233-layout-stability">
 /* V233 — normalização de carteira: grid consistente, hierarquia e alvos uniformes. */
 #app #v134WalletRoot{width:100%;max-width:100%;min-width:0;overflow:hidden}
@@ -42212,7 +42029,6 @@ window.FechouV225={opsApi,heartbeat,groupEvidence,openEvidenceGallery,enhanceWal
  window.addEventListener('pageshow',recover);document.addEventListener('visibilitychange',()=>{if(!document.hidden)recover()});
 })();
 </script>
-
 <style id="fechou-v233-chat-minimize">
 #v121ChatOverlay [data-fc-chat-minimize]{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;display:inline-grid!important;place-items:center!important;border:1px solid #405168!important;border-radius:10px!important;background:#223042!important;color:#d8e7f7!important;font-size:19px!important;line-height:1!important;cursor:pointer!important}
 #fechou-chat-restore{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:2147483647;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border:1px solid #5b7896;border-radius:14px;background:#172a3e;color:#f3f7fc;font:700 13px system-ui;box-shadow:0 8px 28px #0008;cursor:pointer}
@@ -42226,8 +42042,6 @@ window.FechouV225={opsApi,heartbeat,groupEvidence,openEvidenceGallery,enhanceWal
  const observer=new MutationObserver(rs=>{for(const r of rs)for(const n of r.addedNodes)if(n.nodeType===1&&(n.id==='v121ChatOverlay'||n.querySelector?.('#v121ChatOverlay'))){ensure();break}});if(document.body)observer.observe(document.body,{childList:true,subtree:true});ensure();
 })();
 </script>
-
-
 <style id="fechou-v233-wallet-earnings-layout">
 /* Carteira V233 — organização inspirada em painel de ganhos mobile; mantém cores e componentes nativos do FECHOU. */
 #app #v134WalletRoot .v134-wallet{gap:12px!important}
@@ -42259,7 +42073,6 @@ window.FechouV225={opsApi,heartbeat,groupEvidence,openEvidenceGallery,enhanceWal
 #app #v134WalletRoot .v134-wallet .v134-wallet-collapse{border-radius:15px!important}
 @media(max-width:380px){#app #v134WalletRoot .v233-wallet-section-head{flex-direction:column!important}#app #v134WalletRoot .v233-wallet-period-total{text-align:left!important}#app #v134WalletRoot .v233-wallet-month>small{font-size:7px!important}}
 </style>
-
 <style id="fechou-v235-wallet-chat-photo-fixes">
 /* Wallet: annual horizontal month carousel, native FECHOU palette and mobile-first sizing. */
 #app .v233-wallet-carousel{width:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:thin;overscroll-behavior-x:contain;padding:3px 0 9px}
@@ -42323,8 +42136,6 @@ window.FechouV225={opsApi,heartbeat,groupEvidence,openEvidenceGallery,enhanceWal
  window.fechouRefreshWalletLayout=run;
 })();
 </script>
-
-
 <style id="fechou-v240-messenger-wallet">
 /* FECHOU V240 — acabamento inspirado em mensageiros modernos, sem Stories. */
 #v121ChatOverlay#v121ChatOverlay .v133-chat-inbox{background:#0d1724!important;color:#eef5ff!important;padding:12px 13px 18px!important;gap:12px!important}
@@ -42410,9 +42221,6 @@ window.FechouV225={opsApi,heartbeat,groupEvidence,openEvidenceGallery,enhanceWal
  if(document.body)observer.observe(document.body,{childList:true,subtree:true});
 })();
 </script>
-
-
-
 <style id="fechou-v241-precise-visual-fixes">
 /* Carteira: janeiro a dezembro em uma única faixa, com rolagem horizontal por toque. */
 #app #v134WalletRoot .v233-wallet-carousel{display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;overflow-x:auto!important;overflow-y:hidden!important;touch-action:pan-x!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior-x:contain!important;scroll-snap-type:x mandatory!important;scrollbar-width:thin!important;padding:4px 0 10px!important}
@@ -42460,9 +42268,6 @@ window.FechouV225={opsApi,heartbeat,groupEvidence,openEvidenceGallery,enhanceWal
  window.addEventListener('pageshow',sync);
 })();
 </script>
-
-
-
 <style id="fechou-v242-chat-responsive-and-home-button">
 /* FECHOU V242 — correção pontual dos controles do chat e contenção responsiva. */
 html,body{max-width:100%;overflow-x:hidden!important}
@@ -42608,8 +42413,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-head-actions [data-v
 }
 @media(prefers-reduced-motion:reduce){#v121ChatOverlay *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 </style>
-
-
 <script id="fechou-v242-chat-controls">
 (()=>{
  'use strict';
@@ -42663,8 +42466,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-head-actions [data-v
  document.documentElement.setAttribute('data-fechou-build','V245');
 })();
 </script>
-
-
 <style id="fechou-v245-role-selection-layout">
 /* V245: preserva o seletor de perfil em coluna no primeiro painel — cliente e profissional em coluna única. */
 #fechou-role-selection > .grid {
@@ -42680,7 +42481,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-head-actions [data-v
   box-sizing: border-box;
 }
 </style>
-
 <style id="fechou-v245-chat-layout-fix">
 /* V245 — O cartão de contrato/fotos/etapas fica no rodapé da conversa, nunca sobre as mensagens. */
 #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v121-chat-window{
@@ -42936,8 +42736,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-head-actions [data-v
   position:absolute!important;top:8px!important;right:8px!important;z-index:20!important;
 }
 </style>
-
-
 <script id="fechou-v245-modal-manager">
 (function(){
  "use strict";
@@ -43064,8 +42862,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-head-actions [data-v
  window.addEventListener("resize",()=>{const ov=chat();if(ov)syncDock(ov);},{passive:true});
 })();
 </script>
-
-
 <!-- FECHOU V246 — chat compacto com ações funcionais e menu progressivo -->
 <style id="fechou-v246-chat">
 #v121ChatOverlay .v246-chat-controls{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0 2px;padding:0;width:100%;}
@@ -43097,7 +42893,7 @@ function init(ov){
  const primary=document.createElement('button');primary.type='button';primary.className='v246-main-action';primary.textContent='Verificar serviço';primary.setAttribute('aria-label','Ação atual do serviço');
  const toggle=document.createElement('button');toggle.type='button';toggle.className='v246-more-toggle';toggle.setAttribute('aria-expanded','false');toggle.innerHTML='<span>＋ Mais ações do serviço</span><span aria-hidden="true">⌄</span>';
  const panel=document.createElement('div');panel.className='v246-more-panel';panel.hidden=true;
- const expand=document.createElement('button');expand.type='button';expand.className='v246-main-action v256-stage-expand';expand.textContent='⤢ Maximizar';expand.setAttribute('aria-expanded','false');expand.setAttribute('aria-label','Maximizar detalhes do serviço');
+ const expand=document.createElement('button');expand.type='button';expand.className='v246-main-action v256-stage-expand';expand.textContent='Ver ações';expand.setAttribute('aria-expanded','false');expand.setAttribute('aria-label','Maximizar detalhes do serviço');
  const photos=document.createElement('button');photos.type='button';photos.textContent='▧ Fotos do serviço';
  const attach=document.createElement('button');attach.type='button';attach.textContent='＋ Anexos';
  const verify=document.createElement('button');verify.type='button';verify.textContent='✓ Verificar / concluir';
@@ -43151,9 +42947,9 @@ function init(ov){
  function setStageExpanded(expanded){
   slot.classList.toggle('v256-expanded',!!expanded);
   slot.classList.toggle('v256-stage-collapsed',!expanded);
-  expand.textContent=expanded?'⌃ Minimizar':'⤢ Maximizar';
+  expand.textContent=expanded?'Ocultar ações':'Ver ações';
   expand.setAttribute('aria-expanded',String(!!expanded));
-  expand.setAttribute('aria-label',expanded?'Minimizar detalhes do serviço':'Maximizar detalhes do serviço');
+  expand.setAttribute('aria-label',expanded?'Ocultar ações do serviço':'Ver ações do serviço');
  }
  setStageExpanded(false);
  contract.addEventListener('click',()=>{if(!clickOriginal(['[data-v189-contract]','[data-v121-generate-contract]','[data-v121-accept-contract]','[data-v121-print-contract]'])){const c=$('.v133-contract-card',ov);if(c){c.scrollIntoView({behavior:'smooth',block:'center'});c.classList.add('v224-tap-feedback');setTimeout(()=>c.classList.remove('v224-tap-feedback'),260);}}});
@@ -43185,9 +42981,6 @@ window.__FECHOU_V246_INIT__=init;
 const obs=new MutationObserver(()=>{const ov=$('#v121ChatOverlay');if(ov)init(ov);});if(document.body)obs.observe(document.body,{childList:true,subtree:true});init($('#v121ChatOverlay'));
 })();
 </script>
-
-
-
 <!-- FECHOU V250 — abertura do chat independente da consulta de mensagens -->
 <style id="fechou-v248-messenger-adaptation">
 /* Lista de conversas: identidade visual Messenger, sem Stories e sem recursos inventados. */
@@ -43250,11 +43043,8 @@ const obs=new MutationObserver(()=>{const ov=$('#v121ChatOverlay');if(ov)init(ov
  document.querySelector('meta[name="fechou-build"]')?.setAttribute('content','V249');
 })();
 </script>
-
 </body>
 </html>
-
-
 <!-- FECHOU V253 — tela inicial única e recuperação da entrada do chat. -->
 <style id="fechou-v253-home-options-stack">
   /* Somente a disposição: cliente em cima, profissional embaixo.
@@ -43493,10 +43283,7 @@ const obs=new MutationObserver(()=>{const ov=$('#v121ChatOverlay');if(ov)init(ov
   window.FECHOU_CHAT_GET_STATE_SOURCE = "__fechouAppState";
 })();
 </script>
-
 <!-- FECHOU V255 — correção da referência ao estado real do aplicativo no acesso ao chat. -->
-
-
 <!-- FECHOU V258 — estrutura estável do rodapé do chat, modais completos e tela inicial estável. -->
 <style id="fechou-v257-chat-dock-and-full-modals">
 /* O slot de contrato/serviço é um grid item irmão do scroller e fica imediatamente acima de Anexar/Enviar. */
@@ -43710,54 +43497,15 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   }
 }
 </style>
-<script id="fechou-v258-modal-maximize-and-layout-guard">
+<script id="fechou-v277-remove-all-modal-maximize-controls">
 (()=>{'use strict';
- if(window.__FECHOU_V257_MODAL_MANAGER__)return;
- window.__FECHOU_V257_MODAL_MANAGER__=true;
- const ROOTS=[
-  '.v149-modal-backdrop','#fechou-v164-contract-review','.v121-confirm-overlay',
-  '.v134-modal-backdrop','.v185-payment-overlay','.v189-overlay',
-  '.fechou-chat-attachments-overlay','.fechou-checkout-overlay',
-  '.fechou-v179-discount-overlay','.v163-start-backdrop','.v225-evidence-gallery',
-  '.fechou-contract-view-overlay','.fechou-v156-sign-overlay','.v53-modal-backdrop',
-  '.v222-help-modal','.ew-message-backdrop'
- ].join(',');
- const DIALOGS='[role="dialog"],.v149-modal-card,.v175-contract-review-card,.v121-confirm-card,.v134-modal,.v185-payment-dialog,.v189-dialog,.fechou-chat-attachments-modal,.fechou-checkout-modal,.fechou-v179-discount-dialog,.v163-start-card,.v225-evidence-gallery-card,.fechou-contract-view-dialog,.fechou-v156-sign-dialog,.v53-modal,.v222-help-card,.ew-message-box';
- function decorate(root){
-  if(!root?.isConnected)return;
-  const dialog=root.matches(DIALOGS)?root:(root.querySelector(DIALOGS));if(!dialog)return;
-  const header=dialog.querySelector(':scope > header')||dialog.querySelector('header');
-  if(!header||header.querySelector('[data-fechou-modal-maximize]'))return;
-  const button=document.createElement('button');button.type='button';button.className='fechou-v256-modal-maximize';
-  button.dataset.fechouModalMaximize='1';button.textContent='⤢';button.title='Maximizar janela';
-  button.setAttribute('aria-label','Maximizar janela');
-  const close=header.querySelector('button[aria-label*="Fechar" i],button[class*="close" i],[data-fechou-attachments-close]');
-  header.insertBefore(button,close||null);
- }
- function scan(){
-  document.querySelectorAll(ROOTS).forEach(decorate);
-  const chat=document.getElementById('v121ChatOverlay');
-  if(chat)chat.querySelectorAll(ROOTS).forEach(decorate);
- }
- document.addEventListener('click',event=>{
-  const button=event.target?.closest?.('[data-fechou-modal-maximize]');if(!button)return;
-  event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
-  const root=button.closest(ROOTS);const dialog=button.closest(DIALOGS);if(!root||!dialog)return;
-  const expanded=!dialog.classList.contains('fechou-v256-modal-maximized');
-  dialog.classList.toggle('fechou-v256-modal-maximized',expanded);
-  button.textContent=expanded?'⤡':'⤢';button.title=expanded?'Restaurar tamanho da janela':'Maximizar janela';
-  button.setAttribute('aria-label',expanded?'Restaurar tamanho da janela':'Maximizar janela');
- },true);
- let queued=false;const observer=new MutationObserver(()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;scan()})});
- const start=()=>{scan();if(document.body)observer.observe(document.body,{childList:true,subtree:true})};
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
- window.addEventListener('resize',scan,{passive:true});
- window.FECHOU_BUILD_VERSION='V258-CHAT-CONTRACT-LAYOUT-STABLE';
- window.FECHOU_BUILD_ID='FECHOU_V258_CHAT_CONTRATO_LAYOUT_ESTAVEL';
+ const remove=()=>document.querySelectorAll('[data-fechou-modal-maximize],.fechou-v256-modal-maximize').forEach(el=>el.remove());
+ remove();
+ const app=document.getElementById('app');
+ if(app){const observer=new MutationObserver(()=>remove());observer.observe(app,{childList:true,subtree:true});}
+ document.addEventListener('click',()=>{if(document.querySelector('[data-fechou-modal-maximize],.fechou-v256-modal-maximize'))remove();},true);
 })();
 </script>
-
-
 <!-- FECHOU V259 — faixa inferior única do chat, ações vinculadas ao slot e home sem refluxo. -->
 <style id="fechou-v259-final-home-and-chat-layout">
   #exylonWelcome .ew-welcome-options{
@@ -43820,8 +43568,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
 </script>
-
-
 <!-- FECHOU V260 — leitor, assinatura e PDF sem cortes em telas pequenas. -->
 <style id="fechou-v260-contract-modal-viewport-fix">
   /* A regra antiga acrescentava padding ao overlay e, ao mesmo tempo, exigia
@@ -43899,8 +43645,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
 <script id="fechou-v260-build-marker">
 (()=>{'use strict';window.FECHOU_BUILD_VERSION='V260-CONTRATO-MODAL-INTEGRAL';window.FECHOU_BUILD_ID='FECHOU_V260_CONTRATO_MODAL_INTEGRAL';document.documentElement.setAttribute('data-fechou-build','V260')})();
 </script>
-
-
 <!-- FECHOU V261 — correção de especificidade do leitor de contrato dentro do chat. -->
 <style id="fechou-v261-chat-contract-root-fix">
   /* O seletor geral de modais do chat (V245) tinha dois IDs e ganhava do
@@ -43976,9 +43720,7 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   requestAnimationFrame(()=>{window.FECHOU_BUILD_VERSION='V261-CHAT-CONTRATO-MODAL-SEM-CORTE';window.FECHOU_BUILD_ID='FECHOU_V261_CHAT_CONTRATO_MODAL_SEM_CORTE';document.documentElement.setAttribute('data-fechou-build','V261')});
 })();
 </script>
-
 <!-- FECHOU V262: preserva o contrato assinado no fluxo direto para o painel V149 gerar a ação de PDF; fluxo pré-pago mantém o controlador V189. -->
-
 <!-- FECHOU V262 — camada oficial de correções pendentes (chat, contrato, home, segurança, legal) -->
 <style id="fechou-v262-layout-and-ux">
 /* Home: cliente e profissional sempre empilhados, sem duplicação visual */
@@ -44090,7 +43832,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   contain:layout style;
 }
 </style>
-
 <script id="fechou-v262-core-fixes">
 (() => {
   'use strict';
@@ -44427,7 +44168,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   };
 })();
 </script>
-
 <script id="fechou-v262-legal-and-compliance">
 (() => {
   'use strict';
@@ -44468,7 +44208,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   }
 })();
 </script>
-
 <script id="fechou-v262-security-audit-notes">
 (() => {
   'use strict';
@@ -44498,8 +44237,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   };
 })();
 </script>
-
-
 <script id="fechou-v262-policies-nav">
 (() => {
   'use strict';
@@ -44532,7 +44269,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   }, true);
 })();
 </script>
-
 <!-- FECHOU V263 — grade de ações do chat no modelo solicitado (2x3 + colapso), cores do app + laranja no ativo -->
 <style id="fechou-v263-chat-grid">
 /* Grade de ações do chat no estilo do modelo, com cores do aplicativo */
@@ -44759,8 +44495,7 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
         if (btn.disabled !== wantDisabled) btn.disabled = wantDisabled;
       }
       refreshService();
-      // Lightweight poll instead of heavy MutationObserver to avoid freeze
-      refreshTimer = setInterval(refreshService, 1500);
+      // V277: atualiza no início; a sincronização do pedido atualiza o estado real.
     } finally {
       building = false;
     }
@@ -44796,7 +44531,6 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   document.documentElement.setAttribute('data-fechou-build', 'V263.1');
 })();
 </script>
-
 <!-- FECHOU V265 — grade estável, zero observer contínuo, fecha modal anterior, sem botão extra -->
 <style id="fechou-v265-chat">
 #v121ChatOverlay .v133-chat-tools,
@@ -44887,7 +44621,7 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
 #v121ChatOverlay .v263-action-btn.v263-service-done .v263-ico { color: #ffc36f !important; }
 #v121ChatOverlay .v263-actions-panel.is-collapsed .v263-actions-grid { display: none !important; }
 </style>
-<script id="fechou-v265-chat">
+<script id="fechou-v265-chat-js">
 (() => {
   'use strict';
   if (window.__FECHOU_V265__) return;
@@ -45024,8 +44758,7 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
       if (btn.disabled !== wantDisabled) btn.disabled = wantDisabled;
     }
     refreshService();
-    // Atualiza o texto do serviço só a cada 2.5s, sem tocar no DOM do overlay de forma que force re-render
-    refreshTimer = setInterval(refreshService, 2500);
+    // V277: sem temporizador permanente para evitar redesenho e consumo desnecessário.
   }
 
   function check() {
@@ -45038,15 +44771,13 @@ body #v121ChatOverlay#v121ChatOverlay:not(.v189-mini) .v133-chat-compose{
   setTimeout(check, 400);
   setTimeout(check, 1200);
   setTimeout(check, 2500);
-  // Depois disso, só se o usuário reabrir o chat (não fica em loop)
-  setInterval(check, 3000);
+  // V277: sem polling permanente. A montagem é acionada pelas mutações do próprio chat.
 
   window.FECHOU_BUILD_VERSION = 'V265-CHAT-ESTAVEL';
   window.FECHOU_BUILD_ID = 'FECHOU_V265_CHAT_ESTAVEL';
   document.documentElement.setAttribute('data-fechou-build', 'V265');
 })();
 </script>
-
 <!-- FECHOU V266 — botões menores + compose sempre visível no mini e com ações recolhidas -->
 <style id="fechou-v266-chat">
 /* Botões de ação bem mais compactos */
@@ -45154,7 +44885,7 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
   opacity: 1 !important;
 }
 </style>
-<script id="fechou-v266-chat">
+<script id="fechou-v266-chat-js">
 (() => {
   'use strict';
   if (window.__FECHOU_V266__) return;
@@ -45174,11 +44905,11 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
       compose.style.setProperty('opacity', '1', 'important');
     }
   }
-  setInterval(forceComposeVisible, 800);
   document.addEventListener('click', forceComposeVisible, true);
+  document.addEventListener('focusin', forceComposeVisible, true);
+  setTimeout(forceComposeVisible, 0);
 })();
 </script>
-
 <!-- FECHOU V267 — ações recolhidas ainda mostram o campo de mensagem + Enviar -->
 <style id="fechou-v267-chat">
 /* Quando as ações estão recolhidas, o compose continua 100% visível e utilizável */
@@ -45225,7 +44956,7 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
   pointer-events: auto !important;
 }
 </style>
-<script id="fechou-v267-chat">
+<script id="fechou-v267-chat-js">
 (() => {
   'use strict';
   if (window.__FECHOU_V267__) return;
@@ -45243,11 +44974,11 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
       compose.style.setProperty('opacity', '1', 'important');
     }
   }
-  setInterval(ensureCompose, 1000);
   document.addEventListener('click', ensureCompose, true);
+  document.addEventListener('focusin', ensureCompose, true);
+  setTimeout(ensureCompose, 0);
 })();
 </script>
-
 <!-- FECHOU V268 — Online verde / Ausente vermelho + limite 6 fotos confirmado -->
 <style id="fechou-v268-status">
 #v121ChatOverlay .v133-head-copy p.v268-online,
@@ -45270,7 +45001,7 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
   color: #ef4444;
 }
 </style>
-<script id="fechou-v268-status">
+<script id="fechou-v268-status-js">
 (() => {
   'use strict';
   if (window.__FECHOU_V268__) return;
@@ -45287,12 +45018,11 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
     else if (/ausente/.test(t)) p.classList.add('v268-ausente');
   }
 
-  setInterval(paintStatus, 800);
   document.addEventListener('click', paintStatus, true);
+  document.addEventListener('focusin', paintStatus, true);
   setTimeout(paintStatus, 300);
 })();
 </script>
-
 <!-- FECHOU V269 — fluxo pagamento protegido: notificação carteira, taxa explícita, conclusão bilateral, avaliação auto, Pix -->
 <!-- FECHOU V270 — carteira pendente nos dois lados, contrato opcional sem insistência, cancelamento com motivo e gate admin -->
 <!-- FECHOU V271 — pagamento pelo app SEMPRE exige contrato + cláusulas obrigatórias -->
@@ -45340,14 +45070,14 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
     injectClauses();
   }
 
-  setInterval(enforceContract, 1200);
   document.addEventListener('click', enforceContract, true);
+  document.addEventListener('focusin', enforceContract, true);
+  setTimeout(enforceContract, 0);
 
   window.FECHOU_BUILD_VERSION = 'V271-CONTRACT-MANDATORY';
   document.documentElement.setAttribute('data-fechou-build', 'V271');
 })();
 </script>
-
 <!-- FECHOU V272 — remove popup pré-pago + impede flicker do chat (sem abrir/fechar automático) -->
 <script id="fechou-v272-no-flicker">
 (() => {
@@ -45384,15 +45114,24 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
   }, true);
 
   // Limpa flags quando reabre
-  const obs = new MutationObserver(() => {
+  const observeOverlay = () => {
     const ov = document.getElementById('v121ChatOverlay');
-    if (ov && !ov.classList.contains('v189-mini') && ov.style.display !== 'none') {
-      delete ov.dataset.userMinimized;
-      delete ov.dataset.userClosed;
-    }
-    protect();
+    if (!ov || ov.dataset.v277GuardObserved === '1') return;
+    ov.dataset.v277GuardObserved = '1';
+    const obs = new MutationObserver(() => {
+      if (!ov.classList.contains('v189-mini') && ov.style.display !== 'none') {
+        delete ov.dataset.userMinimized;
+        delete ov.dataset.userClosed;
+      }
+      protect();
+    });
+    obs.observe(ov, { attributes: true, attributeFilter: ['style','class','data-fechou-minimized'] });
+  };
+  observeOverlay();
+  const addObserver = new MutationObserver(records => {
+    if (records.some(r => [...r.addedNodes].some(n => n.nodeType === 1 && (n.id === 'v121ChatOverlay' || n.querySelector?.('#v121ChatOverlay'))))) observeOverlay();
   });
-  if (document.body) obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['style', 'class', 'data-fechou-minimized'] });
+  if (document.body) addObserver.observe(document.body, { childList: true });
 
   // Desativa os intervals agressivos dos patches anteriores que tocavam no chat
   window.__FECHOU_V265__ = true;
@@ -45407,8 +45146,6 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
   document.documentElement.setAttribute('data-fechou-build', 'V272');
 })();
 </script>
-
-
 <!-- FECHOU V274 — correções funcionais e visuais sem reescrever os componentes existentes. -->
 <style id="fechou-v274-fixes">
 :root{--fechou-chevron:#e59a34;--fechou-modal-bg:#0d1622;--fechou-modal-panel:#142236;--fechou-modal-border:#3b536d}
@@ -45475,7 +45212,7 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
 .v274-confirm-error{display:none;margin:0 0 12px;padding:9px 10px;border:1px solid #924b4b;border-radius:9px;background:#321d22;color:#ffc6c6;font-size:12px;line-height:1.45}
 @media(max-width:390px){#v121ChatOverlay .v263-action-btn{min-height:54px!important;padding:8px 9px!important;font-size:12px!important;gap:7px!important}#v121ChatOverlay .v263-action-btn .v263-ico{width:21px!important;height:21px!important;flex-basis:21px!important;font-size:17px!important}}
 </style>
-<script id="fechou-v274-fixes">
+<script id="fechou-v274-fixes-js">
 (()=>{
  'use strict';
  if(window.__FECHOU_V274__)return;
@@ -45510,7 +45247,7 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
      if(!toolbar){toolbar=document.createElement('div');toolbar.className='v222-grid-toolbar';anchor.insertAdjacentElement('afterend',toolbar);}
      toolbar.dataset.gridFor=id;
      let button=toolbar.querySelector('.v222-grid-toggle');
-     if(!button){button=document.createElement('button');button.type='button';button.className='v222-grid-toggle';button.innerHTML='<span aria-hidden="true">▦</span><span>Visualização compacta</span>';button.title='Exibir três serviços por linha';toolbar.append(button);}
+     if(!button){button=document.createElement('button');button.type='button';button.className='v222-grid-toggle';button.innerHTML='<span aria-hidden="true">▦</span><span>Visualização compacta</span>';button.setAttribute('aria-label','Alternar visualização dos serviços');button.title='Alternar visualização dos serviços';toolbar.append(button);}
      button.__fechouV274Grid=grid;button.dataset.v274GridId=id;
      let active=false;try{active=localStorage.getItem(storageKey(id))==='1';}catch(_){}
      grid.classList.toggle('v222-services-grid-3',active);
@@ -45520,21 +45257,7 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
      if(label)label.textContent=active?'Visualização confortável':'Visualização compacta';
    }
  }
- document.addEventListener('click',event=>{
-   const button=event.target.closest?.('.v222-grid-toggle');if(!button)return;
-   const id=button.dataset.v274GridId||button.closest('.v222-grid-toolbar')?.dataset.gridFor||'available';
-   const grid=button.__fechouV274Grid||null;if(!grid?.isConnected)return;
-   let stored=null;try{stored=localStorage.getItem(storageKey(id));}catch(_){}
-   const previous=button.dataset.v274Applied==='true';
-   // The original V222 handler normally toggles and persists first. Recover by applying that saved value;
-   // if it did not run (or failed to resolve its grid), invert the previously applied state here.
-   const next=stored!==null&&((stored==='1')!==previous)?stored==='1':!previous;
-   grid.classList.toggle('v222-services-grid-3',next);
-   try{localStorage.setItem(storageKey(id),next?'1':'0');}catch(_){}
-   button.dataset.v274Applied=String(next);
-   button.setAttribute('aria-pressed',String(next));
-   const label=button.querySelector('span:last-child');if(label)label.textContent=next?'Visualização confortável':'Visualização compacta';
- },false);
+ /* V277: o alternador de grade tem apenas um handler (V222), evitando alternar duas vezes e travar. */
 
  // Real proposal withdrawal: only pending proposals that have not been selected are exposed here.
  function openWithdrawDialog(button){
@@ -45609,8 +45332,8 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
  function run(){syncGridControls();syncContractLabels();}
  const schedule=()=>requestAnimationFrame(run);
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();
- const root=document.body;
- if(root){const observer=new MutationObserver(schedule);observer.observe(root,{childList:true,subtree:true,characterData:true});}
+ const root=document.getElementById('app');
+ if(root){const observer=new MutationObserver(schedule);observer.observe(root,{childList:true,subtree:true});}
  const originalRender=window.render;
  if(typeof originalRender==='function'&&!originalRender.__fechouV274){
    const wrapped=function(){const result=originalRender.apply(this,arguments);schedule();return result;};
@@ -45623,13 +45346,7 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
  document.querySelector('meta[name="exylon-hub-version"]')?.setAttribute('content','V274');
 })();
 </script>
-
 <style id="fechou-v275-interaction-fixes">
-  .v275-description-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:7px;padding:9px 11px;border:1px solid #344b63;border-radius:9px;background:#101a27;color:#dce8f5;text-align:left;font-size:12px;font-weight:700;cursor:pointer}
-  .v275-description-toggle::after{content:"⌄";font-size:18px;line-height:1;transition:transform .16s ease}
-  .v275-description-toggle[aria-expanded="true"]::after{transform:rotate(180deg)}
-  #app textarea[data-v275-description-input]{min-height:76px!important;max-height:110px!important;overflow-y:auto!important;transition:min-height .16s ease,max-height .16s ease}
-  #app textarea[data-v275-description-input][data-v275-expanded="true"]{min-height:190px!important;max-height:340px!important}
   .v275-directory-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 24px}
   .v275-directory-pagination>span{flex:1;text-align:center}
   #fechou-v275-cancel-overlay{position:fixed;inset:0;z-index:100050;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(2,7,14,.84);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
@@ -45682,56 +45399,6 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
       details.append(summary, content);
       content.append(section);
     });
-  }
-
-  // Campo de descrição: apenas um botão, estado recolhido por padrão e texto preservado.
-  function ensureDescriptionDisclosure() {
-    const textarea = document.querySelector('#app textarea[data-input="description"]');
-    if (!textarea) return;
-    textarea.dataset.v275DescriptionInput = '1';
-    if (!textarea.id) textarea.id = 'fechou-v275-description';
-    const field = textarea.closest('.field') || textarea.parentElement;
-    if (!field) return;
-    const toggles = [...field.querySelectorAll('[data-v275-description-toggle]')];
-    let toggle = toggles.shift() || null;
-    toggles.forEach(node => node.remove());
-    if (!toggle) {
-      toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'v275-description-toggle';
-      toggle.dataset.v275DescriptionToggle = '1';
-      toggle.setAttribute('aria-controls', textarea.id);
-      const example = field.querySelector('#exw-v8-service-example, .v34-description-example, .v189-service-examples');
-      if (example?.parentNode === field) example.insertAdjacentElement('afterend', toggle);
-      else textarea.insertAdjacentElement('afterend', toggle);
-    }
-    toggle.setAttribute('aria-controls', textarea.id);
-    const expanded = getState().__v275DescriptionExpanded === true;
-    textarea.dataset.v275Expanded = String(expanded);
-    textarea.setAttribute('aria-expanded', String(expanded));
-    toggle.setAttribute('aria-expanded', String(expanded));
-    const label = expanded ? 'Recolher campo de descrição' : 'Expandir campo de descrição';
-    if (toggle.textContent !== label) toggle.textContent = label;
-  }
-
-  let descriptionClickBound = false;
-  if (!descriptionClickBound) {
-    descriptionClickBound = true;
-    window.addEventListener('click', event => {
-      const button = event.target?.closest?.('[data-v275-description-toggle]');
-      if (!button) return;
-      event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
-      const field = button.closest('.field') || button.parentElement;
-      const textarea = field?.querySelector('textarea[data-v275-description-input]');
-      if (!textarea) return;
-      const expanded = getState().__v275DescriptionExpanded !== true;
-      getState().__v275DescriptionExpanded = expanded;
-      textarea.dataset.v275Expanded = String(expanded);
-      textarea.setAttribute('aria-expanded', String(expanded));
-      button.setAttribute('aria-expanded', String(expanded));
-      button.textContent = expanded ? 'Recolher campo de descrição' : 'Expandir campo de descrição';
-      if (expanded) { textarea.focus({preventScroll:true}); textarea.setSelectionRange(textarea.value.length, textarea.value.length); }
-    }, true);
   }
 
   // Busca de catálogo com debounce: mantém o foco e a posição do cursor durante a atualização.
@@ -45796,12 +45463,12 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
       const reason = String(reasonField.value || '').trim();
       if (reason.length < 8) { errorField.textContent = 'Informe um motivo com pelo menos 8 caracteres.'; reasonField.focus(); return; }
       if (cancelInFlight.has(id)) return;
-      if (typeof window.ewApi !== 'function') { errorField.textContent = 'A conexão autenticada do FECHOU não está disponível. Entre novamente e tente de novo.'; return; }
+      if (typeof window.fechouOpsApi !== 'function') { errorField.textContent = 'A conexão autenticada do FECHOU não está disponível. Entre novamente e tente de novo.'; return; }
       cancelInFlight.add(id);
       submit.disabled = true; reasonField.disabled = true; submit.textContent = 'Enviando…';
       try {
-        // ewApi recupera o JWT da sessão Supabase e envia Bearer + publishable key.
-        const result = await window.ewApi('service/cancel', {
+        // fechouOpsApi recupera o JWT da sessão Supabase e envia Bearer + publishable key.
+        const result = await window.fechouOpsApi('service/cancel', {
           order_id: id,
           reason,
           idempotency_key: 'service-cancel:' + id
@@ -45844,6 +45511,10 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
     const id = target.matches('[data-v178-wallet-refund]')
       ? target.dataset.v178WalletRefund
       : String(target.dataset.act || '').split(':').slice(1).join(':');
+    if (typeof window.FECHOU_V280_OPEN_CANCEL === 'function') {
+      window.FECHOU_V280_OPEN_CANCEL(target, id, target.matches('[data-v178-wallet-refund]') ? 'wallet' : 'order');
+      return;
+    }
     openCancelDialog(target, id, target.matches('[data-v178-wallet-refund]') ? 'wallet' : 'order');
   }, true);
 
@@ -45868,13 +45539,14 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
     }
   }
   function run() {
-    try { normalizeFactors(); ensureDescriptionDisclosure(); normalizeChatAttachmentModal(); normalizeChatControls(); }
+    try { normalizeFactors(); normalizeChatAttachmentModal(); normalizeChatControls(); }
     catch (error) { console.warn('FECHOU V275: ajuste visual não aplicado em um ciclo.', error); }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, {once:true});
   else run();
   const observer = new MutationObserver(() => run());
-  if (document.body) observer.observe(document.body, {childList:true, subtree:true});
+  const appRoot = document.getElementById('app');
+  if (appRoot) observer.observe(appRoot, {childList:true, subtree:true});
 
   window.FECHOU_BUILD_VERSION = 'V275-CORRIGIDO';
   window.FECHOU_BUILD_ID = 'FECHOU_V275_CORRIGIDO';
@@ -45883,7 +45555,6 @@ body #v121ChatOverlay#v121ChatOverlay.v189-mini .v133-chat-compose .btn {
   document.querySelector('meta[name="exylon-hub-version"]')?.setAttribute('content', 'V275');
 })();
 </script>
-
 <style id="fechou-v276-chat-reference-ui">
 /* ================= FECHOU V276 — Chat conforme referência visual ================= */
 /* Mensagens: bolhas compactas, máx. 72%, cores da referência */
@@ -45951,6 +45622,429 @@ document.addEventListener('click',e=>{
 },true);
 })();
 </script>
+<!-- FECHOU V277 — estabilidade, privacidade de localidade, padronização e ajustes finais. -->
+<style id="fechou-v277-system-standard">
+  /* O rodapé e a navegação inferior ficam ocultos até autenticação real. */
+  body:not([data-fechou-authenticated="1"]) .footer,
+  body:not([data-fechou-authenticated="1"]) #app .bottom-nav{display:none!important}
+  #app .actions,#app .row{gap:10px 12px!important;flex-wrap:wrap!important}
+  #app .actions>.btn,#app .row>.btn{margin:0!important;max-width:100%}
+  #app .btn,#app button:not(.help-dot):not(.api-help){box-sizing:border-box}
+  #app .field input,#app .field select,#app .field textarea{border-radius:10px!important}
+  #app .panel,#app .order,#app .pro,#app .tile,#app .stat{border-color:#2b3d52!important}
+  #app .v222-grid-toolbar{display:flex!important;justify-content:flex-start!important;margin:8px 0 10px!important}
+  #app .v222-grid-toggle{display:inline-grid!important;place-items:center!important;width:40px!important;min-width:40px!important;max-width:40px!important;height:40px!important;min-height:40px!important;padding:0!important;border-radius:10px!important;background:#14263b!important;border:1px solid #395b7c!important;color:#e7f0fa!important}
+  #app .v222-grid-toggle span:last-child{display:none!important}
+  #app .v222-grid-toggle span:first-child{font-size:19px!important;line-height:1!important}
+  #app .v222-services-grid-3{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:9px!important}
+  #app .v222-services-grid-3>.order,#app .v222-services-grid-3>.home-job{min-width:0!important;overflow:hidden!important}
+  #app .v277-accordion{margin:9px 0!important;border:1px solid #30465f!important;border-radius:11px!important;background:#111c2a!important;overflow:hidden!important}
+  #app .v277-accordion>summary{list-style:none!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;min-height:44px!important;padding:11px 13px!important;color:#edf4fc!important;font-size:13px!important;font-weight:700!important;cursor:pointer!important}
+  #app .v277-accordion>summary::-webkit-details-marker{display:none!important}
+  #app .v277-accordion>summary::after{content:"";width:8px;height:8px;flex:0 0 8px;border-right:2px solid #80acd6;border-bottom:2px solid #80acd6;transform:rotate(45deg);transition:transform .16s ease}
+  #app .v277-accordion[open]>summary::after{transform:rotate(225deg)}
+  #app .v277-accordion-content{padding:0 13px 13px!important;color:#cbd6e2!important;font-size:13px!important;line-height:1.55!important}
+  #app .v277-proposal-warning{display:block;margin-top:7px;padding:8px 10px;border:1px solid #9b6a2a;border-radius:9px;background:#2a2116;color:#ffd18a;font-size:12px;line-height:1.4}
+  #app .v277-proposal-warning[hidden]{display:none!important}
+  [data-fechou-modal-maximize],.fechou-v256-modal-maximize{display:none!important}
+  @media(max-width:420px){#app .v222-services-grid-3{gap:5px!important}#app .v222-services-grid-3>.order,#app .v222-services-grid-3>.home-job{padding:7px!important}#app .v222-services-grid-3>.order .btn,#app .v222-services-grid-3>.home-job .btn{font-size:9px!important;padding:6px 4px!important}}
+  @media(min-width:700px){#app .v222-services-grid-3{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+</style>
+<script id="fechou-v277-system-fixes">
+(()=>{'use strict';
+ if(window.__FECHOU_V277__)return;window.__FECHOU_V277__=true;
+ const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+ const getState=()=>{try{return window.__fechouV178GetState?.()||window.__fechouAppState||window.state||{}}catch(_){return window.state||{}}};
+ let queued=false;
+ function isLogged(){const s=getState();return !!(s.supabaseUser?.id||s.user?.id||s.authUser?.id)}
+ function syncAuthShell(){
+   const logged=isLogged();document.body?.setAttribute('data-fechou-authenticated',logged?'1':'0');
+   const footer=$('.footer');if(footer){footer.hidden=!logged;footer.setAttribute('aria-hidden',String(!logged));}
+   const nav=$('#app .bottom-nav');if(nav){nav.hidden=!logged;nav.setAttribute('aria-hidden',String(!logged));}
+ }
+ function buildAccordion(summary,html){const d=document.createElement('details');d.className='v277-accordion';d.innerHTML='<summary></summary><div class="v277-accordion-content"></div>';d.querySelector('summary').textContent=summary;d.querySelector('.v277-accordion-content').innerHTML=html;return d;}
+ function convertHeadingsToAccordions(root){
+   if(!root||root.dataset.v277Accordions==='1')return;root.dataset.v277Accordions='1';
+   const headings=$$('h3',root).filter(h=>!h.closest('.v277-accordion'));
+   for(const h of headings){
+     const parts=[];let node=h.nextElementSibling;
+     while(node&&node.tagName!=='H3') {const next=node.nextElementSibling;parts.push(node);node=next;}
+     if(!parts.length)continue;
+     const details=document.createElement('details');details.className='v277-accordion';
+     const summary=document.createElement('summary');summary.textContent=h.textContent.trim();
+     const content=document.createElement('div');content.className='v277-accordion-content';
+     h.parentNode.insertBefore(details,h);details.append(summary,content);content.append(...parts);h.remove();
+   }
+ }
+ function faqAccordions(){
+   const s=getState();if(s.page!=='menudetail')return;
+   const section=$('#app .panel');if(!section)return;
+   const key=String(s.menuSection||'faq');
+   if(['contractinfo','about','login','profile'].includes(key))return;
+   if(key==='faq'||key==='policies'||key==='privacy'||key==='cancel'||key==='safety'||key==='pricing'||key==='payments')convertHeadingsToAccordions(section);
+   if(key==='services'){
+     $$('.v102-service-row',section).forEach(row=>{
+       if(row.dataset.v277Expanded==='1')return;row.dataset.v277Expanded='1';
+       const name=row.querySelector('b')?.textContent?.trim()||'';
+       const catalog=window.FECHOU_SERVICE_CATALOG||{};
+       const items=Array.isArray(catalog[name])?catalog[name]:[];
+       const summary=document.createElement('summary');summary.textContent=name;summary.setAttribute('aria-expanded','false');
+       const list=document.createElement('ul');list.style.margin='8px 0 0';list.style.paddingLeft='20px';
+       list.innerHTML=items.map(x=>'<li>'+String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</li>').join('');
+       const d=document.createElement('details');d.className='v277-accordion';d.append(summary,list);row.replaceWith(d);
+     });
+   }
+   if(key==='safety'){
+     const title=$('#app .hero h1');if(title&&title.textContent.trim()==='Segurança e confiança')title.textContent='Segurança e confidencialidade';
+   }
+ }
+ function requestDisclosures(){
+   const s=getState();if(s.page!=='request')return;
+   const field=$('#app textarea[data-input="description"]')?.closest('.field');if(!field)return;
+   const targets=[
+     {selector:'#v56-description-help',label:'Atenção'},
+     {selector:'#exw-v8-service-example,.v189-service-examples',label:'Exemplo'}
+   ];
+   for(const item of targets){
+     const source=$(item.selector,field);if(!source||source.closest('details.v277-accordion'))continue;
+     const d=buildAccordion(item.label,source.innerHTML||source.textContent||'');
+     source.replaceWith(d);
+   }
+ }
+ function proposalWarning(){
+   const input=$('#app [data-input="proposalPrice"]');if(!input||input.dataset.v277WarningBound==='1')return;
+   input.dataset.v277WarningBound='1';const warning=input.parentElement?.querySelector('.v277-proposal-warning');
+   const check=()=>{const max=Number(input.dataset.regionalHigh||input.max||0),value=Number(input.value||0);if(warning){const show=max>0&&value>max+0.009;warning.hidden=!show;warning.textContent=show?'Atenção: o valor informado supera o valor alto estimado para a região ('+new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(max)+'). Reduza o valor para enviar a proposta.':'';}input.setCustomValidity(max>0&&value>max+0.009?'O valor ultrapassa o limite alto estimado pela IA.':'');};
+   input.addEventListener('input',check);check();
+ }
+ function cleanupModalMaximize(){ $$('[data-fechou-modal-maximize],.fechou-v256-modal-maximize').forEach(n=>n.remove()); }
+ function run(){
+   queued=false;syncAuthShell();faqAccordions();requestDisclosures();proposalWarning();cleanupModalMaximize();
+ }
+ function schedule(){if(queued)return;queued=true;requestAnimationFrame(run)}
+ const start=()=>{
+   run();const app=$('#app');if(app){const observer=new MutationObserver(schedule);observer.observe(app,{childList:true,subtree:true});}
+   const supa=window.ewSupabase||window.__FECHOU_SUPABASE_CLIENT;
+   try{supa?.auth?.onAuthStateChange?.(()=>schedule());}catch(_){}
+   try{supa?.auth?.getSession?.().then(({data})=>{if(data?.session?.user){const st=getState();st.supabaseUser=st.supabaseUser||data.session.user;}schedule()}).catch(()=>{});}catch(_){}
+ };
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+ window.FECHOU_BUILD_VERSION='V278-CORRECOES-FINAIS-ESTATICAS';
+ window.FECHOU_BUILD_ID='FECHOU_V278_CORRECOES_FINAIS_ESTATICAS';
+ document.documentElement.setAttribute('data-fechou-build','V278');
+ document.querySelector('meta[name="fechou-build"]')?.setAttribute('content','V278');
+ document.querySelector('meta[name="exylon-hub-version"]')?.setAttribute('content','V278');
+ window.FECHOU_V277={run,schedule};
+ document.addEventListener('input',e=>{if(e.target?.matches?.('#app [data-input="proposalPrice"]'))proposalWarning();},true);
+ document.addEventListener('click',e=>{const toggle=e.target?.closest?.('.v222-grid-toggle');if(!toggle)return;const grid=toggle.__fechouV274Grid;if(grid?.isConnected){toggle.dataset.v274Applied=String(grid.classList.contains('v222-services-grid-3'));const label=toggle.querySelector('span:last-child');if(label)label.textContent=grid.classList.contains('v222-services-grid-3')?'Visualização confortável':'Visualização compacta';}},false);
+})();
+</script>
+<!-- FECHOU V278 — fechamento das pendências estáticas da V277 -->
+<style id="fechou-v278-final-consistency">
+  /* Não deixar controles de maximização com o ícone proibido em nenhum modal. */
+  [data-fechou-modal-maximize], .fechou-v256-modal-maximize { display:none!important; }
+  #app .actions, #app .row, #app .button-row, #app .form-actions,
+  #app .v274-confirm-actions, #app .v222-direct-contract-actions .actions {
+    display:flex; flex-wrap:wrap; gap:10px 12px!important;
+  }
+  #app .actions > button, #app .row > button, #app .button-row > button,
+  #app .form-actions > button, #app .v274-confirm-actions > button { margin:0!important; }
+  #app .v277-proposal-warning { display:block; margin-top:7px; }
+  #app .v277-proposal-warning[hidden] { display:none!important; }
+</style>
+<script id="fechou-v278-final-consistency-js">
+(()=>{'use strict';
+ if(window.__FECHOU_V278__)return;window.__FECHOU_V278__=true;
+ const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+ const state=()=>{try{return window.__fechouV178GetState?.()||window.__fechouAppState||window.state||{}}catch(_){return window.state||{}}};
+ // O painel de ações do chat continua disponível, mas sem o símbolo de maximização.
+ function renameStageExpand(root=document){
+   $$('.v256-stage-expand',root).forEach(b=>{
+     const expanded=b.getAttribute('aria-expanded')==='true';
+     b.textContent=expanded?'Ocultar ações':'Ver ações';
+     b.setAttribute('aria-label',expanded?'Ocultar ações do serviço':'Ver ações do serviço');
+   });
+ }
+ // Remove apenas controles de maximização de modal; não remove botões funcionais de outras áreas.
+ function removeModalMaximize(root=document){
+   $$('[data-fechou-modal-maximize],.fechou-v256-modal-maximize',root).forEach(n=>n.remove());
+ }
+ function numeric(v){
+   if(v==null||v==='')return 0;
+   const n=Number(String(v).trim().replace(/\.(?=\d{3}(?:\D|$))/g,'').replace(',','.'));
+   return Number.isFinite(n)?n:0;
+ }
+ function proposalWarning(){
+   const input=$('#app [data-input="proposalPrice"]');if(!input)return;
+   let warning=input.parentElement?.querySelector('.v277-proposal-warning');
+   if(!warning){
+     warning=document.createElement('div');warning.className='v277-proposal-warning';
+     warning.setAttribute('role','status');warning.setAttribute('aria-live','polite');warning.hidden=true;
+     (input.closest('.field')||input.parentElement||input).appendChild(warning);
+   }
+   if(input.dataset.v278WarningBound==='1')return;
+   input.dataset.v278WarningBound='1';
+   const check=()=>{
+     const max=numeric(input.dataset.regionalHigh||input.getAttribute('data-regional-high')||input.max);
+     const value=numeric(input.value);
+     const over=max>0&&value>max+0.009;
+     warning.hidden=!over;
+     warning.textContent=over?'Atenção: o valor informado supera o valor alto estimado para a região ('+new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(max)+'). O valor precisa respeitar esse limite.':'';
+     input.setCustomValidity(over?'O valor ultrapassa o limite alto estimado pela IA.':'');
+   };
+   input.addEventListener('input',check);input.addEventListener('change',check);check();
+ }
+ function syncAuth(){
+   const s=state();
+   const sessionId=window.__FECHOU_AUTH_SESSION_USER_ID;
+   const authChecked=window.__FECHOU_AUTH_SESSION_CHECKED===true;
+   const logged=authChecked?!!sessionId:!!(s.supabaseUser?.id||s.authUser?.id||s.user?.id);
+   document.body?.setAttribute('data-fechou-authenticated',logged?'1':'0');
+   $$('.footer').forEach(el=>{el.hidden=!logged;el.setAttribute('aria-hidden',String(!logged));});
+   const nav=$('#app .bottom-nav');if(nav){nav.hidden=!logged;nav.setAttribute('aria-hidden',String(!logged));}
+ }
+ function run(){removeModalMaximize();renameStageExpand();proposalWarning();syncAuth();}
+ let queued=false;function schedule(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;run();});}
+ function bindAuth(){
+   const client=window.ewSupabase||window.__FECHOU_SUPABASE_CLIENT;
+   try{client?.auth?.onAuthStateChange?.((_event,session)=>{
+     window.__FECHOU_AUTH_SESSION_CHECKED=true;
+     window.__FECHOU_AUTH_SESSION_USER_ID=session?.user?.id||null;
+     const s=state();s.supabaseUser=session?.user||null;
+     schedule();
+   });}catch(_){ }
+   try{client?.auth?.getSession?.().then(({data,error})=>{
+     if(error)throw error;
+     window.__FECHOU_AUTH_SESSION_CHECKED=true;
+     window.__FECHOU_AUTH_SESSION_USER_ID=data?.session?.user?.id||null;
+     const s=state();s.supabaseUser=data?.session?.user||null;
+     schedule();
+   }).catch(()=>{window.__FECHOU_AUTH_SESSION_CHECKED=true;window.__FECHOU_AUTH_SESSION_USER_ID=null;schedule();});}
+   catch(_){ }
+ }
+ function start(){run();bindAuth();
+   if(document.body){
+     const observer=new MutationObserver(records=>{
+       // Só reprocessa se houver adição/remoção real de elementos; sem observar atributos ou texto.
+       if(records.some(r=>r.addedNodes.length||r.removedNodes.length))schedule();
+     });
+     observer.observe(document.body,{childList:true,subtree:true});
+   }
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+ document.addEventListener('click',e=>{if(e.target?.closest?.('.v256-stage-expand'))requestAnimationFrame(renameStageExpand);},true);
+ document.addEventListener('input',e=>{if(e.target?.matches?.('#app [data-input="proposalPrice"]'))proposalWarning();},true);
+ window.FECHOU_BUILD_VERSION='V278-CORRECOES-FINAIS-ESTATICAS';
+ window.FECHOU_BUILD_ID='FECHOU_V278_CORRECOES_FINAIS_ESTATICAS';
+ document.documentElement.setAttribute('data-fechou-build','V278');
+ document.querySelector('meta[name="fechou-build"]')?.setAttribute('content','V278');
+ document.querySelector('meta[name="exylon-hub-version"]')?.setAttribute('content','V278');
+ window.FECHOU_V278={run,schedule};
+})();
+</script>
+<style id="fechou-v279-cancel-details">
+#fechou-v279-cancel-overlay{position:fixed;inset:0;z-index:100120;display:flex;align-items:center;justify-content:center;padding:14px;background:rgba(2,7,14,.86);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#fechou-v279-cancel-overlay .v279-cancel-dialog{width:min(100%,520px);max-height:min(90dvh,820px);overflow:auto;padding:20px;border:1px solid #405c78;border-radius:18px;background:linear-gradient(155deg,#192a3e,#0b1420);box-shadow:0 25px 90px #000c;color:#edf4fc}
+#fechou-v279-cancel-overlay h2{margin:0 0 6px;color:#f5f8fc;font-size:20px}
+#fechou-v279-cancel-overlay .v279-intro{margin:0 0 14px;color:#bac9d9;font-size:12px;line-height:1.5}
+#fechou-v279-cancel-overlay .v279-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0;padding:10px;border:1px solid #2c425a;border-radius:12px;background:#0b1623}
+#fechou-v279-cancel-overlay .v279-fact{min-width:0;padding:4px}
+#fechou-v279-cancel-overlay .v279-fact.full{grid-column:1/-1}
+#fechou-v279-cancel-overlay .v279-fact small{display:block;margin-bottom:3px;color:#8fa8c1;font-size:10px}
+#fechou-v279-cancel-overlay .v279-fact b{display:block;color:#edf5ff;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+#fechou-v279-cancel-overlay .v279-notice{margin:12px 0;padding:10px 11px;border:1px solid #66532f;border-radius:10px;background:#2a2114;color:#f2dfb5;font-size:11px;line-height:1.5}
+#fechou-v279-cancel-overlay label{display:block;margin:13px 0 6px;color:#e2eaf3;font-size:12px;font-weight:800}
+#fechou-v279-cancel-overlay textarea{width:100%;min-height:100px;box-sizing:border-box;background:#07111c;color:#f4f6f9;border:1px solid #435a73;border-radius:10px;padding:11px;font:inherit;font-size:13px;resize:vertical}
+#fechou-v279-cancel-overlay .v279-status{min-height:18px;margin:10px 0;color:#ffaaaa;font-size:11px;line-height:1.45}
+#fechou-v279-cancel-overlay .v279-actions{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px}
+#fechou-v279-cancel-overlay button{min-height:42px;padding:9px 14px;border-radius:9px;border:1px solid #456486;background:#214b7a;color:#fff;font-weight:800;cursor:pointer}
+#fechou-v279-cancel-overlay button.secondary{background:#172331;border-color:#435164;color:#e2eaf3}
+#fechou-v279-cancel-overlay button:disabled{opacity:.55;cursor:wait}
+@media(max-width:420px){#fechou-v279-cancel-overlay{padding:8px}#fechou-v279-cancel-overlay .v279-cancel-dialog{padding:14px;border-radius:14px}#fechou-v279-cancel-overlay .v279-facts{gap:5px;padding:7px}}
+@media(max-width:340px){#fechou-v279-cancel-overlay .v279-facts{grid-template-columns:minmax(0,1fr)}}
+</style>
+<script id="fechou-v279-final-runtime">
+(() => {
+  'use strict';
+  if (window.__FECHOU_V280_RUNTIME__) return;
+  window.__FECHOU_V280_RUNTIME__ = true;
+  const getState = () => {
+    try { return window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {}; }
+    catch (_) { return window.__fechouAppState || window.state || {}; }
+  };
+  const inFlight = new Set();
+  const escText = value => String(value ?? '').trim();
+  const firstValue = values => {
+    for (const value of values) {
+      if (value === null || value === undefined || value === '') continue;
+      const number = Number(value);
+      if (Number.isFinite(number) && number > 0) return number;
+    }
+    return null;
+  };
+  const money = value => new Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'}).format(value);
+  const labelFor = (value, map) => {
+    const raw = escText(value);
+    if (!raw) return 'Não informado';
+    return map[raw.toLowerCase()] || raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+  const paymentLabels = {
+    pix:'Pix', boleto:'Boleto', credit_card:'Cartão de crédito', card:'Cartão',
+    credit:'Cartão de crédito', contract_prepaid:'Pagamento pelo aplicativo + contrato',
+    direct:'Pagamento direto entre as partes', cash:'Dinheiro',
+    payment_app:'Pagamento pelo aplicativo + contrato'
+  };
+  const statusLabels = {
+    pending:'Pendente', awaiting_payment:'Aguardando pagamento', paid:'Pago', approved:'Aprovado',
+    confirmed:'Confirmado', received:'Recebido', processing:'Em processamento',
+    requested:'Solicitado', in_review:'Em análise', review:'Em análise',
+    release_ready:'Liberado para solicitar repasse', refunded:'Reembolso confirmado',
+    refund_pending:'Reembolso pendente', refund_requested:'Reembolso solicitado',
+    refund_processing:'Reembolso em processamento', failed:'Com falha', rejected:'Recusado',
+    cancelled:'Cancelado', canceled:'Cancelado', completed:'Concluído', complete:'Concluído',
+    contracted:'Contratado', in_progress:'Em execução', started:'Iniciado',
+    awaiting_signature:'Aguardando assinatura', signed:'Assinado'
+  };
+  function findOrder(id) {
+    const state = getState();
+    const groups = [state.orders, state.v189Pending, state.pendingOrders, state.cachedOrders];
+    for (const group of groups) {
+      if (!Array.isArray(group)) continue;
+      const match = group.find(item => String(item?.id || '') === String(id));
+      if (match) return match;
+    }
+    return null;
+  }
+  function fact(container, label, value, full=false) {
+    if (value === null || value === undefined || value === '') return;
+    const item = document.createElement('div');
+    item.className = 'v279-fact' + (full ? ' full' : '');
+    const small = document.createElement('small'); small.textContent = label;
+    const strong = document.createElement('b'); strong.textContent = String(value);
+    item.append(small, strong); container.append(item);
+  }
+  function openCancel(button, orderId, source) {
+    const id = escText(orderId);
+    if (!id || inFlight.has(id)) return;
+    const order = findOrder(id);
+    if (!order) {
+      const message = 'Não foi possível localizar o pedido para exibir os dados do cancelamento. Atualize a lista e tente novamente.';
+      if (typeof window.safeToast === 'function') window.safeToast(message);
+      else if (typeof window.toast === 'function') window.toast(message);
+      return;
+    }
+    document.getElementById('fechou-v279-cancel-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'fechou-v279-cancel-overlay';
+    overlay.innerHTML = '<section class="v279-cancel-dialog" role="dialog" aria-modal="true" aria-labelledby="v279-cancel-title" aria-describedby="v279-cancel-intro"><h2 id="v279-cancel-title">Solicitar cancelamento</h2><p class="v279-intro" id="v279-cancel-intro">Confira a contratação antes de enviar. O envio registra uma solicitação; não confirma cancelamento nem devolução de dinheiro.</p><div class="v279-facts" aria-label="Resumo da contratação"></div><p class="v279-notice">A elegibilidade será verificada pelo servidor conforme o pagamento, o contrato e o andamento do serviço. Contrato ativo, execução iniciada ou divergência financeira podem exigir análise. O reembolso só é considerado concluído após confirmação do provedor de pagamento.</p><label for="v279-cancel-reason">Motivo da solicitação</label><textarea id="v279-cancel-reason" maxlength="500" minlength="8" placeholder="Explique o motivo do cancelamento (mínimo de 8 caracteres)."></textarea><p class="v279-status" role="status" aria-live="polite"></p><div class="v279-actions"><button type="button" class="secondary" data-v279-close>Voltar</button><button type="button" data-v279-submit>Enviar solicitação</button></div></section>';
+    const title = escText(order.service || order.title || order.category || 'Serviço');
+    const selectedPrice = order.selectedProposal?.price ?? order.selected_proposal?.price;
+    const contractedValue = firstValue([selectedPrice, order.total, order.total_amount, order.estimated_total, order.price, order.budget]);
+    const paidValue = firstValue([order.paid_amount, order.amount_paid, order.total_paid, order.payment?.paid_amount, order.payment?.amount_paid]);
+    const paymentMethod = order.payment_method || order.paymentMethod || order.payment_flow || order.client_payment_preference || order.metadata?.payment_method || order.metadata?.payment_flow;
+    const paymentStatus = order.payment_status || order.paymentStatus || order.payment?.status || order.metadata?.payment_status;
+    const contractStatus = order.contract_status || order.contract?.status || order.contract?.signature_status || order.metadata?.contract_status;
+    const serviceState = order.service_state || order.metadata?.service_state || order.status;
+    const refundStatus = order.refund_status || order.metadata?.refund_status || order.payment?.refund_status;
+    const facts = overlay.querySelector('.v279-facts');
+    fact(facts, 'Serviço', title, true);
+    fact(facts, 'Referência do pedido', id, true);
+    const clientName = order.client_name || order.client?.name || order.client_profile?.name;
+    const professionalName = order.professional_name || order.professional?.name || order.professional_profile?.name;
+    if (clientName) fact(facts, 'Cliente', clientName);
+    if (professionalName) fact(facts, 'Profissional', professionalName);
+    fact(facts, 'Valor contratado', contractedValue ? money(contractedValue) : 'Não informado');
+    fact(facts, 'Valor pago', paidValue ? money(paidValue) : 'Não há valor pago confirmado no registro do pedido');
+    fact(facts, 'Forma de pagamento', labelFor(paymentMethod, paymentLabels));
+    fact(facts, 'Situação do pagamento', labelFor(paymentStatus, statusLabels));
+    fact(facts, 'Situação do contrato', labelFor(contractStatus, statusLabels));
+    fact(facts, 'Andamento do serviço', labelFor(serviceState, statusLabels));
+    fact(facts, 'Situação do reembolso', labelFor(refundStatus, statusLabels));
+    if (!contractedValue || !paidValue) {
+      const caution = document.createElement('p');
+      caution.className = 'v279-intro';
+      caution.textContent = 'Algum dado financeiro não está disponível no registro carregado. O sistema não vai presumir pagamento ou estorno; a API fará a validação final.';
+      facts.after(caution);
+    }
+    const reason = overlay.querySelector('#v279-cancel-reason');
+    const status = overlay.querySelector('.v279-status');
+    const submit = overlay.querySelector('[data-v279-submit]');
+    const close = () => { if (overlay.isConnected) overlay.remove(); };
+    overlay.querySelector('[data-v279-close]').addEventListener('click', close);
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    overlay.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); close(); } });
+    reason.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') submit.click(); });
+    submit.addEventListener('click', async () => {
+      const why = escText(reason.value);
+      if (why.length < 8) {
+        status.style.color = '#ffaaaa';
+        status.textContent = 'Informe um motivo com pelo menos 8 caracteres.';
+        reason.focus();
+        return;
+      }
+      if (inFlight.has(id)) return;
+      if (typeof window.fechouOpsApi !== 'function') {
+        status.style.color = '#ffaaaa';
+        status.textContent = 'A conexão segura não está disponível. Entre novamente e tente outra vez.';
+        return;
+      }
+      inFlight.add(id);
+      submit.disabled = true; reason.disabled = true; submit.textContent = 'Enviando…';
+      status.style.color = '#d8e7f7';
+      status.textContent = 'Enviando solicitação ao servidor…';
+      try {
+        const result = await window.fechouOpsApi('service/cancel', {
+          order_id: id,
+          reason: why,
+          idempotency_key: 'client-cancel:' + id
+        });
+        if (result?.ok === false || result?.success === false || result?.error) {
+          throw new Error(result.error || result.message || 'O servidor não confirmou o recebimento da solicitação.');
+        }
+        if (result?.order && String(result.order.id || '') === id) {
+          const state = getState();
+          const index = Array.isArray(state.orders) ? state.orders.findIndex(item => String(item.id) === id) : -1;
+          if (index >= 0) state.orders[index] = {...state.orders[index], ...result.order};
+        }
+        status.style.color = '#aee5c7';
+        status.textContent = String(result?.message || 'Solicitação recebida pelo servidor. Acompanhe o estado atualizado do pedido; eventual reembolso só será confirmado após retorno do provedor.');
+        submit.textContent = 'Solicitação enviada';
+        reason.disabled = true;
+        submit.disabled = true;
+        if (button?.isConnected) { button.textContent = 'Solicitação enviada'; button.disabled = true; }
+        try { await window.ewSyncOrders?.(); } catch (error) { console.warn('FECHOU: sincronização posterior ao cancelamento pendente.', error); }
+        try { await window.ewLoadNotificationsV85?.(); } catch (error) { console.warn('FECHOU: atualização de notificações pendente.', error); }
+        const state = getState();
+        if (state.__v134Wallet && typeof window.__fechouV134LoadWallet === 'function') {
+          try { await window.__fechouV134LoadWallet(); await window.__fechouV134RenderWallet?.(); }
+          catch (error) { console.warn('FECHOU: atualização da carteira após solicitação pendente.', error); }
+        }
+      } catch (error) {
+        status.style.color = '#ffaaaa';
+        status.textContent = String(error?.message || error || 'Não foi possível registrar a solicitação.');
+        submit.disabled = false; reason.disabled = false; submit.textContent = 'Tentar novamente';
+      } finally {
+        inFlight.delete(id);
+      }
+    });
+    document.body.append(overlay);
+    reason.focus({preventScroll:true});
+  }
+  window.FECHOU_V280_OPEN_CANCEL = openCancel;
+  window.FECHOU_BUILD_VERSION = 'V279-CORRIGIDO';
+  window.FECHOU_BUILD_ID = 'FECHOU_V280_CORRIGIDO';
+  document.documentElement.setAttribute('data-fechou-version', 'V279');
+  document.documentElement.setAttribute('data-fechou-build', 'V279');
+  document.querySelectorAll('meta[name="fechou-build"],meta[name="exylon-hub-version"]').forEach(meta => meta.setAttribute('content', 'V279'));
+  // Keep the live wallet's existing automatic refresh path; no duplicate polling timer is added.
+})();
+</script>
 
-
-
+<script id="fechou-v280-security-runtime">
+(function(){
+  try {
+    document.documentElement.dataset.fechouBuild = "V280";
+    window.FECHOU_BUILD_VERSION = "V280";
+  } catch (_) {}
+})();
+</script>
