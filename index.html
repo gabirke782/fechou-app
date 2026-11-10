@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-build="V322" data-fechou-version="V322" lang="pt-BR">
+<html data-fechou-build="V322.2" data-fechou-version="V322.2" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-v215-core">
@@ -93,7 +93,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" name="viewport"/>
 <title>FECHOU · Serviços</title>
-<meta content="V320" name="fechou-build"/>
+<meta content="V322.2" name="fechou-build"/>
 <style>
       :root{
         --bg: #090c10;
@@ -1540,7 +1540,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
         color: #4f7fb8;
       }
     </style>
-<meta content="V320" name="fechou-build"/>
+<meta content="V322.2" name="fechou-build"/>
 <style id="fechou-v300-contract-polish">
       :root{
         --fechou-nav-height: 70px;
@@ -24488,6 +24488,8 @@ body #app .fechou-profile-progress>div:first-child b {
 
 
 
+
+
 </body></html>`;
           if (printWindow) {
             try {
@@ -37069,7 +37071,7 @@ body{min-width:0!important}
    const logged=authChecked?!!sessionId:!!(s.supabaseUser?.id||s.authUser?.id||s.user?.id);
    document.body?.setAttribute('data-fechou-authenticated',logged?'1':'0');
    $$('.footer').forEach(el=>{el.hidden=false;el.removeAttribute('aria-hidden');});
-   const nav=$('#app .bottom-nav');if(nav){nav.hidden=!logged;nav.setAttribute('aria-hidden',String(!logged));}
+   const nav=$('#app .bottom-nav');if(nav){nav.hidden=false;nav.removeAttribute('aria-hidden');nav.style.removeProperty('display');}
  }
  function run(){removeModalMaximize();renameStageExpand();proposalWarning();syncAuth();}
  let queued=false;function schedule(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;run();});}
@@ -38308,93 +38310,83 @@ body > #fechou-v223-sub-card.v222-help-modal.fechou-subscription-checkout{
 </style>
 
 
-<script id="fechou-v321-public-access-guard">
+<script id="fechou-v322-guest-action-guard">
 (function () {
   "use strict";
   const PUBLIC_GUEST_PAGES = new Set(["home", "publicservices", "signup"]);
-  const isAuthenticated = () => !!(window.state && state.supabaseUser);
-  const isGuestAllowedPage = (page) =>
-    PUBLIC_GUEST_PAGES.has(String(page || "")) ||
-    (String(page || "") === "menudetail" && state.menuSection === "policies");
+  const isAuthenticated = () => !!(window.state && (state.supabaseUser?.id || state.authUser?.id || state.user?.id || window.__FECHOU_AUTH_SESSION_USER_ID));
   const requireAccount = (message) => {
     if (!window.state) return false;
     state.page = "signup";
     state.authMode = "login";
     if (typeof window.render === "function") window.render();
-    if (typeof window.toast === "function")
-      window.toast(message || "Para acessar esta função, entre na sua conta ou crie um cadastro.");
+    if (typeof window.toast === "function") window.toast(message || "Para acessar esta função, entre na sua conta ou crie um cadastro.");
     return false;
   };
 
-  // Guest users can only see the public home/catalogue, signup/login and legal policies.
-  const previousGo = window.go;
-  if (typeof previousGo === "function") {
-    window.go = function (page) {
-      if (!isAuthenticated() && !isGuestAllowedPage(page))
-        return requireAccount();
-      return previousGo.apply(this, arguments);
-    };
-    try { go = window.go; } catch (_) {}
-  }
-
-  // Guard direct state.page changes as well as navigation calls, before protected screens render.
-  const previousRender = window.render;
-  if (typeof previousRender === "function") {
-    window.render = function () {
-      if (window.state && !isAuthenticated() && !isGuestAllowedPage(state.page)) {
-        state.page = "signup";
-        state.authMode = "login";
-      }
-      document.body.classList.toggle("fechou-guest-public-only", !isAuthenticated());
-      return previousRender.apply(this, arguments);
-    };
-    try { render = window.render; } catch (_) {}
-  }
-
-  // A request cannot be created locally in guest/demo mode; a real account is required.
+  // Não substituir go() nem render(): os controladores nativos cuidam da navegação
+  // e da hidratação da sessão. Login/cadastro nunca são bloqueados por este guard.
   const previousCreateBudget = window.createBudget;
   window.createBudget = function () {
     if (!isAuthenticated()) return requireAccount("Para solicitar um serviço, primeiro entre ou crie sua conta de cliente.");
-    if (typeof previousCreateBudget === "function")
-      return previousCreateBudget.apply(this, arguments);
+    if (typeof previousCreateBudget === "function") return previousCreateBudget.apply(this, arguments);
     return requireAccount();
   };
   try { createBudget = window.createBudget; } catch (_) {}
 
-  // A profile is never persisted locally for an unauthenticated visitor.
   window.saveClient = function () {
     if (!isAuthenticated()) return requireAccount("Para criar ou salvar seu perfil, primeiro faça seu cadastro ou entre na sua conta.");
-    if (typeof window.ewSaveProfile === "function")
-      return window.ewSaveProfile("Cliente");
+    if (typeof window.ewSaveProfile === "function") return window.ewSaveProfile("Cliente");
     return requireAccount("Não foi possível salvar o perfil. Entre novamente na sua conta.");
   };
   try { saveClient = window.saveClient; } catch (_) {}
 
-  // The public catalogue is read-only. Any legacy demo action is blocked for guests.
+  // Bloqueia somente ações de negócio para visitantes; authLogin e navegação ficam livres.
   document.addEventListener("click", function (event) {
     if (isAuthenticated()) return;
     const button = event.target && event.target.closest && event.target.closest("[data-act]");
     if (!button) return;
-    const action = String(button.dataset.act || "");
-    if (["v43-request-service", "v43-demo-accept"].includes(action) ||
-        action === "createbudget" || action === "newrequest" ||
-        action === "analyze" || action === "estimate" ||
-        action === "authLogin" && state.page !== "signup") {
+    const action = String(button.dataset.act || "").toLowerCase();
+    if (["v43-request-service", "v43-demo-accept", "createbudget", "newrequest", "analyze", "estimate"].includes(action)) {
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      requireAccount("Explore os serviços públicos livremente. Para solicitar, negociar ou acessar outras funções, faça login ou cadastro.");
+      requireAccount("Para solicitar ou publicar um serviço, faça login ou crie sua conta de cliente.");
     }
   }, true);
 })();
 </script>
-<style id="fechou-v321-guest-navigation-privacy">
-body.fechou-guest-public-only .bottom-nav,
-body.fechou-guest-public-only #nav,
-body.fechou-guest-public-only .footer {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
+<style id="fechou-v322-navigation-visibility-fix">
+/* A navegação e o rodapé institucional permanecem visíveis para cliente e profissional.
+   As permissões continuam protegidas pelos guardas de autenticação de cada ação. */
+body #app .bottom-nav,
+body.fechou-guest-public-only #app .bottom-nav,
+body:not([data-fechou-authenticated="1"]) #app .bottom-nav {
+  display:flex !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+  position:fixed !important;
+  z-index:80 !important;
+  left:50% !important;
+  right:auto !important;
+  bottom:0 !important;
+  transform:translateX(-50%) !important;
+  width:min(100%,600px) !important;
+  box-sizing:border-box !important;
+}
+body #app .bottom-nav button,
+body.fechou-guest-public-only #app .bottom-nav button {
+  display:flex !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+  cursor:pointer !important;
+}
+body .wrap > footer.footer,
+body:not([data-fechou-authenticated="1"]) .wrap > footer.footer,
+body.fechou-guest-public-only .wrap > footer.footer {
+  display:block !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
 }
 </style>
 
@@ -38463,5 +38455,8 @@ body.fechou-guest-public-only .footer {
  });
 })();
 </script>
+
+
+
 </body>
 </html>
