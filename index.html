@@ -38509,5 +38509,44 @@ body.fechou-guest-public-only .wrap > footer.footer {
 })();
 </script>
 
+
+
+<script id="fechou-v323-publish-click-fix">
+(()=>{'use strict';
+ if(window.__FECHOU_V323_PUBLISH_FIX__)return;
+ window.__FECHOU_V323_PUBLISH_FIX__=true;
+ const getState=()=>window.__fechouAppState||window.state||{};
+ const notify=message=>{try{if(typeof window.toast==='function')window.toast(message);else console.warn(message)}catch(_){console.warn(message)}};
+ window.addEventListener('click',event=>{
+  const button=event.target?.closest?.('#v58-publish');
+  if(!button)return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  const s=getState();
+  if(s.__fechouPublishInFlight)return;
+  if(s.currentRole!=='Cliente'){notify('Entre no perfil de cliente para publicar uma solicitação.');return;}
+  if(s.page!=='request'){notify('Volte ao formulário do pedido para publicar.');return;}
+  if(s.priceAnalysisDone!==true){notify('Analise o preço da região antes de publicar o pedido.');return;}
+  if(!String(s.category||'').trim()||!String(s.service||'').trim()){notify('Selecione a categoria e o tipo de serviço.');return;}
+  if(!String(s.location||'').trim()){notify('Informe bairro e cidade do atendimento.');return;}
+  if(typeof window.createBudget!=='function'){notify('A publicação não foi inicializada. Atualize o aplicativo e tente novamente.');return;}
+  if(s.__fechouTemporaryTestPrice===true)s.v134PaymentMethod='contract_prepaid';
+  s.__fechouPublishInFlight=true;
+  const oldHtml=button.innerHTML;
+  button.disabled=true;
+  button.setAttribute('aria-busy','true');
+  button.innerHTML='<span class="v222-inline-spinner" aria-hidden="true"></span><span>Preparando publicação…</span>';
+  Promise.resolve().then(()=>window.createBudget()).catch(error=>{
+   console.error('FECHOU V323 falha no acionamento de publicação:',error);
+   notify('Não foi possível iniciar a publicação: '+String(error?.message||error||'erro inesperado'));
+  }).finally(()=>{
+   s.__fechouPublishInFlight=false;
+   if(button.isConnected){button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML=oldHtml;}
+  });
+ },true);
+})();
+</script>
+
 </body>
 </html>
