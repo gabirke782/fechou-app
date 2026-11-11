@@ -129,6 +129,12 @@ async function asaasRefundCreate(db:any,user:any,params:any,requestId:string) {
   const {data:order,error:orderError}=await db.from("orders").select("id,client_id,total,payment_status,payment_id,refund_status,metadata,payment_metadata").eq("id",orderId).maybeSingle();
   if(orderError||!order) throw Object.assign(new Error("Contratação vinculada ao caso não encontrada."),{status:404});
   if(!["approved","paid","received","confirmed"].includes(norm(order.payment_status))) throw Object.assign(new Error("O pagamento ainda não está confirmado."),{status:409});
+  const orderMeta=asObj(order.metadata);
+  const isTestOrder=["temporary_test_price","temporary_test_payment_only","test_mode","test_order"].some((key:any)=>{
+    const value=orderMeta[key];
+    return value===true||String(value??"").trim().toLowerCase()==="true";
+  });
+  if(ASAAS_ENV==="production"&&isTestOrder)throw Object.assign(new Error("Reembolso automático de contratação marcada como teste está bloqueado em Produção. Use o Asaas Sandbox para validar este fluxo."),{status:409,code:"TEST_MODE_REFUND_BLOCKED"});
   if(["initiating","pending","refund_pending","bank_slip_action_required","refunded"].includes(norm(order.refund_status))) throw Object.assign(new Error("Já existe uma solicitação de estorno ou devolução registrada."),{status:409});
   const paymentId=clean(order.payment_id,120);
   if(!/^pay_[A-Za-z0-9]+$/.test(paymentId)) throw Object.assign(new Error("Identificador da cobrança Asaas inválido; conciliação manual necessária."),{status:409});
