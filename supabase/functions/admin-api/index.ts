@@ -5,6 +5,12 @@ const PUBLIC_KEY = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? Deno.env.get("SUP
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
 const ADMIN_EMAIL = "fechousuporte@gmail.com";
 const MAX_ROWS = 500;
+const ASAAS_API_KEY = (Deno.env.get("ASAAS_API_KEY") || Deno.env.get("ASAAS_ACCESS_TOKEN") || "").trim();
+const ASAAS_WEBHOOK_TOKEN = (Deno.env.get("ASAAS_WEBHOOK_TOKEN") || Deno.env.get("ASAAS_WEBHOOK_SECRET") || "").trim();
+const ASAAS_ENV = ASAAS_API_KEY.startsWith("$aact_hmlg_") ? "sandbox" : ASAAS_API_KEY.startsWith("$aact_prod_") ? "production" : ((Deno.env.get("ASAAS_ENV") || "").toLowerCase() === "sandbox" ? "sandbox" : "production");
+const ASAAS_BASE = ASAAS_ENV === "sandbox" ? "https://api-sandbox.asaas.com/v3" : "https://api.asaas.com/v3";
+const ASAAS_PIX_PAYOUTS_ENABLED = Deno.env.get("FECHOU_ASAAS_PIX_PAYOUTS_ENABLED") === "true";
+const ASAAS_PIX_PAYOUTS_PRODUCTION_CONFIRMATION = Deno.env.get("FECHOU_ASAAS_PIX_PAYOUTS_PRODUCTION_CONFIRMATION") || "";
 
 const clean = (v: unknown, max = 300) => String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
 const asObj = (v: unknown): Record<string, any> => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, any> : {};
@@ -89,6 +95,82 @@ const reply = (req: Request, status: number, body: Record<string, unknown>) =>
 function serviceClient() {
   if (!SUPABASE_URL || !SERVICE_KEY || !PUBLIC_KEY) throw new Error("Backend administrativo não configurado.");
   return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+
+async function asaasRequest(path:string,method="GET",body?:Record<string,unknown>) {
+  if(!ASAAS_API_KEY) throw Object.assign(new Error("ASAAS_API_KEY não está configurada nos secrets do projeto."),{status:503});
+  const response=await fetch(ASAAS_BASE+path,{method,headers:{"Content-Type":"application/json",Accept:"application/json",access_token:ASAAS_API_KEY,"User-Agent":"FECHOU-Admin/1.0"},...(body?{body:JSON.stringify(body)}:{})});
+  const raw=await response.text();let data:any={};try{data=raw?JSON.parse(raw):{};}catch{data={};}
+  if(!response.ok) {
+    const detail=Array.isArray(data.errors)?data.errors.map((x:any)=>clean(x.description||x.code||"",180)).filter(Boolean).join("; "):clean(data.message||"",300);
+    throw Object.assign(new Error("Asaas recusou a operação ("+response.status+"). "+(detail||"Verifique permissões da chave e os dados da cobrança.")),{status:response.status===401||response.status===403?503:502});
+  }
+  return data;
+}
+async function asaasBalance() {
+  const data=await asaasRequest("/finance/getCurrentBalance");
+  return {connected:true,environment:ASAAS_ENV,balance:Number(data.balance||0),checked_at:new Date().toISOString(),webhook_token_configured:Boolean(ASAAS_WEBHOOK_TOKEN)};
+}
+async function asaasRefundCreate(db:any,user:any,params:any,requestId:string) {
+  const caseId=clean(params.case_id,80);
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(caseId)) throw Object.assign(new Error("Identificador do caso inválido."),{status:400});
+  let item:any=null;
+  for(const table of ["fechou_service_cases","fechou_service_review_cases","fechou_support_cases"]) {
+    const {data,error}=await db.from(table).select("*").eq("id",caseId).maybeSingle();
+    if(error && !/does not exist|schema cache/i.test(error.message)) throw new Error("Falha ao consultar o caso de reembolso.");
+    if(data){item=data;break;}
+  }
+  if(!item) throw Object.assign(new Error("Caso de reembolso não encontrado na fila administrativa."),{status:404});
+  if(classifyCaseType(item.case_type)!=="refund"||norm(item.decision)!=="approve") throw Object.assign(new Error("O caso precisa ser de reembolso e estar aprovado na análise administrativa."),{status:409});
+  const orderId=String(item.order_id||"");
+  const {data:order,error:orderError}=await db.from("orders").select("id,client_id,total,payment_status,payment_id,refund_status,metadata,payment_metadata").eq("id",orderId).maybeSingle();
+  if(orderError||!order) throw Object.assign(new Error("Contratação vinculada ao caso não encontrada."),{status:404});
+  if(!["approved","paid","received","confirmed"].includes(norm(order.payment_status))) throw Object.assign(new Error("O pagamento ainda não está confirmado."),{status:409});
+  if(["initiating","pending","refund_pending","bank_slip_action_required","refunded"].includes(norm(order.refund_status))) throw Object.assign(new Error("Já existe uma solicitação de estorno ou devolução registrada."),{status:409});
+  const paymentId=clean(order.payment_id,120);
+  if(!/^pay_[A-Za-z0-9]+$/.test(paymentId)) throw Object.assign(new Error("Identificador da cobrança Asaas inválido; conciliação manual necessária."),{status:409});
+  const {data:checkouts,error:checkoutError}=await db.from("fechou_asaas_checkouts").select("external_reference,amount,provider_payload").eq("order_id",orderId).in("purpose",["service","prepublication"]).order("created_at",{ascending:false}).limit(5);
+  if(checkoutError) throw new Error("Não foi possível conferir a contratação no histórico Asaas.");
+  const payment=await asaasRequest("/payments/"+encodeURIComponent(paymentId));
+  const checkout=(checkouts||[]).find((x:any)=>x.external_reference&&String(x.external_reference)===String(payment.externalReference||""));
+  const amount=Number(checkout?.amount||0);
+  if(!checkout||String(payment.id||"")!==paymentId||!["RECEIVED","CONFIRMED"].includes(String(payment.status||"").toUpperCase())||!(amount>0)||Math.abs(amount-Number(payment.value||0))>0.02) throw Object.assign(new Error("A cobrança não corresponde exatamente ao pagamento confirmado desta contratação."),{status:409});
+  const billing=clean(asObj(checkout.provider_payload).billing_type||asObj(checkout.provider_payload).billingType||asObj(order.payment_metadata).billing_type||asObj(order.payment_metadata).billingType||asObj(order.metadata).payment_billing_type||asObj(order.metadata).billing_type||payment.billingType||"",30).toUpperCase();
+  let claimQuery=db.from("orders").update({refund_status:"initiating",metadata:{...asObj(order.metadata),refund_admin_claimed_at:new Date().toISOString(),refund_admin_claimed_by:user.id},updated_at:new Date().toISOString()}).eq("id",orderId);
+  if(norm(order.refund_status)==="review_required") claimQuery=claimQuery.eq("refund_status","review_required");
+  else if(!order.refund_status) claimQuery=claimQuery.is("refund_status",null);
+  else throw Object.assign(new Error("O status atual do reembolso não permite nova solicitação."),{status:409});
+  const {data:claim,error:claimError}=await claimQuery.select("id").maybeSingle();
+  if(claimError||!claim) throw Object.assign(new Error("Não foi possível reservar o reembolso; atualize o caso."),{status:409});
+  let providerAccepted=false;
+  try {
+    let providerResult:any,requestUrl="";
+    if(billing==="BOLETO") {
+      providerResult=await asaasRequest("/payments/"+encodeURIComponent(paymentId)+"/bankSlip/refund","POST",{});
+      requestUrl=clean(providerResult.requestUrl||"",1000);
+      if(!requestUrl) throw new Error("O Asaas não retornou o link para o cliente informar os dados bancários.");
+      providerAccepted=true;
+    } else if(billing==="PIX"||billing==="CREDIT_CARD") {
+      providerResult=await asaasRequest("/payments/"+encodeURIComponent(paymentId)+"/refund","POST",{description:"FECHOU: reembolso aprovado pela administração. Caso "+caseId});
+      providerAccepted=true;
+    } else throw new Error("Esta forma de pagamento exige conferência manual antes do estorno.");
+    const status=billing==="BOLETO"?"bank_slip_action_required":"pending";
+    const metadata={...asObj(order.metadata),refund_status:status,refund_requested_at:new Date().toISOString(),refund_provider:"asaas",refund_provider_status:clean(providerResult.status||"requested",80),refund_request_url:requestUrl||null,refund_admin_decision_by:user.id};
+    const {error:updateError}=await db.from("orders").update({status:"cancelled",service_state:"cancelled",refund_status:status,metadata,updated_at:new Date().toISOString()}).eq("id",orderId);
+    if(updateError) throw new Error("O Asaas recebeu o pedido, mas o FECHOU não sincronizou a contratação: "+updateError.message);
+    const {error:ledgerError}=await db.from("fechou_wallet_ledger").upsert({user_id:order.client_id,order_id:orderId,entry_type:"refund",amount:Number(amount.toFixed(2)),status:"refund_pending",provider:"asaas",provider_reference:paymentId,description:billing==="BOLETO"?"Estorno iniciado; aguardando dados bancários do cliente no Asaas.":"Estorno solicitado ao Asaas; aguardando confirmação oficial.",idempotency_key:"refund:"+orderId,metadata:{billing_type:billing,request_url:requestUrl||null,case_id:caseId}},{onConflict:"idempotency_key",ignoreDuplicates:true});
+    if(ledgerError) throw new Error("Estorno solicitado ao Asaas, mas houve falha ao registrar a carteira: "+ledgerError.message);
+    await audit(db,user,"asaas_refund_requested","orders",orderId,{case_id:caseId,amount,billing_type:billing,provider_status:clean(providerResult.status||"requested",80)},requestId);
+    return {ok:true,refund_status:status,amount,request_url:requestUrl||null,provider_status:clean(providerResult.status||"requested",80),message:billing==="BOLETO"?"Solicitação iniciada. O cliente ainda precisa informar os dados bancários no link do Asaas.":"Estorno solicitado ao Asaas; a carteira só será atualizada como devolvida após confirmação do Webhook."};
+  } catch(error) {
+    if(providerAccepted) {
+      await db.from("orders").update({metadata:{...asObj(order.metadata),refund_status:"pending_sync",refund_sync_error:clean((error as Error)?.message||error,400),refund_provider_accepted_at:new Date().toISOString()},updated_at:new Date().toISOString()}).eq("id",orderId).eq("refund_status","initiating");
+    } else {
+      await db.from("orders").update({refund_status:"review_required",metadata:{...asObj(order.metadata),refund_status:"review_required",refund_error:clean((error as Error)?.message||error,400),refund_failed_at:new Date().toISOString()},updated_at:new Date().toISOString()}).eq("id",orderId).eq("refund_status","initiating");
+    }
+    throw error;
+  }
 }
 
 async function authenticate(req: Request) {
@@ -229,8 +311,12 @@ async function dashboard(db: any, period: string) {
     db.from("fechou_ops_presence").select("user_id,last_seen_at").gte("last_seen_at", new Date(Date.now() - 90000).toISOString()).limit(10000),
     db.from("fechou_wallet_ledger").select("entry_type,amount,status,created_at").limit(10000)
   ]);
-  const queries = [profilesQ,ordersQ,proposalsQ,checkoutsQ,eventsQ,payoutsQ,casesQ,reviewCasesQ,supportCasesQ,presenceQ,ledgerQ];
-  if (queries.some((q: any) => q.error)) throw new Error("Falha ao carregar os dados reais do dashboard.");
+  const namedQueries: [string,any][] = [["profiles",profilesQ],["orders",ordersQ],["proposals",proposalsQ],["fechou_asaas_checkouts",checkoutsQ],["app_analytics_events",eventsQ],["fechou_wallet_payout_requests",payoutsQ],["fechou_service_cases",casesQ],["fechou_service_review_cases",reviewCasesQ],["fechou_support_cases",supportCasesQ],["fechou_ops_presence",presenceQ],["fechou_wallet_ledger",ledgerQ]];
+  const failed = namedQueries.filter(([,q]) => q?.error).map(([name,q]) => ({table:name,code:q.error.code||null,message:clean(q.error.message||"query failed",300),details:clean(q.error.details||"",200),hint:clean(q.error.hint||"",200)}));
+  if (failed.length) {
+    console.error("admin-api dashboard query failures", JSON.stringify(failed));
+    throw Object.assign(new Error("Dashboard query failure: "+failed.map(x=>x.table+" ["+(x.code||"no-code")+"] "+x.message).join(" | ")),{status:500});
+  }
   const profiles = arr(profilesQ.data), orders = arr(ordersQ.data), proposals = arr(proposalsQ.data);
   const operationalOrders = orders.filter((x: any) => { const m = asObj(x.metadata); return !(m.temporary_test_price === true || norm(m.temporary_test_price) === "true" || m.test_order === true || norm(m.test_mode) === "true"); });
   const checkouts = arr(checkoutsQ.data).filter((c: any) => norm(c.purpose) === "subscription");
@@ -518,18 +604,125 @@ async function decideCase(db:any,user:any,params:any,requestId:string) {
 async function payoutDecide(db:any,user:any,params:any,requestId:string) {
   const id=clean(params.payout_id,80),decision=norm(params.decision),reason=clean(params.reason,1000);
   if(!id||!["approve","reject"].includes(decision))throw Object.assign(new Error("Dados da decisão de saque inválidos."),{status:400});
-  if(decision==="approve"){
-    await audit(db,user,"payout_approval_blocked","fechou_wallet_payout_requests",id,{reason:"asaas_not_configured_and_transfer_flow_disabled"},requestId);
-    throw Object.assign(new Error("Aprovação com pagamento real está desativada. Configure e valide as credenciais e os webhooks do Asaas antes de liberar transferências."),{status:503});
+  if(decision==="reject"){
+    if(!reason)throw Object.assign(new Error("Informe o motivo para rejeitar a solicitação."),{status:400});
+    const {data,error}=await db.from("fechou_wallet_payout_requests")
+      .update({status:"rejected",review_reason:reason,updated_at:new Date().toISOString()})
+      .eq("id",id).in("status",["requested_review","under_review"]).select("id,status").maybeSingle();
+    if(error)throw new Error("Não foi possível rejeitar a solicitação de saque.");
+    if(!data)throw Object.assign(new Error("Solicitação não encontrada ou não está em análise."),{status:409});
+    await audit(db,user,"payout_rejected","fechou_wallet_payout_requests",id,{reason},requestId);
+    return {id,status:data.status};
   }
-  if(!reason)throw Object.assign(new Error("Informe o motivo para rejeitar a solicitação."),{status:400});
-  const {data,error}=await db.from("fechou_wallet_payout_requests")
-    .update({status:"rejected",review_reason:reason,updated_at:new Date().toISOString()})
-    .eq("id",id).in("status",["requested_review","under_review"]).select("id,status").maybeSingle();
-  if(error)throw new Error("Não foi possível rejeitar a solicitação de saque.");
-  if(!data)throw Object.assign(new Error("Solicitação não encontrada ou não está em análise."),{status:409});
-  await audit(db,user,"payout_rejected","fechou_wallet_payout_requests",id,{reason},requestId);
-  return {id,status:data.status};
+
+  if(!ASAAS_PIX_PAYOUTS_ENABLED)throw Object.assign(new Error("Repasse Pix desativado. Habilite FECHOU_ASAAS_PIX_PAYOUTS_ENABLED somente após homologar o fluxo de teste."),{status:409,code:"PIX_PAYOUTS_DISABLED"});
+  if(ASAAS_ENV==="production"&&ASAAS_PIX_PAYOUTS_PRODUCTION_CONFIRMATION!=="I_ACCEPT_REAL_PIX_TRANSFERS")throw Object.assign(new Error("Repasse Pix em Produção bloqueado. Homologue o Sandbox e configure a confirmação explícita de transferências reais antes de liberar."),{status:409,code:"PIX_PAYOUT_PRODUCTION_LOCKED"});
+  if(!ASAAS_API_KEY)throw Object.assign(new Error("Asaas não configurado para transferências. Confira ASAAS_API_KEY nos secrets."),{status:503});
+  const {data:req,error:reqError}=await db.from("fechou_wallet_payout_requests")
+    .select("id,user_id,order_id,amount,status,pix_key_type,pix_key_last4").eq("id",id).maybeSingle();
+  if(reqError||!req)throw Object.assign(new Error("Solicitação de repasse não encontrada."),{status:404});
+  if(!["requested_review","under_review"].includes(norm(req.status)))throw Object.assign(new Error("A solicitação não está disponível para aprovação."),{status:409});
+
+  const {data:active,error:activeError}=await db.from("fechou_wallet_asaas_transfers")
+    .select("id,status,asaas_transfer_id").eq("payout_request_id",id)
+    .in("status",["initiating","unknown","pending","in_bank_processing"]).limit(1).maybeSingle();
+  if(activeError)throw new Error("Não foi possível verificar tentativas anteriores de transferência.");
+  if(active)throw Object.assign(new Error("Já existe uma transferência em andamento ou com resultado incerto. Não repita a operação; aguarde o webhook do Asaas."),{status:409});
+
+  const [{data:order,error:orderError},{data:profile,error:profileError},{data:ledger,error:ledgerError}] = await Promise.all([
+    db.from("orders").select("id,professional_id,status,service_state,payment_status,metadata").eq("id",req.order_id).maybeSingle(),
+    db.from("fechou_payout_profiles").select("user_id,pix_key,pix_key_type,last4,status,verified,confirmed_by_user,metadata").eq("user_id",req.user_id).maybeSingle(),
+    db.from("fechou_wallet_ledger").select("id,amount,status").eq("user_id",req.user_id).eq("order_id",String(req.order_id)).eq("entry_type","payout").eq("status","release_ready").maybeSingle()
+  ]);
+  if(orderError||!order)throw Object.assign(new Error("Contratação do repasse não encontrada."),{status:404});
+  if(profileError||!profile)throw Object.assign(new Error("Perfil de recebimento Pix não encontrado."),{status:409});
+  if(ledgerError||!ledger)throw Object.assign(new Error("Não existe saldo release_ready vinculado a esta contratação."),{status:409});
+  if(String(order.professional_id||"")!==String(req.user_id))throw Object.assign(new Error("O profissional da contratação não corresponde ao titular da solicitação."),{status:409});
+  if(!["approved","paid","received","confirmed"].includes(norm(order.payment_status)))throw Object.assign(new Error("O pagamento da contratação não está confirmado."),{status:409});
+  if(!["completed","concluido","concluído"].includes(norm(order.service_state))&&!["completed","concluido","concluído"].includes(norm(order.status)))throw Object.assign(new Error("A contratação ainda não foi concluída."),{status:409});
+  const meta=asObj(order.metadata);
+  if(meta.temporary_test_price===true||norm(meta.temporary_test_price)==="true"||meta.temporary_test_payment_only===true||norm(meta.temporary_test_payment_only)==="true"||meta.test_order===true||norm(meta.test_order)==="true"||meta.test_mode===true||norm(meta.test_mode)==="true")throw Object.assign(new Error("Repasse de contratação de teste bloqueado."),{status:409,code:"TEST_MODE_PAYOUT_BLOCKED"});
+  if(norm(profile.status)!=="verified"||profile.verified!==true||profile.confirmed_by_user!==true||!profile.pix_key)throw Object.assign(new Error("A chave Pix ainda não foi verificada e confirmada pelo profissional."),{status:409});
+  const pixType=norm(profile.pix_key_type).toUpperCase();
+  const requestType=norm(req.pix_key_type).toUpperCase();
+  const pixKey=String(profile.pix_key).trim();
+  const last4=pixKey.slice(-4);
+  if(!["CPF","CNPJ","EMAIL","PHONE","EVP"].includes(pixType)||pixType!==requestType||last4!==String(req.pix_key_last4||""))throw Object.assign(new Error("A chave Pix verificada não corresponde à chave registrada na solicitação. Solicite novamente após atualizar a chave."),{status:409});
+  const amount=Number(req.amount),ledgerAmount=Number(ledger.amount);
+  if(!Number.isFinite(amount)||amount<=0||Math.round(amount*100)!==Math.round(ledgerAmount*100))throw Object.assign(new Error("O valor solicitado não confere com o saldo liberado."),{status:409});
+  const [openCase,openReview]=await Promise.all([
+    db.from("fechou_service_cases").select("id").eq("order_id",String(req.order_id)).in("status",["open","in_review"]).limit(1).maybeSingle(),
+    db.from("fechou_service_review_cases").select("id").eq("order_id",String(req.order_id)).in("status",["open","in_review"]).limit(1).maybeSingle()
+  ]);
+  if(openCase.error||openReview.error)throw new Error("Não foi possível conferir se existe contestação ou análise pendente.");
+  if(openCase.data||openReview.data)throw Object.assign(new Error("Existe uma contestação ou revisão de serviço pendente; o repasse permanece bloqueado."),{status:409});
+
+  const balance=await asaasRequest("/finance/getCurrentBalance");
+  const available=Number(balance.balance||0);
+  if(!Number.isFinite(available)||available+0.0001<amount)throw Object.assign(new Error("Saldo disponível no Asaas insuficiente para este repasse."),{status:409});
+
+  const normalizedKey=/^[+()\\d\\s.-]+$/.test(pixKey)?pixKey.replace(/\\D/g,""):pixKey.toLowerCase();
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(normalizedKey));
+  const fingerprint=Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,"0")).join("");
+  const adminReason=reason.length>=12?reason:"Aprovação administrativa de repasse após validação de saldo, contratação e titularidade Pix.";
+  if(norm(req.status)==="requested_review"){
+    const {data:claimed,error:claimError}=await db.from("fechou_wallet_payout_requests")
+      .update({status:"under_review",review_reason:"Em validação administrativa para repasse.",updated_at:new Date().toISOString()})
+      .eq("id",id).eq("status","requested_review").select("id").maybeSingle();
+    if(claimError||!claimed)throw Object.assign(new Error("Não foi possível reservar a solicitação para análise. Atualize a fila e tente novamente."),{status:409});
+  }
+  const {data:reserved,error:reserveError}=await db.rpc("fechou_reserve_asaas_payout_attempt",{
+    p_payout_request_id:id,p_user_id:req.user_id,p_order_id:req.order_id,p_admin_id:user.id,
+    p_amount:amount,p_pix_key_type:pixType,p_pix_key_last4:last4,p_pix_key:pixKey,
+    p_pix_key_fingerprint:fingerprint,p_reason:adminReason,p_external_reference_prefix:"fechou-payout"
+  });
+  if(reserveError)throw Object.assign(new Error("Não foi possível reservar a transferência com segurança: "+clean(reserveError.message,300)),{status:409});
+  const attempt=Array.isArray(reserved)?reserved[0]:reserved;
+  if(!attempt?.id||!attempt?.external_reference)throw new Error("A reserva de transferência não retornou identificador válido.");
+  const now=new Date().toISOString();
+  const {error:pendingError}=await db.from("fechou_wallet_payout_requests").update({
+    status:"transfer_pending",review_reason:"Aprovação administrativa registrada; aguardando confirmação do Asaas.",updated_at:now
+  }).eq("id",id).eq("status","under_review");
+  if(pendingError)throw new Error("Reserva criada, mas não foi possível atualizar a solicitação para processamento: "+pendingError.message);
+
+  try {
+    const transfer=await asaasRequest("/transfers","POST",{
+      value:Number(amount.toFixed(2)),pixAddressKey:pixKey,pixAddressKeyType:pixType,operationType:"PIX",
+      description:"FECHOU - repasse profissional",externalReference:attempt.external_reference
+    });
+    const transferId=clean(transfer.id,180);
+    if(!transferId)throw Object.assign(new Error("Asaas aceitou a chamada sem retornar o ID da transferência; conciliação pelo webhook necessária."),{status:502,ambiguous:true});
+    const providerStatus=clean(transfer.status||"PENDING",40).toUpperCase();
+    const mapped=providerStatus==="DONE"?"done":providerStatus==="BANK_PROCESSING"||providerStatus==="IN_BANK_PROCESSING"?"in_bank_processing":providerStatus==="BLOCKED"?"blocked":"pending";
+    const {error:updateAttemptError}=await db.from("fechou_wallet_asaas_transfers").update({
+      asaas_transfer_id:transferId,status:mapped,provider_status:providerStatus,updated_at:new Date().toISOString()
+    }).eq("id",attempt.id);
+    if(updateAttemptError)throw new Error("Asaas retornou transferência "+transferId+", mas o ID não foi sincronizado localmente. O webhook fará a conciliação: "+updateAttemptError.message);
+    await audit(db,user,"asaas_transfer_created","fechou_wallet_asaas_transfers",attempt.id,{
+      payout_request_id:id,amount,transfer_id:transferId,provider_status:providerStatus,external_reference:attempt.external_reference
+    },requestId);
+    return {id,status:"transfer_pending",transfer_id:transferId,provider_status:providerStatus,amount,
+      message:"Transferência enviada ao Asaas. O saldo só será marcado como pago após o webhook TRANSFER_DONE."};
+  } catch(error) {
+    const status=Number((error as any)?.status)||0;
+    const ambiguous=Boolean((error as any)?.ambiguous)||status===0||status>=500||status===502;
+    const nextStatus=ambiguous?"unknown":"failed";
+    const message=clean((error as Error)?.message||error,500);
+    await db.from("fechou_wallet_asaas_transfers").update({
+      status:nextStatus,provider_status:ambiguous?"UNKNOWN":"REJECTED",fail_reason:message,updated_at:new Date().toISOString()
+    }).eq("id",attempt.id);
+    await db.from("fechou_wallet_payout_requests").update({
+      status:ambiguous?"transfer_pending":"under_review",
+      review_reason:ambiguous?"Resultado da chamada ao Asaas incerto. Não repetir; aguardar webhook ou conciliação manual.":message,
+      updated_at:new Date().toISOString()
+    }).eq("id",id).neq("status","paid");
+    await audit(db,user,ambiguous?"asaas_transfer_unknown":"asaas_transfer_rejected","fechou_wallet_asaas_transfers",attempt.id,{
+      payout_request_id:id,amount,error:message,ambiguous
+    },requestId);
+    throw Object.assign(new Error(ambiguous
+      ?"O resultado da solicitação ao Asaas é incerto. O sistema bloqueou uma segunda tentativa para evitar Pix duplicado; aguarde conciliação."
+      :"O Asaas recusou a transferência. A solicitação voltou para análise e o saldo não foi baixado: "+message),{status:ambiguous?502:422});
+  }
 }
 
 async function handleAction(db:any,user:any,admin:any,action:string,params:any,requestId:string) {
@@ -547,10 +740,15 @@ async function handleAction(db:any,user:any,admin:any,action:string,params:any,r
   if(action==="payments_list")return paymentsList(db,params);
   if(action==="transactions_list")return transactionsList(db,params);
   if(action==="payouts_list")return payoutsList(db,params);
-  if(action==="payout_decide")return payoutDecide(db,user,params,requestId);
-  if(action==="asaas_balance"||action==="asaas_refund_create"||action==="asaas_transfer_create"){
-    await audit(db,user,action+"_blocked",null,null,{reason:"asaas_secrets_and_webhooks_not_validated"},requestId);
-    throw Object.assign(new Error("Integração financeira ainda não liberada. Configure ASAAS_API_KEY, ASAAS_ENV e ASAAS_WEBHOOK_TOKEN e valide os webhooks antes de consultar saldo, estornar ou transferir valores."),{status:503});
+  if(action==="payout_decide"){
+    if(norm(params.decision)==="approve")assertPermission(admin,"asaas_transfer_create");
+    return payoutDecide(db,user,params,requestId);
+  }
+  if(action==="asaas_balance") return await asaasBalance();
+  if(action==="asaas_refund_create") return await asaasRefundCreate(db,user,params,requestId);
+  if(action==="asaas_transfer_create"){
+    await audit(db,user,"asaas_transfer_blocked",null,null,{reason:"transfer_requires_approved_payout_request_and_verified_pix_owner"},requestId);
+    throw Object.assign(new Error("Transferência manual desativada. O repasse precisa estar vinculado a uma solicitação de saque aprovada, com titularidade da chave Pix validada."),{status:409});
   }
   throw Object.assign(new Error("Ação administrativa desconhecida."),{status:400});
 }
