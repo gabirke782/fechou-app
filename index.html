@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-build="V322.2" data-fechou-version="V322.2" lang="pt-BR">
+<html data-fechou-build="V322.5" data-fechou-version="1.0.1" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-v215-core">
@@ -93,7 +93,9 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" name="viewport"/>
 <title>FECHOU · Serviços</title>
-<meta content="V322.2" name="fechou-build"/>
+<meta name="fechou-release" content="V322.5-alinhamento-fluxo"/>
+<meta content="V322.5" name="fechou-build"/>
+<meta name="fechou-version" content="1.0.1"/>
 <style>
       :root{
         --bg: #090c10;
@@ -1540,7 +1542,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
         color: #4f7fb8;
       }
     </style>
-<meta content="V322.2" name="fechou-build"/>
+<meta content="V322.5" name="fechou-build"/>
 <style id="fechou-v300-contract-polish">
       :root{
         --fechou-nav-height: 70px;
@@ -1852,10 +1854,10 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 #app#app .fc-plan-track .pill{align-self:flex-start!important;font-size:10px!important;letter-spacing:.05em!important;color:#bfddff!important;background:#264565!important;border:1px solid #476b90!important;padding:6px 10px!important;border-radius:8px!important}
 .fc-plan-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 14px;color:#a9bfd6;font:12px/1.5 system-ui}.fc-plan-controls button{min-height:38px;min-width:42px;padding:8px 12px;border:1px solid #4e7094;border-radius:10px;background:#1e3854;color:#d9ecff;cursor:pointer}.fc-plan-controls div{display:flex;gap:8px}.fc-contract-progress{display:block;margin:0 0 12px;font-size:12px;color:#b9d9f9}.fc-legacy-test-note{display:block;font-size:12px;color:#ffd09a;margin:7px 0;line-height:1.6}
 </style>
-<meta content="V243-front-end-security-audit-layout-only" name="fechou-local-build"/>
+<meta content="V322.5-front-end-alignment" name="fechou-local-build"/>
 </head>
 <body>
-<div class="wrap" id="fechou-v140-1-build-01">
+<div class="wrap" id="fechou-v322-5-build-01" data-fechou-build="V322.5">
 <header class="top">
 <div class="brand">
 <div aria-label="Símbolo FECHOU" class="logo" style="
@@ -5941,6 +5943,9 @@ ${
         }
 
         // SUPABASE: autenticação por e-mail/senha e perfis reais.
+        // Política solicitada: não restaurar login de uma sessão anterior automaticamente.
+        // Remove somente o token local padrão do Supabase; não apaga perfil, pedidos ou arquivos.
+        try { localStorage.removeItem("sb-ziubcqxmxialhmwevtiy-auth-token"); } catch (_) {}
         // V126: URL also exposed globally for older appended scripts that reference EW__URL.
         const EW_SUPABASE_URL = "https://ziubcqxmxialhmwevtiy.supabase.co";
         const EW_SUPABASE_PUBLISHABLE_KEY =
@@ -5961,7 +5966,7 @@ ${
               EW_SUPABASE_PUBLISHABLE_KEY,
               {
                 auth: {
-                  persistSession: true,
+                  persistSession: false,
                   autoRefreshToken: true,
                   detectSessionInUrl: true,
                 },
@@ -21651,7 +21656,7 @@ ${
                   "sb_publishable_h77CyrbAK-RPGaGKgfcBOw_D6_-JTPh",
                 {
                   auth: {
-                    persistSession: true,
+                    persistSession: false,
                     autoRefreshToken: true,
                     detectSessionInUrl: true,
                   },
@@ -21679,7 +21684,7 @@ ${
           );
           const options = {
             auth: {
-              persistSession: true,
+              persistSession: false,
               autoRefreshToken: true,
               detectSessionInUrl: true,
             },
@@ -22728,20 +22733,23 @@ ${
           const client = party?.client || {},
             professional = party?.professional || {};
           const fieldValue = (id) => String(document.getElementById(id)?.value || "").trim();
-          const terms = fieldValue("v121-contract-terms") || q?.conditions ||
-            "Condições específicas devem ser conferidas e aceitas antes do início.";
-          const price = Number(q?.price || o.total || 0);
+          const proposalMessage = String(q?.message || q?.description || q?.details || q?.notes || "").trim();
+          const proposalTerms = String(q?.conditions || q?.terms || q?.special_conditions || "").trim();
+          const terms = fieldValue("v121-contract-terms") || proposalTerms || proposalMessage ||
+            "A proposta selecionada não registrou condições adicionais. As partes deverão confirmar qualquer condição específica no chat antes do início.";
+          const price = Number(q?.price || q?.final_price || o.total || 0);
           const serviceDate = o.date || o.desired_date || "A combinar por escrito";
-          const deadline = fieldValue("v121-contract-deadline") || q?.deadline || "Prazo estimado a combinar por escrito.";
-          const materials = fieldValue("v121-contract-materials") || q?.materials ||
-            "Conforme a proposta aceita; qualquer compra adicional exige autorização prévia.";
-          const workSteps = fieldValue("v121-contract-steps") || q?.work_steps || q?.steps ||
-            "Etapas e sequência de execução a confirmar entre as partes antes do início.";
-          const warranty = fieldValue("v121-contract-warranty") || q?.warranty ||
-            "Garantia específica a confirmar conforme o serviço e a legislação aplicável.";
-          const laborDetails = fieldValue("v121-contract-labor") || q?.labor_details ||
-            "Mão de obra conforme o valor da proposta aceita.";
-          const availability = q?.availability || "A combinar entre as partes";
+          const deadline = fieldValue("v121-contract-deadline") || q?.deadline || q?.estimated_deadline ||
+            "Prazo não especificado na proposta aceita; confirmar por escrito antes do início.";
+          const materials = fieldValue("v121-contract-materials") || q?.materials || q?.included_materials ||
+            "Materiais não especificados na proposta aceita; confirmar por escrito antes da compra ou execução.";
+          const workSteps = fieldValue("v121-contract-steps") || q?.work_steps || q?.steps || q?.execution_steps ||
+            proposalMessage || "Etapas não detalhadas na proposta aceita; confirmar por escrito antes do início.";
+          const warranty = fieldValue("v121-contract-warranty") || q?.warranty || q?.guarantee ||
+            "Garantia específica não informada na proposta; permanecem aplicáveis os direitos previstos na legislação.";
+          const laborDetails = fieldValue("v121-contract-labor") || q?.labor_details || q?.price_composition ||
+            "Mão de obra conforme o valor final da proposta aceita.";
+          const availability = q?.availability || q?.schedule || "A combinar entre as partes";
           const paymentMethodRaw =
             q?.paymentMethod ||
             q?.metadata?.payment_method ||
@@ -22784,6 +22792,9 @@ ${
               name: o.service || o.title || "Serviço contratado",
               category: o.category || "",
               description: o.description || "Não informada",
+              proposal_id: q?.id || null,
+              proposal_message: proposalMessage,
+              proposal_conditions: proposalTerms,
               location: o.location || "A confirmar",
               desired_date: serviceDate,
               availability,
@@ -23032,8 +23043,11 @@ ${
         async function generateContract(o, options = {}) {
           const db = supa();
           if (!db || !uid()) throw new Error("Entre na conta para gerar o contrato.");
-          const q = o?.selectedProposal || findProposal(o, o?.selectedProposalId || o?.selected_proposal_id);
-          if (!q) throw new Error("A proposta aceita não foi encontrada.");
+          const selectedProposalId = o?.selected_proposal_id || o?.selectedProposalId || o?.selectedProposal?.id || o?.selected_proposal?.id;
+          const q = findProposal(o, selectedProposalId) ||
+            (o?.selectedProposal?.id && String(o.selectedProposal.id) === String(selectedProposalId || o.selectedProposal.id) ? o.selectedProposal : null) ||
+            (o?.selected_proposal?.id && String(o.selected_proposal.id) === String(selectedProposalId || o.selected_proposal.id) ? o.selected_proposal : null);
+          if (!q) throw new Error("A proposta aceita vinculada a este pedido não foi encontrada.");
           const professionalId = String(q.professional_id || o.professional_id || "");
           if (state.currentRole !== "Profissional" || professionalId !== uid())
             throw new Error("Somente o profissional selecionado pode gerar o contrato.");
@@ -23593,7 +23607,7 @@ ${
           } else if (directAgreed && !client && directRequested) {
             contractContent = `<section class="fc-contract-card"><h3>Solicitação de contrato</h3><p>O cliente solicitou a formalização desta contratação.</p><div class="fc-contract-actions"><button class="fc-primary-action" type="button" data-v222-respond-direct-contract="accept">Preparar contrato</button><button class="fc-secondary-action" type="button" data-v222-respond-direct-contract="decline">Recusar solicitação</button></div></section>`;
           } else {
-            contractContent = `<section class="fc-contract-card"><h3>Contrato da contratação</h3><p>As condições contratuais e os documentos desta contratação aparecerão aqui quando estiverem disponíveis.</p></section>`;
+            contractContent = `<section class="fc-contract-card"><h3>Condições da proposta selecionada</h3>${q ? `<p><b>Serviço:</b> ${esc121(o.service || o.category || "Serviço contratado")}</p><p><b>Valor acordado:</b> ${Number(q.price || o.total || 0).toLocaleString("pt-BR", {style:"currency",currency:"BRL"})}</p><p><b>Condições:</b> ${esc121(q.conditions || q.terms || q.special_conditions || q.message || q.description || q.details || "Não foram registradas condições adicionais na proposta.")}</p>${q.message && q.conditions && String(q.message).trim() !== String(q.conditions).trim() ? `<p><b>Mensagem original da proposta:</b> ${esc121(q.message)}</p>` : ""}<p><b>Materiais:</b> ${esc121(q.materials || q.included_materials || "A confirmar entre as partes.")}</p><p><b>Disponibilidade:</b> ${esc121(q.availability || q.schedule || "A combinar")}</p><p><b>Prazo:</b> ${esc121(q.deadline || q.estimated_deadline || "A combinar por escrito")}</p><p><b>Forma de pagamento:</b> ${esc121(q.paymentMethod || q.metadata?.payment_method || (modeOf(o)==="contract_prepaid" ? "Pagamento pelo aplicativo + contrato" : "Pagamento direto entre as partes"))}</p><small>Estas são as condições vinculadas à proposta selecionada. O contrato formal e os aceites serão exibidos quando forem gerados e registrados.</small>` : `<p>Não foi possível carregar a proposta vinculada. Atualize os pedidos para sincronizar as condições antes de prosseguir.</p>`}</section>`;
           }
           const inboxOrders = getRelevantOrders().filter(item => {
             const pid = item.selected_proposal_id || item.selectedProposalId || item.selectedProposal?.id;
@@ -23788,6 +23802,14 @@ ${
           inboxFilter = archived.has(String(first.id)) ? "archived" : "all";
           await openChat(first.id, proposal.id, { showInbox: true });
           return true;
+        };
+        window.__fechouOpenChatByOrder = async function (orderId) {
+          const order = findOrder(orderId);
+          if (!order) throw new Error("Não foi possível localizar esta contratação.");
+          const proposalId = order.selected_proposal_id || order.selectedProposalId || order.selectedProposal?.id;
+          const proposal = proposalForCurrentUser(order, proposalId);
+          if (!proposal?.id) throw new Error("Não foi possível identificar a proposta desta conversa.");
+          return openChat(order.id, proposal.id, { showInbox: false });
         };
         window.__fechouCloseChatWithoutReopen = (orderId) => {
           if (String(chatOrderId || "") !== String(orderId || "")) return false;
@@ -28155,14 +28177,15 @@ body #app .fechou-profile-progress>div:first-child b {
             if (contestReason.length < 8) { toast134("Descreva o problema com pelo menos 8 caracteres para enviar à análise."); return false; }
           }
           if (action === "start" && button.dataset.fechouStartConfirmed !== "1") {
-            try { await window.FECHOU_VALIDATE_EVIDENCE(orderId, "start"); }
-            catch (e) { toast134(e?.message || "Registre pelo menos uma foto em Antes antes de iniciar o serviço."); return false; }
+            // A foto Antes é registrada depois da chegada ao local, nunca como pré-requisito para iniciar.
             if (typeof window.__fechouOpenStartServiceModal === "function") window.__fechouOpenStartServiceModal(button);
-            return;
+            else button.dataset.fechouStartConfirmed = "1";
+            if (button.dataset.fechouStartConfirmed !== "1") return;
           }
           const map = { start:"service/start", complete:"service/submit-completion", approve:"service/approve-completion", contest:"service/contest-completion", review:"service/request-review" };
           if (!map[action]) return;
-          if (action === "start" || action === "complete") {
+          if (action === "complete") {
+            window.FECHOU_V322_REMINDERS?.finishing?.(orderId);
             try { await window.FECHOU_VALIDATE_EVIDENCE(orderId, action); }
             catch (e) {
               const msg = String(e?.message || "Não foi possível validar as fotos obrigatórias.");
@@ -32729,7 +32752,7 @@ body #app .v134-wallet .btn:not(.secondary){background:#245c8c!important;border-
 /* Títulos principais inteiramente brancos, sem alterar acentos e títulos internos. */
 #app .hero h1, #app .hero h1 span, #app .hero h1 strong, #app .hero h1 em{color:#fff!important}
 /* O contêiner externo mantém o mínimo de uma tela. O conteúdo interno cresce somente conforme seu conteúdo real. */
-.wrap#fechou-v140-1-build-01{height:auto!important;min-height:100dvh!important;max-height:none!important;overflow:visible!important}
+.wrap#fechou-v322-5-build-01{height:auto!important;min-height:100dvh!important;max-height:none!important;overflow:visible!important}
 #app{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important}
 #app>:first-child, #app>:last-child{min-height:0!important;max-height:none!important}
 #app .panel, #app .section, #app .grid, #app article{min-height:0}
@@ -33846,7 +33869,7 @@ window.addEventListener('click',async e=>{
  if(t.matches('[data-v189-wallet-tab]')){consume();const w=t.closest('.v134-wallet');const target=t.dataset.v189WalletTab==='refund'?$('.v173-refund-panel',w):$('.v134-ledger-row',w)?.parentElement||$('.v134-wallet-stats',w);if(target){for(let p=target.parentElement;p&&p!==w;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;target.scrollIntoView({behavior:'smooth',block:'start'})}else note('Nenhuma movimentação registrada nesta seção.');return}
  if(t.matches('[data-v189-pay]')){consume();const o=active(t.dataset.v189Pay);if(o)checkout(o).catch(err=>note(errorText(err)));return}
  if(t.matches('[data-v189-cancel]')){consume();const o=active(t.dataset.v189Cancel);if(o)cancelPayment(o);return}
- if(t.matches('[data-v189-start]')){consume();const o=active(t.dataset.v189Start);if(!o||!bothSigned(o))return note('Aguardando confirmação das duas assinaturas.');try{await window.FECHOU_VALIDATE_EVIDENCE(String(o.id),'start')}catch(error){return note(error?.message||'Registre pelo menos uma foto em Antes antes de iniciar o serviço.')}t.disabled=true;try{const locationData=await window.FECHOU_V322_CAPTURE_LOCATION?.();const r=await api('service/start',{order_id:String(o.id),protocol_version:189,...(locationData||{})});await window.ewSyncOrders?.();const current=active(o.id);if(r.order?.id===o.id)Object.assign(current,r.order);if(!isStarted(current))throw new Error('O servidor ainda não confirmou o início do serviço.');schedule();window.FECHOU_V322_REMINDERS?.started?.(String(o.id));note('Serviço iniciado. Você chegou ao local do serviço? Tire uma foto inicial pelo chat do cliente.')}catch(err){note(errorText(err))}finally{t.disabled=false}return}
+ if(t.matches('[data-v189-start]')){consume();const o=active(t.dataset.v189Start);if(!o||!bothSigned(o))return note('Aguardando confirmação das duas assinaturas.');t.disabled=true;try{const locationData=await window.FECHOU_V322_CAPTURE_LOCATION?.();const r=await api('service/start',{order_id:String(o.id),protocol_version:189,...(locationData||{})});await window.ewSyncOrders?.();const current=active(o.id);if(r.order?.id===o.id)Object.assign(current,r.order);if(!isStarted(current))throw new Error('O servidor ainda não confirmou o início do serviço.');schedule();window.FECHOU_V322_REMINDERS?.started?.(String(o.id));note('Serviço iniciado. Você chegou ao local do serviço? Tire uma foto inicial pelo chat do cliente.')}catch(err){note(errorText(err))}finally{t.disabled=false}return}
  const contract=t.closest('[data-v121-generate-contract],[data-v121-accept-contract],[data-v121-print-contract]');if(contract){const o=active(contract.closest('#v121ChatOverlay')?.dataset.orderId)||active();if(o&&mode(o)==='contract_prepaid'){consume();if(!paid(o)){const gate=dialog('Pagamento pendente','<p>O contrato e a assinatura serão liberados depois que o provedor confirmar o pagamento. Nenhum contrato foi gerado nesta tentativa.</p>',btn('Entendi','close'));$('[data-v189=close]',gate.box).onclick=gate.close;return}const print=contract.matches('[data-v121-print-contract]');const printWindow=print?window.open('','_blank'):null;if(printWindow){printWindow.opener=null;printWindow.document.body.textContent='Carregando o contrato original…'}contract.disabled=true;try{await contractReview(o,{print,printWindow})}catch(err){try{printWindow?.close()}catch(_){}note(errorText(err))}finally{contract.disabled=false}return}}
  const article=t.closest('.v135-notification-item');if(article&&!t.closest('[data-v181-read],[data-v135-read]')&&!t.matches('a[href]')){consume();const nid=article.dataset.v181Notification||article.dataset.v135NotificationItem||article.dataset.id||article.dataset.notificationId;const row=(state().notifications||[]).find(n=>String(n.id)===String(nid));const data=row?.data||{};const orderId=data.order_id||data.orderId||row?.order_id||article.dataset.v181Order||article.dataset.v135OrderId||article.dataset.orderId;try{let o=active(orderId);if(!o&&orderId){await window.ewSyncOrders?.();o=active(orderId)}if(!o){if(/pagamento|pix|repasse|saque|reembolso|estorno/i.test(String(row?.title||'')+' '+String(row?.type||''))){article.closest('.v135-notification-pop')?.remove();$('[data-v134-wallet-nav]')?.click();return}note('O serviço desta notificação não está disponível para esta conta. Atualize os pedidos.');return}// Abrir o item somente visualiza a notificação. A remoção ocorre pelo botão explícito "Marcar como lida".
 article.closest('.v135-notification-pop')?.remove();openOrder(o,data.proposal_id||article.dataset.v135ProposalId)}catch(err){note(errorText(err))}return}
@@ -37351,7 +37374,6 @@ body{min-width:0!important}
    if(error)throw new Error('Não foi possível validar as fotos obrigatórias. Tente novamente antes de prosseguir.');
    const counts={before:0,during:0,after:0};
    for(const row of data||[])if(Object.prototype.hasOwnProperty.call(counts,String(row.phase||'')))counts[String(row.phase)]++;
-   if(action==='start'&&counts.before<1)throw new Error(`Para iniciar o serviço, registre pelo menos uma foto em Antes. Atualmente: ${counts.before}.`);
    if(action==='complete'){
      const missing=[['before','Antes'],['during','Durante'],['after','Depois']].filter(([phase])=>counts[phase]<1);
      if(missing.length)throw new Error('Para finalizar, é obrigatória pelo menos uma foto em cada etapa. Falta: '+missing.map(([phase,label])=>label).join(', ')+'.');
@@ -38100,12 +38122,12 @@ body{min-width:0!important}
   #v121ChatOverlay .fc-chat-selected-files{display:block!important;max-width:100%!important;}
   @media(max-width:480px){#app .v305-services-grid-3{gap:5px!important}#app .v305-services-grid-3>.order,#app .v305-services-grid-3>.home-job{padding:7px!important}}
 </style>
-<script id="fechou-v320-build-marker">
-  window.FECHOU_BUILD_VERSION="V320-REVISAO-FINAL-PERFIL-DEMO-E-METADADOS";
-  window.FECHOU_BUILD_ID="FECHOU_V320_REVISAO_FINAL_PERFIL_DEMO_E_METADADOS";
-  document.documentElement.dataset.fechouBuild="V320";
-  document.documentElement.dataset.fechouVersion="V320";
-  document.querySelectorAll('meta[name="fechou-build"],meta[name="exylon-hub-version"]').forEach(meta=>meta.setAttribute("content","V320"));
+<script id="fechou-v322-5-build-marker">
+  window.FECHOU_BUILD_VERSION="V322.5-FLUXO-PROPOSTA-LEMBRETES";
+  window.FECHOU_BUILD_ID="FECHOU_V322_5_FLUXO_PROPOSTA_LEMBRETES";
+  document.documentElement.dataset.fechouBuild="V322.5";
+  document.documentElement.dataset.fechouVersion="V322.5";
+  document.querySelectorAll('meta[name="fechou-build"],meta[name="exylon-hub-version"]').forEach(meta=>meta.setAttribute("content","V322.5"));
   document.documentElement.lang="pt-BR";
 </script>
 
@@ -38405,58 +38427,87 @@ body.fechou-guest-public-only .wrap > footer.footer {
 <script id="fechou-v322-location-reminders">
 (()=>{'use strict';
  if(window.__FECHOU_V322_HELPERS__)return;window.__FECHOU_V322_HELPERS__=true;
- const timers=new Map();
+ const timers=new Map(), watches=new Map(), arrivalHits=new Map();
  const labels={arrival:'Você chegou ao local do serviço? Tire uma foto inicial pelo chat do cliente.',hourly:'Você ainda está executando o serviço? Tire uma foto durante o serviço.',finish:'Você terminou o serviço? Não esqueça sua última etapa das fotos.'};
- function inAppNotice(orderId,message){
-   const overlay=document.querySelector('#v121ChatOverlay');
-   if(overlay && (!orderId || String(overlay.dataset.orderId||'')===String(orderId))){
-     const box=document.createElement('div');box.className='v322-reminder';box.setAttribute('role','status');box.setAttribute('aria-live','polite');
-     const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Fechar aviso');close.textContent='×';close.addEventListener('click',()=>box.remove());
-     const text=document.createElement('span');text.textContent=message;box.append(close,text);
-     (overlay.querySelector('.fc-chat-scroll')||overlay.querySelector('.fc-chat-window')||overlay).appendChild(box);
-   }
-   if(typeof window.safeToast==='function')window.safeToast(message);
-   else if(typeof window.toast==='function')window.toast(message);
-   if('Notification' in window && Notification.permission==='granted'){
-     try{new Notification('FECHOU · Serviço',{body:message,tag:'fechou-'+orderId+'-'+message.slice(0,12)})}catch(_){ }
-   }
+ const storageKey=id=>'fechou:v322:reminder:'+String(id);
+ function getOrders(){const s=window.__fechouV178GetState?.()||window.__fechouAppState||window.state||{};return Array.isArray(s.orders)?s.orders:[]}
+ function getOrder(id){return getOrders().find(o=>String(o.id)===String(id))||null}
+ function coords(o){
+   const sources=[o,o?.service_address,o?.address_data,o?.location,o?.metadata,o?.metadata?.service_address,o?.metadata?.location,o?.service?.address,o?.request?.address];
+   const pairs=[['latitude','longitude'],['lat','lng'],['lat','lon'],['service_latitude','service_longitude'],['destination_latitude','destination_longitude'],['address_latitude','address_longitude'],['latitude','lon']];
+   for(const src of sources){if(!src||typeof src!=='object')continue;for(const [a,b] of pairs){const lat=Number(src[a]),lon=Number(src[b]);if(Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180&&(lat!==0||lon!==0))return {lat,lon}}}
+   return null;
+ }
+ function distance(a,b){const R=6371000,rad=x=>x*Math.PI/180,dLat=rad(b.lat-a.lat),dLon=rad(b.lon-a.lon),x=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+ function notify(message,orderId,kind){
+   const overlay=document.querySelector('#v121ChatOverlay'),box=document.createElement('div');box.className='v322-reminder';box.setAttribute('role','status');box.setAttribute('aria-live','polite');
+   box.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 13px;margin:10px;border:1px solid #42678c;border-radius:12px;background:#132438;color:#eef6ff;font-size:13px;line-height:1.45;z-index:99999';
+   const text=document.createElement('span');text.textContent=message;text.style.flex='1 1 190px';box.append(text);
+   const open=document.createElement('button');open.type='button';open.textContent='Abrir conversa';open.style.cssText='border:1px solid #6c9bc9;border-radius:8px;background:#1b4264;color:#fff;padding:7px 10px;font-weight:700';open.addEventListener('click',async()=>{try{await window.__fechouOpenChatByOrder?.(String(orderId));box.remove()}catch(error){if(typeof window.safeToast==='function')window.safeToast(String(error?.message||'Não foi possível abrir a conversa.'))}});
+   const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Fechar aviso');close.textContent='×';close.style.cssText='border:0;background:transparent;color:#dceafa;font-size:20px';close.addEventListener('click',()=>box.remove());box.append(open,close);
+   if(overlay&&String(overlay.dataset.orderId||'')===String(orderId))(overlay.querySelector('.fc-chat-scroll')||overlay.querySelector('.fc-chat-window')||overlay).appendChild(box);
+   else{document.getElementById('fechou-v322-reminder-global')?.remove();box.id='fechou-v322-reminder-global';box.style.cssText+=';position:fixed;left:12px;right:12px;bottom:88px;max-width:620px;margin:0 auto;box-shadow:0 10px 32px #0008';document.body.appendChild(box)}
+   if(typeof window.safeToast==='function')window.safeToast(message);else if(typeof window.toast==='function')window.toast(message);
+   if('Notification'in window&&Notification.permission==='granted'){try{new Notification('FECHOU · Serviço',{body:message,tag:'fechou-'+orderId+'-'+kind,renotify:false})}catch(_){}}
  }
  window.FECHOU_V322_CAPTURE_LOCATION=()=>new Promise(resolve=>{
    const result={location_permission_status:'unavailable'};
-   if(!window.isSecureContext || !navigator.geolocation){resolve(result);return;}
+   if(!window.isSecureContext||!navigator.geolocation){resolve(result);return}
    result.location_permission_status='requested';
-   navigator.geolocation.getCurrentPosition(pos=>resolve({location_permission_status:'granted',start_location:{latitude:Number(pos.coords.latitude),longitude:Number(pos.coords.longitude),accuracy_m:Number(pos.coords.accuracy),recorded_at:new Date(pos.timestamp||Date.now()).toISOString()}}),err=>{
-     result.location_permission_status=err?.code===1?'denied':err?.code===3?'timeout':'unavailable';
-     resolve(result);
-   },{enableHighAccuracy:true,maximumAge:30000,timeout:8000});
+   const request=()=>navigator.geolocation.getCurrentPosition(pos=>{const latitude=Number(pos.coords.latitude),longitude=Number(pos.coords.longitude),accuracy_m=Number(pos.coords.accuracy),recorded_at=new Date(pos.timestamp||Date.now()).toISOString();resolve({location_permission_status:'granted',latitude,longitude,accuracy_m,recorded_at,start_location:{latitude,longitude,accuracy_m,recorded_at}})},err=>{result.location_permission_status=err?.code===1?'denied':err?.code===3?'timeout':'unavailable';resolve(result)},{enableHighAccuracy:true,maximumAge:10000,timeout:12000});
+   if('Notification'in window&&Notification.permission==='default'){try{Notification.requestPermission().finally(request)}catch(_){request()}}else request();
  });
- function clear(orderId){const key=String(orderId);if(timers.has(key)){clearInterval(timers.get(key));timers.delete(key)}}
+ function stopWatch(id){const key=String(id);if(watches.has(key)){try{navigator.geolocation.clearWatch(watches.get(key))}catch(_){}watches.delete(key)}}
+ function startArrivalWatch(id){
+   const key=String(id);if(watches.has(key)||!navigator.geolocation||!window.isSecureContext)return;
+   const o=getOrder(key),target=coords(o);if(!target){notify('O serviço foi iniciado. Para detectar sua chegada automaticamente, o endereço do serviço precisa ter latitude e longitude cadastradas. Enquanto isso, envie a foto inicial pelo chat.',key,'arrival-address-missing');return}
+   let hits=0;const watch=navigator.geolocation.watchPosition(pos=>{const accuracy=Number(pos.coords.accuracy);if(!Number.isFinite(accuracy)||accuracy>100){hits=0;return}const d=distance({lat:pos.coords.latitude,lon:pos.coords.longitude},target);if(d<=150){hits++;if(hits>=2){stopWatch(key);notify(labels.arrival,key,'arrival');try{localStorage.setItem(storageKey(key),JSON.stringify({...JSON.parse(localStorage.getItem(storageKey(key))||'{}'),arrival_notified_at:new Date().toISOString()}))}catch(_){}}}else hits=0},()=>{}, {enableHighAccuracy:true,maximumAge:10000,timeout:20000});watches.set(key,watch);
+ }
+ function clear(id){const key=String(id);if(timers.has(key)){clearInterval(timers.get(key));timers.delete(key)}stopWatch(key)}
  function resume(order){
-   const id=String(order?.id||'');const status=String(order?.service_state||order?.metadata?.service_state||'').toLowerCase();
-   if(!id||status!=='in_progress'||timers.has(id))return;
-   const timer=setInterval(()=>{
-     const fresh=(window.__fechouV178GetState?.()?.orders||window.__fechouAppState?.orders||window.state?.orders||[]).find(x=>String(x.id)===id);
-     const current=String(fresh?.service_state||fresh?.metadata?.service_state||'').toLowerCase();
-     if(current && current!=='in_progress'){clear(id);return}
-     if(document.visibilityState==='visible')inAppNotice(id,labels.hourly);
-   },60*60*1000);
-   timers.set(id,timer);
+   const id=String(order?.id||''),status=String(order?.service_state||order?.metadata?.service_state||'').toLowerCase();if(!id||status!=='in_progress')return;
+   startArrivalWatch(id);
+   if(timers.has(id))return;
+   let data={};try{data=JSON.parse(localStorage.getItem(storageKey(id))||'{}')}catch(_){}
+   if(!data.started_at){data.started_at=new Date().toISOString();try{localStorage.setItem(storageKey(id),JSON.stringify(data))}catch(_){}}
+   const tick=()=>{const fresh=getOrder(id),current=String(fresh?.service_state||fresh?.metadata?.service_state||'').toLowerCase();if(current&&current!=='in_progress'){clear(id);return}let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey(id))||'{}')}catch(_){}const last=Date.parse(saved.last_hourly_at||saved.started_at||data.started_at||'');if(!last||Date.now()-last>=60*60*1000){if(document.visibilityState==='visible'){notify(labels.hourly,id,'hourly');saved.last_hourly_at=new Date().toISOString();try{localStorage.setItem(storageKey(id),JSON.stringify(saved))}catch(_){}}}};
+   tick();const timer=setInterval(tick,60*1000);timers.set(id,timer);
  }
  window.FECHOU_V322_REMINDERS={
-   started(id){inAppNotice(id,labels.arrival);resume({id,service_state:'in_progress'});},
-   resume,
-   finished(id){clear(id);inAppNotice(id,labels.finish);},
-   clear
+   started(id){const key=String(id);try{localStorage.setItem(storageKey(key),JSON.stringify({started_at:new Date().toISOString()}))}catch(_){};resume({id:key,service_state:'in_progress'});if(!coords(getOrder(key)))return;notify('Serviço iniciado. O FECHOU vai avisar quando o GPS indicar sua chegada ao endereço. Mantenha a localização permitida e o aplicativo aberto.',key,'tracking-started')},
+   resume,finishing(id){notify(labels.finish,id,'finish')},finished(id){clear(id);try{localStorage.removeItem(storageKey(id))}catch(_){}},clear
  };
- document.addEventListener('visibilitychange',()=>{
-   if(document.visibilityState!=='visible')return;
-   const state=window.__fechouV178GetState?.()||window.__fechouAppState||window.state||{};
-   (state.orders||[]).filter(o=>String(o.service_state||o.metadata?.service_state||'').toLowerCase()==='in_progress').forEach(resume);
- });
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;getOrders().filter(o=>String(o.service_state||o.metadata?.service_state||'').toLowerCase()==='in_progress').forEach(resume)});
+ window.addEventListener('beforeunload',()=>{for(const id of watches.keys())stopWatch(id)});
 })();
 </script>
 
 
+
+
+<style id="fechou-admin-portal-style">
+#fechou-admin-portal-link{position:fixed;z-index:2147482500;right:16px;bottom:18px;display:none;align-items:center;gap:9px;padding:11px 15px;border:1px solid #18aebd;border-radius:999px;background:linear-gradient(135deg,#0a4051,#082c3c);color:#dfffff;font:800 12px/1 Arial,sans-serif;text-decoration:none;box-shadow:0 8px 28px #00121db8}
+#fechou-admin-portal-link:hover{filter:brightness(1.12);transform:translateY(-1px)}
+#fechou-admin-portal-link .admin-dot{width:8px;height:8px;border-radius:50%;background:#29ddc0;box-shadow:0 0 10px #29ddc0}
+@media(max-width:600px){#fechou-admin-portal-link{right:10px;bottom:78px;padding:10px 13px}}
+</style>
+<script id="fechou-admin-portal-integration">
+(()=>{'use strict';
+ const ADMIN_EMAIL='fechousuporte@gmail.com';
+ let link=null,attached=new WeakSet(),lastPage='',trackedPage='',visitorId='',sessionId='';
+ const getState=()=>{try{return window.__fechouV178GetState?.()||window.__fechouAppState||window.state||{}}catch(_){return window.state||{}}};
+ const getClient=()=>window.__FECHOU_SUPABASE_CLIENT||window.ewSupabase||null;
+ const userEmail=()=>{const s=getState();return String(s.supabaseUser?.email||s.authUser?.email||s.user?.email||'').trim().toLowerCase()};
+ function mount(){const allowed=userEmail()===ADMIN_EMAIL;if(allowed){if(!link){link=document.createElement('a');link.id='fechou-admin-portal-link';link.href='painel-administrativo.html';link.target='_blank';link.rel='noopener noreferrer';link.innerHTML='<span class="admin-dot"></span><span>Painel administrativo</span>';document.body.appendChild(link)}link.style.display='inline-flex'}else if(link)link.style.display='none'}
+ function track(client,eventName,extra={}){if(!client?.functions?.invoke)return;const payload={event_name:eventName,page:String(getState().page||'unknown'),path:location.pathname,visitor_id:visitorId,session_id:sessionId,...extra};client.functions.invoke('track-app-event',{body:payload}).catch(()=>{});}
+ function identifiers(){try{visitorId=localStorage.getItem('fechou:analytics:visitor')||'';if(!visitorId){visitorId=crypto.randomUUID?.()||('v-'+Date.now()+'-'+Math.random().toString(36).slice(2));localStorage.setItem('fechou:analytics:visitor',visitorId)}}catch(_){visitorId='v-'+Date.now()}try{sessionId=sessionStorage.getItem('fechou:analytics:session')||'';if(!sessionId){sessionId=crypto.randomUUID?.()||('s-'+Date.now()+'-'+Math.random().toString(36).slice(2));sessionStorage.setItem('fechou:analytics:session',sessionId)}}catch(_){sessionId='s-'+Date.now()}}
+ function attach(){const c=getClient();if(!c?.auth||attached.has(c))return false;attached.add(c);c.auth.onAuthStateChange((event,session)=>{mount();if(event==='SIGNED_IN')track(c,'login');else if(event==='SIGNED_OUT')track(c,'logout')});try{if(typeof c.auth.signUp==='function'&&!c.auth.signUp.__fechouAnalytics){const original=c.auth.signUp.bind(c.auth);const wrapped=async function(args){const result=await original(args);if(!result?.error&&result?.data?.user)track(c,'signup');return result};wrapped.__fechouAnalytics=true;c.auth.signUp=wrapped}}catch(_){}try{c.auth.getSession().then(({data})=>{if(String(data?.session?.user?.email||'').toLowerCase()===ADMIN_EMAIL){const s=getState();s.supabaseUser=s.supabaseUser||data.session.user;mount()}}).catch(()=>{})}catch(_){}return true}
+ identifiers();
+ function tick(){attach();mount();const p=String(getState().page||'unknown');if(p!==lastPage)lastPage=p;const c=getClient();if(c&&p!==trackedPage){track(c,trackedPage?'app_page_view':'page_view');trackedPage=p}}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tick,{once:true});else tick();
+ setInterval(tick,1800);
+})();
+</script>
 
 </body>
 </html>
