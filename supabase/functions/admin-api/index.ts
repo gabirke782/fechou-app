@@ -122,6 +122,8 @@ async function asaasRefundCreate(db:any,user:any,params:any,requestId:string) {
     if(data){item=data;break;}
   }
   if(!item) throw Object.assign(new Error("Caso de reembolso não encontrado na fila administrativa."),{status:404});
+  const caseMeta=asObj(item.metadata);
+  if(norm(item.case_type)==="manual_refund_reconciliation"||caseMeta.manual_refund_reconciliation_required===true||norm(caseMeta.source)==="manual_user_report")throw Object.assign(new Error("Este caso é de conciliação de estorno manual. Consulte o status no Asaas; não emita um novo estorno por esta ação."),{status:409,code:"MANUAL_REFUND_RECONCILIATION_REQUIRED"});
   if(classifyCaseType(item.case_type)!=="refund"||norm(item.decision)!=="approve") throw Object.assign(new Error("O caso precisa ser de reembolso e estar aprovado na análise administrativa."),{status:409});
   const orderId=String(item.order_id||"");
   const {data:order,error:orderError}=await db.from("orders").select("id,client_id,total,payment_status,payment_id,refund_status,metadata,payment_metadata").eq("id",orderId).maybeSingle();
@@ -133,6 +135,8 @@ async function asaasRefundCreate(db:any,user:any,params:any,requestId:string) {
   const {data:checkouts,error:checkoutError}=await db.from("fechou_asaas_checkouts").select("external_reference,amount,provider_payload").eq("order_id",orderId).in("purpose",["service","prepublication"]).order("created_at",{ascending:false}).limit(5);
   if(checkoutError) throw new Error("Não foi possível conferir a contratação no histórico Asaas.");
   const payment=await asaasRequest("/payments/"+encodeURIComponent(paymentId));
+  const providerRefunds=Array.isArray(payment.refunds)?payment.refunds:[];
+  if(norm(payment.status)==="refunded"||providerRefunds.length>0)throw Object.assign(new Error("O Asaas já registra um estorno solicitado ou concluído para esta cobrança. A ação foi bloqueada para evitar devolução duplicada; faça a conciliação manual."),{status:409,code:"ASAAS_REFUND_ALREADY_EXISTS"});
   const checkout=(checkouts||[]).find((x:any)=>x.external_reference&&String(x.external_reference)===String(payment.externalReference||""));
   const amount=Number(checkout?.amount||0);
   if(!checkout||String(payment.id||"")!==paymentId||!["RECEIVED","CONFIRMED"].includes(String(payment.status||"").toUpperCase())||!(amount>0)||Math.abs(amount-Number(payment.value||0))>0.02) throw Object.assign(new Error("A cobrança não corresponde exatamente ao pagamento confirmado desta contratação."),{status:409});
@@ -494,7 +498,12 @@ async function casesList(db: any, params: any) {
   let items=[...arr(a.data).map((x:any)=>normalize(x,"fechou_service_cases")),...arr(b.data).map((x:any)=>normalize(x,"fechou_service_review_cases")),...arr(c.data).map((x:any)=>normalize(x,"fechou_support_cases"))];
   const type=norm(params.type),status=norm(params.status),search=norm(params.search);
   if(type)items=items.filter((x:any)=>x.type===type);
-  if(status)items=items.filter((x:any)=>norm(x.status).includes(status));
+  if(status && status!=="all"){
+    if(status==="pending")items=items.filter((x:any)=>["open","in_review","pending","requested_review","under_review"].includes(norm(x.status)));
+    else if(status==="approved")items=items.filter((x:any)=>norm(x.status)==="approved");
+    else if(status==="rejected")items=items.filter((x:any)=>norm(x.status)==="rejected");
+    else items=items.filter((x:any)=>norm(x.status).includes(status));
+  }
   if(search)items=items.filter((x:any)=>[x.order_id,x.order_code,x.requester_name,x.requester_email,x.reason].some(v=>norm(v).includes(search)));
   items.sort((x:any,y:any)=>String(y.created_at).localeCompare(String(x.created_at)));
   return {items:items.slice(0,100),total:items.length};
