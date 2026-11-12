@@ -17,7 +17,8 @@ if (!html.includes("async function openChat") || !html.includes("async function 
   throw new Error("Funções centrais de chat/evidências não encontradas.");
 }
 
-const ids = [...html.matchAll(/\bid\s*=\s*(["'])(.*?)\1/gi)].map((m) => m[2]);
+const markup = html.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "<script></script>");
+const ids = [...markup.matchAll(/\bid\s*=\s*(["'])(.*?)\1/gi)].map((m) => m[2]);
 const seen = new Set();
 const duplicates = new Set();
 for (const id of ids) {
