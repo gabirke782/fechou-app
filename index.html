@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-build="V323" data-fechou-version="1.0.1" lang="pt-BR">
+<html data-fechou-build="V337" data-fechou-version="1.0.1" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-v215-core">
@@ -93,8 +93,8 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" name="viewport"/>
 <title>FECHOU · Serviços</title>
-<meta name="fechou-release" content="V322.5-alinhamento-fluxo"/>
-<meta content="V322.5" name="fechou-build"/>
+<meta name="fechou-release" content="V333-completion-timestamps-and-role-guard"/>
+<meta content="V333" name="fechou-build"/>
 <meta name="fechou-version" content="1.0.1"/>
 <style>
       :root{
@@ -1542,7 +1542,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
         color: #4f7fb8;
       }
     </style>
-<meta content="V322.5" name="fechou-build"/>
+<meta content="V328" name="fechou-build"/>
 <style id="fechou-v300-contract-polish">
       :root{
         --fechou-nav-height: 70px;
@@ -1854,10 +1854,10 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 #app#app .fc-plan-track .pill{align-self:flex-start!important;font-size:10px!important;letter-spacing:.05em!important;color:#bfddff!important;background:#264565!important;border:1px solid #476b90!important;padding:6px 10px!important;border-radius:8px!important}
 .fc-plan-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 14px;color:#a9bfd6;font:12px/1.5 system-ui}.fc-plan-controls button{min-height:38px;min-width:42px;padding:8px 12px;border:1px solid #4e7094;border-radius:10px;background:#1e3854;color:#d9ecff;cursor:pointer}.fc-plan-controls div{display:flex;gap:8px}.fc-contract-progress{display:block;margin:0 0 12px;font-size:12px;color:#b9d9f9}.fc-legacy-test-note{display:block;font-size:12px;color:#ffd09a;margin:7px 0;line-height:1.6}
 </style>
-<meta content="V323-publish-fix" name="fechou-local-build"/>
+<meta content="V333-completion-timestamps-and-role-guard" name="fechou-local-build"/>
 </head>
 <body>
-<div class="wrap" id="fechou-v323-build-01" data-fechou-build="V323">
+<div class="wrap" id="fechou-v322-5-build-01" data-fechou-build="V333">
 <header class="top">
 <div class="brand">
 <div aria-label="Símbolo FECHOU" class="logo" style="
@@ -2999,7 +2999,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
                             : x.proposal.status === "accepted" ||
                               x.proposal.selected ||
                               String(x.order.selected_proposal_id || x.order.selectedProposalId || "") === String(x.proposal.id)
-                              ? `<div class="actions"><span class="pill">${window.modeOf?.(x.order) === "contract_prepaid" ? "Você foi escolhido" : "Proposta selecionada"}</span></div>`
+                              ? `<div class="actions"><span class="pill">${window.modeOf?.(x.order) === "contract_prepaid" ? "Você foi escolhido" : "Proposta selecionada"}</span>${button("Abrir conversa", `openchat:${x.order.id}`, "secondary small")}</div>`
                               : window.modeOf?.(x.order) === "contract_prepaid"
                                 ? `<div class="actions"><span class="pill bluepill">Interesse enviado</span><span class="muted">Aguardando o cliente visualizar seu perfil e selecionar um profissional.</span><button type="button" class="btn secondary small v274-withdraw-btn" data-v274-withdraw-proposal="1" data-order-id="${esc(x.order.id)}" data-proposal-id="${esc(x.proposal.id)}">Desistir</button></div>`
                                 : `<div class="actions"><span class="pill bluepill">Aguardando resposta</span><button type="button" class="btn secondary small v274-withdraw-btn" data-v274-withdraw-proposal="1" data-order-id="${esc(x.order.id)}" data-proposal-id="${esc(x.proposal.id)}">Desistir</button></div>`
@@ -4055,7 +4055,7 @@ ${
                           : o.createdAt || "Data não informada"
                       )}</span><div class="actions">${
                         (o.selectedProposalId || o.selected_proposal_id || o.selectedProposal?.id)
-                          ? `<span class="pill">Proposta selecionada</span>`
+                          ? `<span class="pill">Proposta selecionada</span>${button("Abrir conversa", `openchat:${o.id}`, "secondary small")}`
                           : button("Ver propostas", `openproposals:${o.id}`, "small")
                       }${button(
                         "Abrir arquivo",
@@ -4634,7 +4634,7 @@ ${
         };
         if (!state.supabaseUser)
           return toast("Entre na conta antes de publicar o pedido.");
-        ewCreateOrderRemote(state.budget)
+        return ewCreateOrderRemote(state.budget)
           .then((remote) => {
             state.budget = remote;
             state.orders.unshift(remote);
@@ -4643,17 +4643,22 @@ ${
               state.__fechouLastRequestPublished = false;
               state.page = "proposals";
               window.render();
-              window.FechouV189?.publicationDialog(remote);
-              return;
+              const checkoutAlreadyOpened =
+                String(state.__fechouAutoCheckoutDraftId || "") === String(remote.id);
+              if (checkoutAlreadyOpened) state.__fechouAutoCheckoutDraftId = "";
+              else window.FechouV189?.publicationDialog(remote);
+              return remote;
             }
             state.__fechouLastRequestPublished = true;
             state.page = "proposals";
             render();
             toast("Solicitação publicada e confirmada.");
+            return remote;
           })
           .catch((err) => {
-            console.error(err);
+            console.error("FECHOU publicação do pedido:", err);
             toast(ewFriendlyError(err));
+            throw err;
           });
       }
       function download() {
@@ -4776,6 +4781,25 @@ ${
               "O checkout ainda está carregando. Tente novamente em alguns segundos."
             );
           }
+          return;
+        }
+        if (act.startsWith("openchat:")) {
+          // V336: consome o clique do card para impedir que controladores globais
+          // legados interpretem o mesmo evento e abram outra conversa.
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          const oid = String(act.slice("openchat:".length)).trim();
+          const card = b.closest("[data-v148-order-id]");
+          const cardOrderId = String(card?.dataset?.v148OrderId || oid).trim();
+          if (!oid || cardOrderId !== oid) {
+            return toast("O vínculo deste botão com a contratação está inconsistente. Atualize a lista antes de abrir o chat.");
+          }
+          if (typeof window.__fechouOpenChatByOrder !== "function")
+            return toast("O chat ainda está carregando. Atualize a tela e tente novamente.");
+          window.__fechouOpenChatByOrder(oid).catch((err) =>
+            toast(err?.message || "Não foi possível abrir a conversa desta contratação.")
+          );
           return;
         }
         if (act.startsWith("proposeorder:")) {
@@ -5605,6 +5629,15 @@ ${
         const EW_API_URL =
           "https://ziubcqxmxialhmwevtiy.supabase.co/functions/v1/eworkers-api";
         async function ewApi(action, payload = {}) {
+          // Assinatura é exclusiva do profissional. Evita chamadas subscription/status
+          // feitas durante a restauração/login do cliente, que geravam HTTP 403 inútil.
+          if (action === "subscription/status") {
+            const role = String(state.currentRole || state.profile?.role || state.supabaseUser?.user_metadata?.role || "").trim().toLowerCase();
+            if (role === "cliente" || role === "client") {
+              const current = state.subscription || null;
+              return { ok: true, subscription: current, last_subscription: current, pending_subscription: state.subscriptionCheckoutPending || null, skipped_for_role: true };
+            }
+          }
           // A Edge Function exige JWT real do usuário. Inicializa/recupera o cliente
           // persistente antes de concluir que a sessão expirou; a publishable key
           // permanece exclusivamente no header apikey, nunca como Bearer.
@@ -11426,6 +11459,7 @@ ${
 
       (function () {
         "use strict";
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
         const PHOTO_KEY_PREFIX = "exylon_hub_profile_photo_v50:";
         const safeGet = (k) => {
           try {
@@ -11996,6 +12030,7 @@ ${
 
       (function () {
         "use strict";
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
         const APP_URL = window.location.origin + "/";
         const originalToast = window.toast;
         const say = (msg) => {
@@ -12315,17 +12350,26 @@ ${
                 "O Supabase não retornou o ID do pedido; não é possível confirmar a publicação."
               );
             state.budget = remote;
+            state.activeOrderId = remote.id;
+            if (String(remote.publication_status || "").toLowerCase() === "awaiting_payment") {
+              // Rascunho privado: o checkout Asaas já foi aberto pelo V189.
+              // Não inserir em pedidos publicados nem exibir confirmação prematura.
+              state.__fechouLastRequestPublished = false;
+              state.page = "proposals";
+              window.render();
+              return remote;
+            }
             state.orders = [
               remote,
               ...(state.orders || []).filter(
                 (x) => String(x.id) !== String(remote.id)
               ),
             ];
-            state.activeOrderId = remote.id;
             state.__fechouLastRequestPublished = true;
             state.page = "proposals";
             window.render();
             say("Solicitação publicada e confirmada.");
+            return remote;
           } catch (e) {
             console.error("FECHOU publicação falhou:", {
               code: e?.code,
@@ -13073,6 +13117,7 @@ ${
 
       // V55 consolidated interaction fixes: publish action, client IA placement, professional subscription intro.
       (function () {
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
         document.addEventListener(
           "click",
           function (e) {
@@ -13137,6 +13182,7 @@ ${
 
       (function () {
         "use strict";
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
         const q = (s, r = document) => r.querySelector(s),
           qa = (s, r = document) => Array.from(r.querySelectorAll(s));
         let workflowBusy = false;
@@ -20584,6 +20630,7 @@ ${
 
       (function () {
         "use strict";
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
         const $ = (sel, root = document) => root.querySelector(sel);
         const photoKey = () =>
           "exylon_hub_profile_photo_v50:" +
@@ -23532,6 +23579,10 @@ ${
           const sameConversation = !!old && String(old.dataset.orderId || "") === activeId && String(old.dataset.proposalId || "") === String(q.id);
           const draftValue = sameConversation ? String(old.querySelector("#v121ChatDraft")?.value ?? state.v121ChatDraft ?? "") : String(state.v121ChatDraft || "");
           const savedScroll = sameConversation ? Number(old.querySelector(".fc-chat-scroll")?.scrollTop || 0) : 0;
+          const focused = sameConversation && old.contains(document.activeElement) ? document.activeElement : null;
+          const focusedId = focused?.id || "";
+          const focusedStart = typeof focused?.selectionStart === "number" ? focused.selectionStart : null;
+          const focusedEnd = typeof focused?.selectionEnd === "number" ? focused.selectionEnd : null;
           const minimized = sameConversation && old.classList.contains("fc-chat-minimized");
           const inboxOpen = !!chatInboxOpen;
           const expanded = chatToolsExpanded;
@@ -23638,7 +23689,7 @@ ${
             return `<div class="fc-inbox-row ${active ?"active" : ""}"><button type="button" class="fc-inbox-open" data-fc-switch-chat="${esc121(item.id)}" data-fc-switch-proposal="${esc121(prop?.id || "")}"><span class="fc-inbox-avatar" data-fechou-row-photo="${esc121(item.id)}">${esc121(avatar)}</span><span class="fc-inbox-copy"><strong>${esc121(person)}</strong><small>${esc121(item.service || item.title || item.category || "Serviço")}</small><span>${esc121(preview).slice(0,80)}</span></span><span class="fc-inbox-status ${online ?"is-active" : "is-away"}"><i></i>${online ? "Online" : "Ausente"}</span><time>${esc121(date)}</time></button><button class="fc-inbox-menu-button" type="button" data-fc-inbox-menu="${esc121(item.id)}" aria-label="Opções da conversa">⋯</button>${inboxMenuOrderId === String(item.id) ? `<div class="fc-inbox-menu"><button type="button" data-fc-inbox-action="archive" data-order-id="${esc121(item.id)}">${archived ? "Desarquivar" : "Arquivar"}</button><button type="button" data-fc-inbox-action="delete" data-order-id="${esc121(item.id)}">Remover da lista</button></div>` : ""}</div>`;
           }).join("") || `<div class="fc-inbox-empty">${inboxFilter === "archived" ? "Nenhuma conversa arquivada." : "Nenhuma conversa encontrada."}</div>`;
 
-          const overlay = document.createElement("div");
+          let overlay = document.createElement("div");
           overlay.id = "v121ChatOverlay";
           overlay.dataset.orderId = activeId;
           overlay.dataset.proposalId = String(q.id);
@@ -23684,7 +23735,24 @@ ${
           </section>`;
 
           if (minimized) overlay.classList.add("fc-chat-minimized");
-          if (old) old.replaceWith(overlay); else document.body.appendChild(overlay);
+          if (old && sameConversation) {
+            // Reuse the mounted conversation root during same-chat refreshes.
+            // Replacing the whole overlay detached the active dialog on every realtime update,
+            // causing visible flashes, focus loss and scroll jumps.
+            const transientDialogs = Array.from(old.children).filter(node =>
+              node.id === "fechou-clicksign-sign-modal" ||
+              node.classList.contains("fechou-v156-sign-overlay") ||
+              node.classList.contains("v149-modal-backdrop")
+            );
+            for (const attr of Array.from(old.attributes)) old.removeAttribute(attr.name);
+            for (const attr of Array.from(overlay.attributes)) old.setAttribute(attr.name, attr.value);
+            old.replaceChildren(...Array.from(overlay.childNodes), ...transientDialogs);
+            overlay = old;
+          } else if (old) {
+            old.replaceWith(overlay);
+          } else {
+            document.body.appendChild(overlay);
+          }
           const inbox = overlay.querySelector("#fcChatInbox");
           const toggle = overlay.querySelector("[data-fc-inbox-toggle]");
           if (toggle) toggle.classList.toggle("selected", inboxOpen);
@@ -23715,18 +23783,60 @@ ${
           if (selected) selected.textContent = chatFiles.length ? `${chatFiles.length}/5 · ${chatFiles.map(f=>f.name).join(", ")}` : "";
           if (inbox && !inboxOpen) inbox.classList.add("hidden");
           if (typeof window.__fechouInitChatAccessibility === "function") window.__fechouInitChatAccessibility(overlay);
+          if (sameConversation && focusedId) {
+            const restored = overlay.querySelector(`#${focusedId}`);
+            if (restored) {
+              restored.focus({preventScroll:true});
+              if (focusedStart !== null && typeof restored.setSelectionRange === "function") {
+                try { restored.setSelectionRange(focusedStart, focusedEnd ?? focusedStart); } catch (_) {}
+              }
+            }
+          }
         }
         async function openChat(orderId, proposalId = null, options = {}) {
+          const requestedOrderId = String(orderId || "").trim();
+          if (!requestedOrderId) throw new Error("Identificador da contratação ausente.");
           chatInboxOpen = options?.showInbox === true;
-          const o = findOrder(orderId);
-          if (!o)
-            throw new Error("Serviço não encontrado. Atualize os pedidos.");
           if (!uid()) throw new Error("Entre na conta para abrir o chat.");
-          const q = proposalForCurrentUser(o, proposalId);
-          if (!q?.id)
-            throw new Error(
-              "Não encontrei uma proposta vinculada a esta conversa. Atualize os orçamentos."
-            );
+          // A contratação e a proposta são relidas pelo ID exato no banco antes
+          // de abrir a conversa. Isso elimina a seleção de registros antigos do cache.
+          const db = supa();
+          if (!db?.from) throw new Error("Não foi possível validar a contratação no servidor. Entre novamente.");
+          const { data: canonicalOrder, error: orderError } = await db
+            .from("orders").select("*").eq("id", requestedOrderId).maybeSingle();
+          if (orderError) throw new Error("Não foi possível validar esta contratação: " + orderError.message);
+          if (!canonicalOrder || String(canonicalOrder.id) !== requestedOrderId)
+            throw new Error("A contratação solicitada não existe ou não está disponível para esta conta.");
+          const localOrder = findOrder(requestedOrderId);
+          const canonicalProposalId = String(canonicalOrder.selected_proposal_id || proposalId || "").trim();
+          if (!canonicalProposalId) throw new Error("Esta contratação ainda não possui uma proposta selecionada.");
+          if (proposalId && canonicalOrder.selected_proposal_id && String(proposalId) !== String(canonicalOrder.selected_proposal_id))
+            throw new Error("A proposta selecionada mudou. Atualize a lista antes de abrir a conversa.");
+          const { data: canonicalProposal, error: proposalError } = await db
+            .from("proposals").select("*").eq("id", canonicalProposalId).eq("order_id", requestedOrderId).maybeSingle();
+          if (proposalError) throw new Error("Não foi possível validar a proposta desta contratação: " + proposalError.message);
+          if (!canonicalProposal || String(canonicalProposal.order_id) !== requestedOrderId || String(canonicalProposal.id) !== canonicalProposalId)
+            throw new Error("A proposta não pertence a esta contratação. A conversa foi bloqueada.");
+          if (String(canonicalOrder.client_id || "") !== uid() && String(canonicalProposal.professional_id || "") !== uid())
+            throw new Error("Esta conversa não pertence à sua conta.");
+          const o = {
+            ...(localOrder || {}), ...canonicalOrder,
+            id: requestedOrderId,
+            selected_proposal_id: canonicalProposalId,
+            selectedProposalId: canonicalProposalId,
+            professional_id: canonicalOrder.professional_id || canonicalProposal.professional_id,
+            proposals: [
+              ...(Array.isArray(localOrder?.proposals) ? localOrder.proposals.filter(x => String(x?.id || "") !== canonicalProposalId) : []),
+              canonicalProposal
+            ],
+            selectedProposal: canonicalProposal
+          };
+          const orderIndex = Array.isArray(state.orders) ? state.orders.findIndex(x => String(x?.id || "") === requestedOrderId) : -1;
+          if (orderIndex >= 0) state.orders[orderIndex] = o;
+          else if (Array.isArray(state.orders)) state.orders.push(o);
+          const q = canonicalProposal;
+          if (q.order_id && String(q.order_id) !== requestedOrderId)
+            throw new Error("A proposta selecionada pertence a outra contratação. O chat foi bloqueado para evitar misturar conversas.");
           if (
             String(o.client_id) !== uid() &&
             String(q.professional_id) !== uid()
@@ -23742,7 +23852,7 @@ ${
             );
           const sameConversation = String(chatOrderId || "") === String(o.id) && String(chatProposalId || "") === String(q.id);
           const unsentDraft = String($("#v121ChatDraft")?.value ?? state.v121ChatDraft ?? "");
-          chatOrderId = o.id;
+          chatOrderId = requestedOrderId;
           chatProposalId = String(q.id);
           rememberAuthorizedChat(o, q);
           // Revalida fotos em toda abertura, para refletir troca de avatar e renovar URL temporária.
@@ -23760,13 +23870,31 @@ ${
             professional: { full_name: q?.name || state.proName || "" },
           };
           renderChatOverlay();
-          const openingOrderId = String(o.id);
+          const openingOrderId = requestedOrderId;
           const openingProposalId = String(q.id);
+          const mountedOverlay = document.getElementById("v121ChatOverlay");
+          if (!mountedOverlay || String(mountedOverlay.dataset.orderId || "") !== openingOrderId || String(mountedOverlay.dataset.proposalId || "") !== openingProposalId) {
+            mountedOverlay?.remove();
+            chatOrderId = null;
+            chatProposalId = null;
+            chatInboxOpen = false;
+            clearAuthorizedChat();
+            throw new Error("O aplicativo tentou abrir uma conversa diferente da contratação solicitada. O chat incorreto foi bloqueado e fechado.");
+          }
           const [partyResult, messagesResult] = await Promise.allSettled([
             loadPartyData(o),
             loadChatMessages(o, q.id),
           ]);
           if (String(chatOrderId || "") !== openingOrderId || String(chatProposalId || "") !== openingProposalId) return true;
+          const currentOverlay = document.getElementById("v121ChatOverlay");
+          if (!currentOverlay || String(currentOverlay.dataset.orderId || "") !== openingOrderId || String(currentOverlay.dataset.proposalId || "") !== openingProposalId) {
+            currentOverlay?.remove();
+            chatOrderId = null;
+            chatProposalId = null;
+            chatInboxOpen = false;
+            clearAuthorizedChat();
+            throw new Error("A conversa mudou de contratação durante o carregamento. A janela incorreta foi fechada.");
+          }
           if (partyResult.status === "fulfilled" && partyResult.value)
             state.v121PartyData = partyResult.value;
           if (messagesResult.status === "rejected") {
@@ -23804,12 +23932,17 @@ ${
           return true;
         };
         window.__fechouOpenChatByOrder = async function (orderId) {
-          const order = findOrder(orderId);
-          if (!order) throw new Error("Não foi possível localizar esta contratação.");
+          const requestedOrderId = String(orderId || "").trim();
+          if (!requestedOrderId) throw new Error("Identificador da contratação ausente.");
+          const order = findOrder(requestedOrderId);
+          if (!order || String(order.id || "") !== requestedOrderId)
+            throw new Error("Não foi possível localizar exatamente esta contratação. Atualize os pedidos.");
           const proposalId = order.selected_proposal_id || order.selectedProposalId || order.selectedProposal?.id;
           const proposal = proposalForCurrentUser(order, proposalId);
           if (!proposal?.id) throw new Error("Não foi possível identificar a proposta desta conversa.");
-          return openChat(order.id, proposal.id, { showInbox: false });
+          if (proposal.order_id && String(proposal.order_id) !== requestedOrderId)
+            throw new Error("A proposta selecionada está vinculada a outro pedido. Nenhuma conversa foi aberta.");
+          return openChat(requestedOrderId, proposal.id, { showInbox: false });
         };
         window.__fechouCloseChatWithoutReopen = (orderId) => {
           if (String(chatOrderId || "") !== String(orderId || "")) return false;
@@ -24501,6 +24634,10 @@ body #app .fechou-profile-progress>div:first-child b {
   #fechou-v164-contract-review .v175-contract-review-card{width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important}
 }
 </style>
+
+
+
+
 
 
 
@@ -25571,6 +25708,7 @@ body #app .fechou-profile-progress>div:first-child b {
 
       (function () {
         "use strict";
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
         if (window.__FECHOU_V132__) return;
         window.__FECHOU_V132__ = true;
         const $ = (s, r = document) => r.querySelector(s),
@@ -26725,6 +26863,7 @@ body #app .fechou-profile-progress>div:first-child b {
 
       (function () {
         "use strict";
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
         const VERSION = "V134";
         const $ = (sel, root = document) => root.querySelector(sel);
         const $$ = (sel, root = document) =>
@@ -27842,54 +27981,79 @@ body #app .fechou-profile-progress>div:first-child b {
 
         // Add service status and evidence widgets to the draggable conversation window.
         async function loadEvidence(overlay) {
-          const db = getDb(),
-            orderId = String(overlay?.dataset?.orderId || "");
-          if (!db || !orderId) return;
+          const db = getDb();
+          const orderId = String(overlay?.dataset?.orderId || "").trim();
+          if (!db?.from || !orderId) return;
           const host = overlay.querySelector(".v134-evidence");
-          if (!host) return;
+          const grid = host?.querySelector(".v134-evidence-grid");
+          if (!host || !grid) return;
+          const phaseLabels = { before: "Antes", during: "Durante", after: "Depois" };
+          grid.replaceChildren();
           try {
-            const { data, error } = await db
-              .from("fechou_service_evidence")
-              .select("*")
-              .eq("order_id", orderId)
-              .order("created_at", { ascending: false })
-              .limit(1000);
+            const { data, error } = await db.from("fechou_service_evidence")
+              .select("id,order_id,phase,storage_path,file_name,created_at")
+              .eq("order_id", orderId).order("created_at", { ascending: true }).limit(1000);
             if (error) throw error;
-            const grid = $(".v134-evidence-grid", host);
-            if (!grid) return;
-            grid.innerHTML = "";
-            const phaseCounts = {before:0,during:0,after:0};
-            for (const item of data || []) if (Object.prototype.hasOwnProperty.call(phaseCounts, String(item.phase || ""))) phaseCounts[String(item.phase)]++;
-            const phaseLabels = {before:"Antes",during:"Durante",after:"Depois"};
+            // Uma resposta atrasada de outro chat nunca pode preencher esta galeria.
+            if (!overlay.isConnected || String(overlay.dataset.orderId || "") !== orderId) return;
+            const rows = Array.isArray(data) ? data.filter(x => String(x.order_id) === orderId && Object.prototype.hasOwnProperty.call(phaseLabels, String(x.phase || ""))) : [];
+            const counts = { before: 0, during: 0, after: 0 };
+            rows.forEach(item => counts[item.phase]++);
             host.querySelectorAll("[data-v134-evidence-button]").forEach(button => {
               const phase = String(button.dataset.v134EvidenceButton || "");
-              const count = phaseCounts[phase] || 0;
+              const count = counts[phase] || 0;
               button.disabled = count >= 5;
               button.setAttribute("aria-label", `${phaseLabels[phase] || "Etapa"}: ${count} de 5 fotos`);
               button.textContent = `${count >= 5 ? "✓" : "＋"} ${phaseLabels[phase] || "Etapa"} · ${count}/5`;
-              button.title = count >= 5 ? "Limite de cinco fotos desta etapa atingido" : `${count} de 5 fotos registradas`;
+              button.title = `${count} de 5 fotos registradas`;
             });
-            for (const item of data || []) {
-              const { data: urlData, error: signErr } = await db.storage
-                .from("eworkers-service-evidence")
-                .createSignedUrl(item.storage_path, 60 * 60);
-              if (signErr) continue;
-              const box = document.createElement("a");
-              box.className = "v134-evidence-item";
-              box.href = urlData.signedUrl;
-              box.target = "_blank";
-              box.rel = "noopener";
-              box.innerHTML = `<img src="${esc134(
-                urlData.signedUrl
-              )}" alt="Evidência ${esc134(item.phase)}"><small>${esc134(
-                item.phase
-              )} · ${esc134(
-                new Date(item.created_at).toLocaleDateString("pt-BR")
-              )}</small>`;
-              grid.appendChild(box);
+            if (!rows.length) {
+              const empty = document.createElement("p");
+              empty.className = "v134-evidence-empty";
+              empty.style.cssText = "margin:8px 0;padding:10px 12px;border:1px solid #3b5875;border-radius:10px;background:#111f2e;color:#cbd9e8;font-size:12px;line-height:1.45;overflow-wrap:anywhere";
+              empty.textContent = "Nenhuma foto registrada nesta contratação.";
+              grid.append(empty);
+              return;
             }
-          } catch (e) {
-            console.warn("Evidências de serviço não carregadas:", e);
+            const bucket = db.storage?.from?.("eworkers-service-evidence");
+            if (!bucket?.createSignedUrl) throw new Error("O armazenamento privado de evidências não está conectado.");
+            const results = await Promise.all(rows.map(async item => {
+              try {
+                const { data: signed, error: signError } = await bucket.createSignedUrl(item.storage_path, 3600);
+                if (signError || !signed?.signedUrl) throw signError || new Error("URL segura não retornada.");
+                return { item, url: signed.signedUrl };
+              } catch (error) { return { item, error }; }
+            }));
+            if (!overlay.isConnected || String(overlay.dataset.orderId || "") !== orderId) return;
+            for (const result of results) {
+              const { item } = result;
+              if (result.url) {
+                const box = document.createElement("a");
+                box.className = "v134-evidence-item";
+                box.href = result.url; box.target = "_blank"; box.rel = "noopener";
+                const img = document.createElement("img"); img.src = result.url; img.alt = `Evidência ${phaseLabels[item.phase]}`; img.loading = "lazy";
+                const small = document.createElement("small");
+                small.textContent = `${phaseLabels[item.phase]} · ${new Date(item.created_at).toLocaleDateString("pt-BR")}`;
+                box.append(img, small); grid.append(box);
+              } else {
+                const warning = document.createElement("p");
+                warning.className = "v134-evidence-load-error";
+                warning.style.cssText = "margin:8px 0;padding:10px 12px;border:1px solid #80613a;border-radius:10px;background:#111f2e;color:#ffe0b0;font-size:12px;line-height:1.45;overflow-wrap:anywhere";
+                warning.setAttribute("role", "status");
+                warning.textContent = `${phaseLabels[item.phase]}: foto registrada, mas não foi possível abrir o arquivo. Atualize a conversa ou verifique a permissão de leitura do armazenamento.`;
+                grid.append(warning);
+                console.warn("FECHOU: falha ao gerar URL da evidência", { orderId, evidenceId: item.id, error: result.error });
+              }
+            }
+          } catch (error) {
+            if (!overlay.isConnected || String(overlay.dataset.orderId || "") !== orderId) return;
+            const warning = document.createElement("p");
+            warning.className = "v134-evidence-load-error";
+            warning.style.cssText = "margin:8px 0;padding:10px 12px;border:1px solid #80613a;border-radius:10px;background:#111f2e;color:#ffe0b0;font-size:12px;line-height:1.45;overflow-wrap:anywhere";
+            warning.setAttribute("role", "alert");
+            warning.textContent = "Não foi possível carregar as fotos desta contratação. " + String(error?.message || error).slice(0, 220);
+            grid.replaceChildren(warning);
+            console.error("Evidências de serviço não carregadas:", { orderId, error });
           }
         }
         async function persistEvidence(input) {
@@ -29888,6 +30052,7 @@ body #app .fechou-profile-progress>div:first-child b {
 
       (function () {
         "use strict";
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
         if (window.__FECHOU_V138__) return;
         window.__FECHOU_V138__ = true;
         const db = () =>
@@ -31918,6 +32083,7 @@ body #app .v156-service-payment .notice{color:#c8d9e9!important;background:#1326
 
       (function () {
         "use strict";
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
         const moneyRound = (n) => Math.round((Number(n) || 0) * 100) / 100;
         const localToday = () => {
           const d = new Date();
@@ -32752,7 +32918,7 @@ body #app .v134-wallet .btn:not(.secondary){background:#245c8c!important;border-
 /* Títulos principais inteiramente brancos, sem alterar acentos e títulos internos. */
 #app .hero h1, #app .hero h1 span, #app .hero h1 strong, #app .hero h1 em{color:#fff!important}
 /* O contêiner externo mantém o mínimo de uma tela. O conteúdo interno cresce somente conforme seu conteúdo real. */
-.wrap#fechou-v323-build-01{height:auto!important;min-height:100dvh!important;max-height:none!important;overflow:visible!important}
+.wrap#fechou-v322-5-build-01{height:auto!important;min-height:100dvh!important;max-height:none!important;overflow:visible!important}
 #app{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important}
 #app>:first-child, #app>:last-child{min-height:0!important;max-height:none!important}
 #app .panel, #app .section, #app .grid, #app article{min-height:0}
@@ -33473,7 +33639,7 @@ async function api(action,payload={}){if(typeof window.ewApi!=='function')throw 
 const required=(r,condition,message)=>{if(!condition)throw new Error(message);return r};
 let renewing=null;
 async function sessionReady(){if(navigator.onLine===false)throw new Error('Sem conexão com a internet. Os dados do pedido foram mantidos.');const c=db()||await window.fechouEnsureSupabaseClient?.();if(!c?.auth)return;const {data,error}=await c.auth.getSession();if(error)throw error;const s=data?.session;if(s?.expires_at&&s.expires_at*1000<Date.now()+120000){if(!renewing)renewing=c.auth.refreshSession().finally(()=>{renewing=null});const r=await renewing;if(r.error)throw r.error}}
-let draftInFlight=null,draftKey='',draftFingerprint='',lastPublicationDialog='';
+let draftInFlight=null,draftKey='',draftFingerprint='';
 async function createDraft(order){
  if(draftInFlight)return draftInFlight;
  const s=state();let estimate=price(s.clientDiscount);
@@ -33895,7 +34061,7 @@ if(typeof rawApi==='function'){
 }
 const originalCreate=window.ewCreateOrderRemote;
 if(typeof originalCreate==='function'){
- const creator=async function(o){await sessionReady();if(mode(o)==='contract_prepaid'||state().v134PaymentMethod==='contract_prepaid'){const draft=await createDraft(o);if(String(lastPublicationDialog)!==String(draft?.id||'')){lastPublicationDialog=String(draft?.id||'');publicationDialog(draft)}return draft;}
+ const creator=async function(o){await sessionReady();if(mode(o)==='contract_prepaid'||state().v134PaymentMethod==='contract_prepaid'){const draft=await createDraft(o);state().__fechouAutoCheckoutDraftId=String(draft.id);await checkout(draft);return draft;}
  // Never blindly retry a mutating request: transport errors may occur after the commit.
  try{return await originalCreate.apply(this,arguments)}catch(e){if(/failed to fetch|network|fetch failed/i.test(String(e?.message||'')))throw new Error(errorText(e));throw e}};
  window.ewCreateOrderRemote=creator;try{if(typeof ewCreateOrderRemote!=='undefined')ewCreateOrderRemote=creator}catch(_){}
@@ -36649,7 +36815,7 @@ body{min-width:0!important}
    }
    const tab=window.open('about:blank','_blank');
    if(!tab){(window.safeToast||window.toast||console.warn)('O navegador bloqueou a nova aba. Permita pop-ups para abrir o PDF e imprimir.');return;}
-   try{tab.document.open();tab.document.write('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>FECHOU · Preparando PDF</title><body style="margin:0;background:#0d1622;color:#edf4fc;font:16px Arial;padding:28px">Preparando o PDF assinado do FECHOU…</body></html>');tab.document.close();}catch(_){}
+   try{tab.document.open();tab.document.write('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>FECHOU · Preparando PDF</title><body style="margin:0;background:#0d1622;color:#edf4fc;font:16px Arial;padding:28px">Preparando o PDF assinado do FECHOU…\n</body></html>');tab.document.close();}catch(_){}
    (async()=>{
      try{
        const response=await fetch(url.href,{mode:'cors',credentials:'omit',cache:'no-store'});
@@ -36945,7 +37111,13 @@ body{min-width:0!important}
  const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
  const getState=()=>{try{return window.__fechouV178GetState?.()||window.__fechouAppState||window.state||{}}catch(_){return window.state||{}}};
  let queued=false;
- function buildAccordion(summary,html){const d=document.createElement('details');d.className='v277-accordion';d.innerHTML='<summary></summary><div class="v277-accordion-content"></div>';d.querySelector('summary').textContent=summary;d.querySelector('.v277-accordion-content').innerHTML=html;return d;}
+ function buildAccordion(summary,html){
+   const card=document.createElement('div');card.className='v56-estimate v56-accordion v277-request-disclosure';
+   const details=document.createElement('details');
+   const heading=document.createElement('summary');heading.className='v56-accordion-summary';heading.textContent=summary;
+   const content=document.createElement('div');content.className='v56-accordion-content';content.innerHTML=html;
+   details.append(heading,content);card.append(details);return card;
+ }
  function convertHeadingsToAccordions(root){
    if(!root||root.dataset.v277Accordions==='1')return;root.dataset.v277Accordions='1';
    const headings=$$('h3',root).filter(h=>!h.closest('.v277-accordion'));
@@ -36981,33 +37153,8 @@ body{min-width:0!important}
      const title=$('#app .hero h1');if(title&&title.textContent.trim()==='Segurança e confiança')title.textContent='Segurança e confidencialidade';
    }
  }
- function requestDisclosures(){
-   const s=getState();if(s.page!=='request')return;
-   const field=$('#app textarea[data-input="description"]')?.closest('.field');if(!field)return;
-   const targets=[
-     {selector:'#v56-description-help',label:'Atenção'},
-     {selector:'#exw-v8-service-example,.v189-service-examples',label:'Exemplo'}
-   ];
-   for(const item of targets){
-     const source=$(item.selector,field);if(!source||source.closest('details.v277-accordion'))continue;
-     const d=buildAccordion(item.label,source.innerHTML||source.textContent||'');
-     source.replaceWith(d);
-   }
- }
- function dedupeRequestExamples(){
-   const s=getState();if(s.page!=='request')return;
-   const root=$('#app');if(!root)return;
-   const seen=new Set();
-   root.querySelectorAll('details').forEach(item=>{
-     const summary=item.querySelector(':scope > summary');
-     if(!summary||!/Exemplo/i.test(summary.textContent||''))return;
-     const normalized=String(item.textContent||'')
-       .replace(/\s+/g,' ').trim().toLocaleLowerCase('pt-BR');
-     if(!normalized)return;
-     if(seen.has(normalized))item.remove();
-     else seen.add(normalized);
-   });
- }
+ function requestDisclosures(){ /* V325 groups all request examples into one accordion and all attention guidance into another. */ }
+ function dedupeRequestExamples(){ /* Consolidation is handled by V325 as a single semantic group. */ }
  function run(){
    queued=false;faqAccordions();requestDisclosures();dedupeRequestExamples();
  }
@@ -38122,16 +38269,14 @@ body{min-width:0!important}
   #v121ChatOverlay .fc-chat-selected-files{display:block!important;max-width:100%!important;}
   @media(max-width:480px){#app .v305-services-grid-3{gap:5px!important}#app .v305-services-grid-3>.order,#app .v305-services-grid-3>.home-job{padding:7px!important}}
 </style>
-<script id="fechou-v322-5-build-marker">
-  window.FECHOU_BUILD_VERSION="V322.5-FLUXO-PROPOSTA-LEMBRETES";
-  window.FECHOU_BUILD_ID="FECHOU_V322_5_FLUXO_PROPOSTA_LEMBRETES";
-  document.documentElement.dataset.fechouBuild="V322.5";
-  document.documentElement.dataset.fechouVersion="V322.5";
-  document.querySelectorAll('meta[name="fechou-build"],meta[name="exylon-hub-version"]').forEach(meta=>meta.setAttribute("content","V322.5"));
+<script id="fechou-v337-build-marker">
+  window.FECHOU_BUILD_VERSION="V337-CANONICAL-CHAT-AND-EVIDENCE";
+  window.FECHOU_BUILD_ID="FECHOU_V337_CANONICAL_CHAT_AND_EVIDENCE";
+  document.documentElement.dataset.fechouBuild="V337";
+  document.documentElement.dataset.fechouVersion="V337";
+  document.querySelectorAll('meta[name="fechou-build"],meta[name="exylon-hub-version"]').forEach(meta=>meta.setAttribute("content","V337"));
   document.documentElement.lang="pt-BR";
 </script>
-
-
 <!-- FECHOU V309 — consolidação conservadora de CSS e handlers; mantém funcionalidades -->
 <style id="fechou-v306-audit-fixes">
   /* F01/F02/F03: prevalece sobre a regra antiga do V107 que forçava uma coluna. */
@@ -38335,10 +38480,11 @@ body > #fechou-v223-sub-card.v222-help-modal.fechou-subscription-checkout{
 <script id="fechou-v322-guest-action-guard">
 (function () {
   "use strict";
+        const state = window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
   const PUBLIC_GUEST_PAGES = new Set(["home", "publicservices", "signup"]);
-  const isAuthenticated = () => !!(window.state && (state.supabaseUser?.id || state.authUser?.id || state.user?.id || window.__FECHOU_AUTH_SESSION_USER_ID));
+  const isAuthenticated = () => !!(state.supabaseUser?.id || state.authUser?.id || state.user?.id || window.__FECHOU_AUTH_SESSION_USER_ID);
   const requireAccount = (message) => {
-    if (!window.state) return false;
+    if (!window.__fechouAppState && !window.__fechouV178GetState && !window.state) return false;
     state.page = "signup";
     state.authMode = "login";
     if (typeof window.render === "function") window.render();
@@ -38455,12 +38601,19 @@ body.fechou-guest-public-only .wrap > footer.footer {
    if(!window.isSecureContext||!navigator.geolocation){resolve(result);return}
    result.location_permission_status='requested';
    const request=()=>navigator.geolocation.getCurrentPosition(pos=>{const latitude=Number(pos.coords.latitude),longitude=Number(pos.coords.longitude),accuracy_m=Number(pos.coords.accuracy),recorded_at=new Date(pos.timestamp||Date.now()).toISOString();resolve({location_permission_status:'granted',latitude,longitude,accuracy_m,recorded_at,start_location:{latitude,longitude,accuracy_m,recorded_at}})},err=>{result.location_permission_status=err?.code===1?'denied':err?.code===3?'timeout':'unavailable';resolve(result)},{enableHighAccuracy:true,maximumAge:10000,timeout:12000});
-   if('Notification'in window&&Notification.permission==='default'){try{Notification.requestPermission().finally(request)}catch(_){request()}}else request();
+   // O serviço pode começar sem permissão de notificações do navegador.
+   // A captura de GPS não deve abrir um segundo popup nem interromper a ação.
+   request();
  });
  function stopWatch(id){const key=String(id);if(watches.has(key)){try{navigator.geolocation.clearWatch(watches.get(key))}catch(_){}watches.delete(key)}}
  function startArrivalWatch(id){
    const key=String(id);if(watches.has(key)||!navigator.geolocation||!window.isSecureContext)return;
-   const o=getOrder(key),target=coords(o);if(!target){notify('O serviço foi iniciado. Para detectar sua chegada automaticamente, o endereço do serviço precisa ter latitude e longitude cadastradas. Enquanto isso, envie a foto inicial pelo chat.',key,'arrival-address-missing');return}
+   const o=getOrder(key),target=coords(o);if(!target){
+     // Sem coordenadas não há como calcular chegada. Não exibir aviso global:
+     // o fluxo de início já orienta a enviar a foto inicial pelo chat.
+     try{localStorage.setItem(storageKey(key),JSON.stringify({...JSON.parse(localStorage.getItem(storageKey(key))||'{}'),arrival_tracking_unavailable:true,arrival_tracking_unavailable_at:new Date().toISOString()}))}catch(_){}
+     return;
+   }
    let hits=0;const watch=navigator.geolocation.watchPosition(pos=>{const accuracy=Number(pos.coords.accuracy);if(!Number.isFinite(accuracy)||accuracy>100){hits=0;return}const d=distance({lat:pos.coords.latitude,lon:pos.coords.longitude},target);if(d<=150){hits++;if(hits>=2){stopWatch(key);notify(labels.arrival,key,'arrival');try{localStorage.setItem(storageKey(key),JSON.stringify({...JSON.parse(localStorage.getItem(storageKey(key))||'{}'),arrival_notified_at:new Date().toISOString()}))}catch(_){}}}else hits=0},()=>{}, {enableHighAccuracy:true,maximumAge:10000,timeout:20000});watches.set(key,watch);
  }
  function clear(id){const key=String(id);if(timers.has(key)){clearInterval(timers.get(key));timers.delete(key)}stopWatch(key)}
@@ -38474,7 +38627,7 @@ body.fechou-guest-public-only .wrap > footer.footer {
    tick();const timer=setInterval(tick,60*1000);timers.set(id,timer);
  }
  window.FECHOU_V322_REMINDERS={
-   started(id){const key=String(id);try{localStorage.setItem(storageKey(key),JSON.stringify({started_at:new Date().toISOString()}))}catch(_){};resume({id:key,service_state:'in_progress'});if(!coords(getOrder(key)))return;notify('Serviço iniciado. O FECHOU vai avisar quando o GPS indicar sua chegada ao endereço. Mantenha a localização permitida e o aplicativo aberto.',key,'tracking-started')},
+   started(id){const key=String(id);let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey(key))||'{}')}catch(_){};saved.started_at=new Date().toISOString();try{localStorage.setItem(storageKey(key),JSON.stringify(saved))}catch(_){};resume({id:key,service_state:'in_progress'})},
    resume,finishing(id){notify(labels.finish,id,'finish')},finished(id){clear(id);try{localStorage.removeItem(storageKey(id))}catch(_){}},clear
  };
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;getOrders().filter(o=>String(o.service_state||o.metadata?.service_state||'').toLowerCase()==='in_progress').forEach(resume)});
@@ -38511,42 +38664,129 @@ body.fechou-guest-public-only .wrap > footer.footer {
 
 
 
-<script id="fechou-v323-publish-click-fix">
+</body>
+
+<style id="fechou-v325-request-disclosure-style">
+#app .v325-request-disclosure{display:block!important;margin:10px 0!important;padding:0!important;overflow:hidden!important;border:1px solid #344b63!important;border-radius:14px!important;background:linear-gradient(145deg,#142235,#0f1926)!important;color:#edf4fc!important;box-shadow:0 8px 22px #0003!important}
+#app .v325-request-disclosure>details{display:block!important;margin:0!important;padding:0!important}
+#app .v325-request-disclosure>details>summary{list-style:none!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;min-height:48px!important;padding:13px 15px!important;color:#edf4fc!important;font-size:14px!important;line-height:1.3!important;font-weight:750!important;cursor:pointer!important;user-select:none!important}
+#app .v325-request-disclosure>details>summary::-webkit-details-marker{display:none!important}
+#app .v325-request-disclosure>details>summary::after{content:""!important;width:8px!important;height:8px!important;flex:0 0 8px!important;border-right:2px solid #83afd9!important;border-bottom:2px solid #83afd9!important;transform:rotate(45deg)!important;transition:transform .18s ease!important}
+#app .v325-request-disclosure>details[open]>summary::after{transform:rotate(225deg)!important}
+#app .v325-request-disclosure-content{padding:0 15px 14px!important;border-top:1px solid #30465d!important;color:#c9d6e4!important;font-size:13px!important;line-height:1.6!important}
+#app .v325-request-disclosure-content p{margin:10px 0 0!important;color:#c9d6e4!important;font-size:13px!important;line-height:1.6!important;overflow-wrap:anywhere!important}
+#app .v325-request-disclosure-content p:first-child{margin-top:11px!important}
+#app .v325-example-source-hidden{display:none!important}
+</style>
+<script id="fechou-v326-request-disclosures">
+// Desativado no V328: a consolidação única é controlada pelo runtime V328 abaixo.
+window.FECHOU_V326_DISCLOSURES={run:()=>{},schedule:()=>{}};
+</script>
+
+
+<script id="fechou-v327-publication-bridge">
 (()=>{'use strict';
- if(window.__FECHOU_V323_PUBLISH_FIX__)return;
- window.__FECHOU_V323_PUBLISH_FIX__=true;
- const getState=()=>window.__fechouAppState||window.state||{};
- const notify=message=>{try{if(typeof window.toast==='function')window.toast(message);else console.warn(message)}catch(_){console.warn(message)}};
- window.addEventListener('click',event=>{
-  const button=event.target?.closest?.('#v58-publish');
-  if(!button)return;
-  event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation();
-  const s=getState();
-  if(s.__fechouPublishInFlight)return;
-  if(s.currentRole!=='Cliente'){notify('Entre no perfil de cliente para publicar uma solicitação.');return;}
-  if(s.page!=='request'){notify('Volte ao formulário do pedido para publicar.');return;}
-  if(s.priceAnalysisDone!==true){notify('Analise o preço da região antes de publicar o pedido.');return;}
-  if(!String(s.category||'').trim()||!String(s.service||'').trim()){notify('Selecione a categoria e o tipo de serviço.');return;}
-  if(!String(s.location||'').trim()){notify('Informe bairro e cidade do atendimento.');return;}
-  if(typeof window.createBudget!=='function'){notify('A publicação não foi inicializada. Atualize o aplicativo e tente novamente.');return;}
-  if(s.__fechouTemporaryTestPrice===true)s.v134PaymentMethod='contract_prepaid';
-  s.__fechouPublishInFlight=true;
-  const oldHtml=button.innerHTML;
-  button.disabled=true;
-  button.setAttribute('aria-busy','true');
-  button.innerHTML='<span class="v222-inline-spinner" aria-hidden="true"></span><span>Preparando publicação…</span>';
-  Promise.resolve().then(()=>window.createBudget()).catch(error=>{
-   console.error('FECHOU V323 falha no acionamento de publicação:',error);
-   notify('Não foi possível iniciar a publicação: '+String(error?.message||error||'erro inesperado'));
-  }).finally(()=>{
-   s.__fechouPublishInFlight=false;
-   if(button.isConnected){button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML=oldHtml;}
-  });
+ if(window.__FECHOU_V327_PUBLICATION_BRIDGE__)return;
+ window.__FECHOU_V327_PUBLICATION_BRIDGE__=true;
+ const getState=()=>window.__fechouV178GetState?.()||window.__fechouAppState||window.state||{};
+ const selectedMode=()=>{
+   const state=getState();
+   const pressed=document.querySelector('#v134-payment-choice-area [data-v134-payment-choice][aria-pressed="true"]');
+   const explicit=pressed?.getAttribute('data-v134-payment-choice');
+   const value=explicit||state.v134PaymentMethod||'direct';
+   return value==='contract_prepaid'?'contract_prepaid':'direct';
+ };
+ const original=window.ewCreateOrderRemote;
+ if(typeof original==='function'&&!original.__fechouV327){
+   const bridged=async function(order){
+     const state=getState();
+     const mode=selectedMode();
+     state.v134PaymentMethod=mode;
+     const enriched={...order,payment_method:mode,payment_flow:mode,client_payment_preference:mode,
+       metadata:{...(order?.metadata||{}),payment_method:mode,payment_flow:mode,client_payment_preference:mode}};
+     // Direct mode stays on the original publication route; prepaid mode is routed by V189 to
+     // orders/prepublish and opens the in-app Asaas checkout. No local/public fallback is added.
+     return original.call(this,enriched);
+   };
+   bridged.__fechouV327=true;
+   window.ewCreateOrderRemote=bridged;
+   try{ewCreateOrderRemote=bridged}catch(_){}
+ }
+ // Keep the selected payment mode synchronized even if the user taps a card after a rerender.
+ document.addEventListener('click',event=>{
+   const choice=event.target?.closest?.('#v134-payment-choice-area [data-v134-payment-choice]');
+   if(choice){const state=getState();state.v134PaymentMethod=choice.dataset.v134PaymentChoice==='contract_prepaid'?'contract_prepaid':'direct';}
  },true);
+ window.FECHOU_V327_PUBLICATION={selectedMode};
+})();
+</script>
+<style id="fechou-v330-request-disclosures">
+#app .v330-request-disclosure{display:block!important;width:100%!important;box-sizing:border-box!important;margin:10px 0!important;padding:0!important;overflow:hidden!important;border:1px solid rgba(52,120,184,.5)!important;border-radius:13px!important;background:#1b1b1b!important;color:#fff!important;box-shadow:none!important}
+#app .v330-request-disclosure>details{display:block!important;width:100%!important;margin:0!important;padding:0!important}
+#app .v330-request-disclosure .v56-accordion-summary{padding:9px 10px!important;color:#fff!important;font-size:12px!important;cursor:pointer!important;line-height:1.35!important}
+#app .v330-request-disclosure .v330-request-disclosure-content{padding:0 14px 14px!important;border-top:1px solid rgba(52,120,184,.22)!important;color:var(--muted,#aeb8c5)!important;font-size:11px!important;line-height:1.45!important}
+#app .v330-request-disclosure-content p{margin:8px 0 0!important;color:var(--muted,#aeb8c5)!important;font-size:11px!important;line-height:1.45!important;overflow-wrap:anywhere!important}
+</style>
+<script id="fechou-v330-request-disclosures-runtime">
+(()=>{'use strict';
+ if(window.__FECHOU_V330_DISCLOSURES__)return;
+ window.__FECHOU_V330_DISCLOSURES__=true;
+ const $=(q,r=document)=>r.querySelector(q), $$=(q,r=document)=>Array.from(r.querySelectorAll(q));
+ const getState=()=>{try{return window.__fechouV178GetState?.()||window.__fechouAppState||window.state||{}}catch(_){return window.__fechouAppState||window.state||{}}};
+ const norm=v=>String(v??'').replace(/\s+/g,' ').trim();
+ const strip=v=>norm(v).replace(/^(?:ⓘ\s*)?(?:Exemplo(?:\s+para\b|\s*:)?|Ex\.:|Atenção\s*:?)\s*/i,'').trim();
+ const add=(arr,v)=>{const x=strip(v);if(x&&!arr.some(y=>y.toLocaleLowerCase('pt-BR')===x.toLocaleLowerCase('pt-BR')))arr.push(x)};
+ function textOf(node){if(!node)return '';if(node.matches('details')){const c=node.cloneNode(true);c.querySelector(':scope > summary')?.remove();c.querySelectorAll('button,input,select,textarea,svg').forEach(x=>x.remove());return norm(c.textContent)}return norm(node.textContent)}
+ function removeLegacy(root,textarea){
+   // The legacy example and attention are generated by independent V50/V56/V189 renderers.
+   // Remove their source nodes across the WHOLE app, not only the textarea field/workflow subtree.
+   const examples=new Set(),attentions=new Set();
+   const addMatches=(selectors,set)=>selectors.forEach(sel=>$$(sel,root).forEach(n=>{if(!n.closest('.v330-request-disclosure'))set.add(n)}));
+   addMatches(['#exw-v8-service-example','.v189-service-examples','.v34-description-example','[data-fechou-description-example]'],examples);
+   addMatches(['#v56-description-help'],attentions);
+   $$('details',root).forEach(n=>{if(n.closest('.v330-request-disclosure'))return;const t=norm(n.querySelector(':scope > summary')?.textContent);if(/^Exemplo\b/i.test(t))examples.add(n);if(/^Atenção\b/i.test(t))attentions.add(n)});
+   $$('small,p,span,div',root).forEach(n=>{if(n.closest('.v330-request-disclosure'))return;const t=norm(n.textContent);if(t.length<1600&&/^(?:Exemplo(?:\s+para\b|\s*:)?|Ex\.:)/i.test(t))examples.add(n);if(t.length<2000&&/^(?:ⓘ\s*)?Atenção\s*:/i.test(t))attentions.add(n)});
+   const top=set=>[...set].filter(n=>![...set].some(o=>o!==n&&o.contains(n)));
+   const collect=(nodes,out)=>{for(const n of top(nodes)){add(out,textOf(n));const wrapper=n.matches('details')?n.closest('.v56-estimate,.v277-request-disclosure,.v325-request-disclosure,.v328-request-disclosure'):null;if(wrapper&&!wrapper.contains(textarea))wrapper.remove();else if(n!==textarea&&!n.contains(textarea))n.remove()}};
+   const ex=[],at=[];collect(examples,ex);collect(attentions,at);
+   return {ex,at};
+ }
+ function ensureCard(field,textarea,kind,label,items){
+   const cls=kind==='example'?'v330-example-card':'v330-attention-card';
+   let el=$('.'+cls,field);
+   if(!el){el=document.createElement('div');el.className='v56-estimate v56-accordion v330-request-disclosure '+cls;
+     const details=document.createElement('details');details.dataset.v330Disclosure=kind;
+     const summary=document.createElement('summary');summary.className='v56-accordion-summary';summary.textContent=label;
+     const body=document.createElement('div');body.className='v56-accordion-content v330-request-disclosure-content';
+     details.append(summary,body);el.append(details);
+     if(kind==='example')textarea.insertAdjacentElement('afterend',el);
+     else {const example=$('.v330-example-card',field);(example||textarea).insertAdjacentElement('afterend',el)}
+   }
+   const body=$('.v330-request-disclosure-content',el),sig=items.join('\n');
+   if(body&&body.dataset.signature!==sig){body.replaceChildren();items.forEach(v=>{const p=document.createElement('p');p.textContent=v;body.append(p)});body.dataset.signature=sig;}
+   return el;
+ }
+ function consolidate(){
+   const st=getState();if(st.page!=='request'||st.currentRole==='Profissional')return;
+   const root=$('#app');if(!root)return;
+   const textarea=$('textarea[data-input="description"]',root)||$('[data-input="description"]',root);if(!textarea)return;
+   const field=textarea.closest('.field')||textarea.parentElement;if(!field)return;
+   const {ex,at}=removeLegacy(root,textarea);
+   const placeholder=norm(textarea.getAttribute('placeholder')||'');
+   if(/^(?:Exemplo|Ex\.:)/i.test(placeholder)){add(ex,placeholder);textarea.placeholder='Descreva o problema ou serviço com suas palavras...'}
+   if(!ex.length)ex.push('Informe o que precisa ser feito, a quantidade, o estado atual, o local e o prazo desejado. Você também pode acrescentar medidas, materiais disponíveis, fotos e condições de acesso.');
+   if(!at.length)at.push('Inclua o máximo de detalhes possíveis do serviço. Explique o que precisa ser feito, quantidades, medidas aproximadas, sintomas e o que você já sabe sobre o local. Você pode usar texto, foto, vídeo ou áudio. Não precisa conhecer termos técnicos.');
+   ensureCard(field,textarea,'example','Exemplo',ex);
+   ensureCard(field,textarea,'attention','Atenção',at);
+   // Guarantee exactly one of each card in the request form.
+   for(const cls of ['.v330-example-card','.v330-attention-card']){const nodes=$$(cls,root);nodes.slice(1).forEach(n=>n.remove());if(nodes[0]&&nodes[0].parentElement!==field){nodes[0].remove();}}
+ }
+ let pending=false;function schedule(){if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;try{consolidate()}catch(e){console.warn('FECHOU V330 disclosures',e)}})}
+ const original=window.render;if(typeof original==='function'&&!original.__fechouV329){const wrapped=function(){const r=original.apply(this,arguments);schedule();return r};wrapped.__fechouV329=true;window.render=wrapped;}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();
+ const app=$('#app');if(app)new MutationObserver(schedule).observe(app,{childList:true,subtree:true});
+ window.FECHOU_V330_DISCLOSURES={run:consolidate,schedule};
 })();
 </script>
 
-</body>
 </html>
