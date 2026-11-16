@@ -29,12 +29,15 @@ A correção ficou restrita à função que autoriza administradores. A conta de
 | Origens permitidas do painel | 10/10 passaram | Função real; cenários simulados de configuração |
 | Fonte implantada da admin-api | Correspondência exata; v33 ativa; JWT habilitado | Confirma implantação, não equivale a teste financeiro completo |
 | Inicialização do R17 no navegador | Interface inicial e navegação ao acesso do cliente funcionaram | Sem login real na prévia local; fluxo completo autenticado permanece pendente |
+| Serviços no navegador móvel de 390 px | Detalhes, propostas e rodapé renderizados; botão abriu registro; descrição expandiu e recolheu | Dados e rede simulados; não comprova autorização ou transação real |
 
 ### Limitação de prévia identificada e resolvida
 
 O servidor padrão de prévia injetava código de atualização automática dentro de textos HTML usados pelos modelos de impressão. Essa transformação produzia erros de sintaxe e trechos de código visíveis. A injeção não existe no arquivo R17 salvo.
 
 Foi configurado um comando de desenvolvimento que serve os bytes do HTML sem essa transformação, dentro do mesmo gerenciador de prévia. Depois da recarga, o aplicativo apresentou a tela inicial normal e abriu o formulário do cliente. Não foram registrados novos erros de sintaxe nessa recarga. Os erros anteriores permanecem no histórico do console e não devem ser confundidos com erros da nova recarga.
+
+Foram capturadas quatro imagens reais do navegador: detalhes, ações/propostas, registro completo e descrição expandida. O cenário utiliza dois profissionais fictícios, um pedido de teste local e nenhuma credencial real. Os botões de abertura do registro e de expansão foram acionados pela interface. Não houve envio de proposta nem aceite, contrato ou pagamento nesse cenário.
 
 Não foi necessário modificar o HTML para compensar o comportamento do servidor de prévia. O SHA-256 preservado é `977abf6f815a4a4ecabedf1056c1fba22535587775e1cdf4e2cdff162ef76e8c`.
 
