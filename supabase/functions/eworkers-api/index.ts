@@ -1819,7 +1819,7 @@ async function updateOrderFromPayment(admin: ReturnType<typeof adminClient>, ord
   await updateOrder(admin, orderId, meta, undefined, extra);
 }
 async function requestAsaasRefund(paymentId: string, reason: string) {
-  return await asaasRequest(`/payments/${encodeURIComponent(paymentId)}/refund`, "POST", { description: text(reason, 500) });
+  return await asaasRequest(`/payments/${encodeURIComponent(paymentId)}/refund`, "POST", { description: text(reason, 140).replace(/[\uD800-\uDBFF]$/, "") });
 }
 async function notifyOrderParticipant(admin: any, userId: string, orderId: string, eventKey: string, type: string, title: string, body: string) {
   if (!validUuid(userId) || !validUuid(orderId)) return;
