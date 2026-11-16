@@ -1,0 +1,125 @@
+{
+  "date": "2026-11-16",
+  "source_commit": "fb030b078cf77c0f0acf398d71d7566731409b3c",
+  "candidate_deployed": false,
+  "execution": "V8 disponível em functions.exec; sem Node, Deno, navegador local ou ambiente de shell. Remoção mecânica de anotações TypeScript nas funções testadas.",
+  "media": {
+    "scope": "Helpers originais de mídia do checkpoint R18, com remoção mecânica de anotações TypeScript. Executado no V8 da sessão; storage, usuário e UUID simulados. Sem implantação, banco, upload real ou transação financeira.",
+    "results": [
+      {
+        "name": "150 arquivos / 300 MiB aceitos",
+        "passed": true
+      },
+      {
+        "name": "151 arquivos recusados",
+        "passed": true
+      },
+      {
+        "name": "Soma acima de 300 MiB recusada",
+        "passed": true
+      },
+      {
+        "name": "50 MiB por arquivo aceitos",
+        "passed": true
+      },
+      {
+        "name": "50 MiB mais um byte recusados",
+        "passed": true
+      },
+      {
+        "name": "Tamanhos inválidos recusados",
+        "passed": true
+      },
+      {
+        "name": "HTML e SVG recusados",
+        "passed": true
+      },
+      {
+        "name": "Aliases M4A e WAV normalizados",
+        "passed": true
+      },
+      {
+        "name": "Tipo com parâmetros normalizado",
+        "passed": true
+      },
+      {
+        "name": "Sessão inválida não chega ao storage",
+        "passed": true
+      },
+      {
+        "name": "Profissional não emite URLs de pedido do cliente",
+        "passed": true
+      },
+      {
+        "name": "Caminho de upload pertence à conta e sessão",
+        "passed": true
+      },
+      {
+        "name": "Falha de assinatura não inventa URL",
+        "passed": true
+      },
+      {
+        "name": "Outra conta recusada antes de consultar storage",
+        "passed": true
+      },
+      {
+        "name": "Travessia e segmentos extras recusados",
+        "passed": true
+      },
+      {
+        "name": "Objeto com tamanho e MIME corretos aceito",
+        "passed": true
+      },
+      {
+        "name": "Tamanho armazenado divergente recusado",
+        "passed": true
+      },
+      {
+        "name": "MIME armazenado divergente recusado",
+        "passed": true
+      },
+      {
+        "name": "Nome diferente não comprova objeto",
+        "passed": true
+      }
+    ]
+  },
+  "pending": {
+    "scope": "v195Pending original do backend candidato R18, removidas anotações TypeScript. Banco/provedor simulados; nenhuma consulta financeira real. A primeira execução parou no helper de teste structuredClone, indisponível no runtime; substituído por cópia JSON dos dados fictícios e reexecutado sem mudar o código do aplicativo.",
+    "results": [
+      {
+        "name": "No máximo três consultas ao provedor por leitura",
+        "passed": true
+      },
+      {
+        "name": "Pedido confirmado sai da lista pendente",
+        "passed": true
+      },
+      {
+        "name": "Consultas restritas ao cliente autenticado",
+        "passed": true
+      },
+      {
+        "name": "Falha do provedor mantém pagamento pendente",
+        "passed": true
+      },
+      {
+        "name": "Profissional recusado antes de consultar dados financeiros",
+        "passed": true
+      },
+      {
+        "name": "Sem acesso a rascunhos de outra conta",
+        "passed": true
+      },
+      {
+        "name": "Marca de tentativa não sobrescreve status concorrente",
+        "passed": true
+      }
+    ]
+  },
+  "limits": [
+    "Banco, armazenamento, usuário e provedor simulados.",
+    "Não comprova compilação integral do TypeScript, upload real, autenticação real, conciliação real nem segurança ponta a ponta.",
+    "Nenhuma alteração funcional ou implantação nesta retomada."
+  ]
+}
