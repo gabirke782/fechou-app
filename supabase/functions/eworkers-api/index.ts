@@ -1850,9 +1850,11 @@ async function withdrawProfessionalProposal(ctx: any, payload: Record<string, an
   const orderId = String(proposal.order_id || "");
   if (!validUuid(orderId)) throw Object.assign(new Error("O pedido vinculado à proposta está inválido."), { status: 409 });
   const { data: order, error: orderError } = await ctx.admin.from("orders")
-    .select("id,client_id,selected_proposal_id,professional_id,archived_at").eq("id", orderId).maybeSingle();
+    .select("id,client_id,selected_proposal_id,professional_id,archived_at,service_state,status").eq("id", orderId).maybeSingle();
   if (orderError) throw Object.assign(new Error("Não foi possível verificar o pedido: " + orderError.message), { status: 500 });
   if (!order) throw Object.assign(new Error("O pedido vinculado não foi encontrado."), { status: 404 });
+  if (order.archived_at || ["completed","complete","cancelled","canceled"].includes(String(order.service_state || order.status || "").toLowerCase()))
+    throw Object.assign(new Error("Este serviço já foi concluído ou encerrado; não é possível desistir do orçamento."), {status:409,code:"ORDER_ALREADY_CLOSED"});
   if (String(order.selected_proposal_id || "") === proposalId || String(order.professional_id || "") === String(ctx.user.id)) {
     throw Object.assign(new Error("Você já foi selecionado para este serviço. Use o fluxo de cancelamento no chat para que contrato, cliente e eventual pagamento sejam protegidos."), { status: 409, code: "PROPOSAL_ALREADY_SELECTED" });
   }
@@ -4760,13 +4762,21 @@ function teamDistance(a:any,b:any){const rad=(n:number)=>n*Math.PI/180,dl=rad(b.
 async function teamNotify(admin:any,userId:string,orderId:string,type:string,title:string,body:string,extra:any={}){if(!validUuid(userId))return;const {error}=await admin.from("notifications").insert({user_id:userId,type,title,body,data:{order_id:orderId,event_key:type+":"+orderId+":"+crypto.randomUUID(),...extra}});if(error)console.warn("FECHOU team notification failed",text(error.message,160));}
 async function teamOrder(ctx:any,id:string){if(!validUuid(id))throw Object.assign(new Error("Identificador da contratação inválido."),{status:400});return await getOrder(ctx.admin,id);}
 async function teamGet(ctx:any,id:string){const d=await teamOrder(ctx,id);const {data:team,error}=await ctx.admin.from("fechou_teams").select("*").eq("order_id",id).maybeSingle();if(error)throw Object.assign(new Error("Não foi possível consultar a equipe."),{status:500});const uid=String(ctx.user.id),client=String(d.order.client_id)===uid,leader=!!team&&String(team.leader_id)===uid,assigned=String(d.professionalId||"")===uid;let approvedMember=false;if(team){const {data:member}=await ctx.admin.from("fechou_team_participants").select("status").eq("team_id",team.id).eq("user_id",uid).maybeSingle();approvedMember=member?.status==="approved";}if(!client&&!leader&&!assigned&&!approvedMember)throw Object.assign(new Error("Somente participantes aprovados da equipe podem acessar esta contratação."),{status:403});return {...d,team,client,leader:leader||assigned,approvedMember};}
+async function canPlanOrderTeam(ctx:any, info:any) {
+ const order=info.order, uid=String(ctx.user.id);
+ if(getRole(ctx.profile,ctx.user)!=="professional" || String(order.client_id)===uid || order.archived_at || order.professional_id || order.selected_proposal_id) return false;
+ if(!["open","novo","recebendo propostas","em negociação","nova solicitação","aguardando escolha do cliente"].includes(String(order.status||"").trim().toLowerCase())) return false;
+ const {data,error}=await ctx.admin.from("proposals").select("id").eq("order_id",order.id).eq("professional_id",uid).in("status",["pending","accepted"]).limit(1);
+ if(error)throw Object.assign(new Error("Não foi possível conferir a proposta para montar a equipe."),{status:503});
+ return !!data?.length;
+}
 async function teamEnsure(ctx:any,p:any){
  ensureUserRole(getRole(ctx.profile,ctx.user),"professional");
  const id=text(p.order_id,80),d=await teamOrder(ctx,id);
  if(d.order.archived_at)throw Object.assign(new Error("Este serviço não está mais disponível."),{status:404});
  const currentProfessional=String(d.professionalId||"");
  if(currentProfessional&&currentProfessional!==String(ctx.user.id))throw Object.assign(new Error("Esta contratação já pertence a outro profissional."),{status:403});
- if(!currentProfessional&&String(d.order.status||"")!=="open")throw Object.assign(new Error("Este serviço não está aberto para formar uma equipe de apoio."),{status:409});
+ if(!currentProfessional&&!(await canPlanOrderTeam(ctx,d)))throw Object.assign(new Error("Este serviço não está aberto para formar uma equipe de apoio."),{status:409});
  if(d.team){if(String(d.team.leader_id)!==String(ctx.user.id))throw Object.assign(new Error("Este serviço já possui um encarregado de equipe."),{status:409});return {team:d.team,pre_hire:!currentProfessional};}
  const {data,error}=await ctx.admin.from("fechou_teams").insert({order_id:id,leader_id:ctx.user.id}).select("*").single();
  if(error){const {data:old}=await ctx.admin.from("fechou_teams").select("*").eq("order_id",id).maybeSingle();if(old&&String(old.leader_id)===String(ctx.user.id))return {team:old,pre_hire:!currentProfessional};throw Object.assign(new Error("Não foi possível iniciar a equipe."),{status:500});}
@@ -4787,7 +4797,7 @@ async function teamList(ctx:any,p:any){
  if(teamError)throw Object.assign(new Error("Não foi possível consultar a equipe."),{status:500});
  const client=String(order.client_id)===uid;
  const assigned=String(orderInfo.professionalId||"")===uid;
- const candidate=!team&&!client&&!assigned&&getRole(ctx.profile,ctx.user)==="professional"&&!order.professional_id&&!order.selected_proposal_id&&String(order.status||"").toLowerCase()==="open"&&!order.archived_at;
+ const candidate=!team&&!client&&!assigned&&await canPlanOrderTeam(ctx,orderInfo);
  const leader=!!team&&String(team.leader_id)===uid;
  if(!client&&!leader&&!assigned&&!candidate)throw Object.assign(new Error("Somente o cliente, o profissional responsável ou o encarregado em planejamento pode acessar esta equipe."),{status:403});
  if(!team)return {team:null,leader:null,invites:[],participants:[],messages:[],turns:[],viewer:{client:false,leader:candidate,member:false,invitee:false,candidate},order:{id:order.id,service:order.service,description:order.description,region_approx:order.region_approx||order.region||""},financial_notice:"Equipe em planejamento; ainda não há contratação nem remuneração reservada."};
