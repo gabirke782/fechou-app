@@ -1,0 +1,20 @@
+--- ativo/fechou-ops-api-v25.ts
++++ pendente/fechou-ops-api.ts
+@@ -326,7 +326,7 @@
+       requestUrl = clean(providerResult.requestUrl || "", 1000);
+       if (!requestUrl) throw new Error("O provedor não retornou a etapa de dados bancários para o estorno de boleto.");
+     } else if (billing === "PIX" || billing === "CREDIT_CARD") {
+-      providerResult = await asaas("/payments/" + encodeURIComponent(paymentId) + "/refund", "POST", { description: "FECHOU: cancelamento antes de vínculo contratual ou início do serviço. Motivo: " + reason.slice(0, 250) });
++      providerResult = await asaas("/payments/" + encodeURIComponent(paymentId) + "/refund", "POST", { description: clean("FECHOU: cancelamento antes de vínculo contratual ou início do serviço. Motivo: " + reason, 140).replace(/[\uD800-\uDBFF]$/, "") });
+     } else throw new Error("A forma de pagamento exige conferência manual antes de solicitar o estorno.");
+     const nextStatus = billing === "BOLETO" ? "bank_slip_action_required" : "pending";
+     const nextMeta = { ...obj(order.metadata), refund_status: nextStatus, refund_requested_at: new Date().toISOString(), refund_reason: reason,
+@@ -391,7 +391,7 @@
+       requestUrl = clean(providerResult.requestUrl || "", 1000);
+       if (!requestUrl) throw new Error("O Asaas não retornou o link necessário para o cliente informar os dados bancários.");
+     } else if (billing === "PIX" || billing === "CREDIT_CARD") {
+-      providerResult = await asaas("/payments/" + encodeURIComponent(paymentId) + "/refund", "POST", { description: "FECHOU: reembolso aprovado após análise administrativa. Motivo: " + reason.slice(0, 250) });
++      providerResult = await asaas("/payments/" + encodeURIComponent(paymentId) + "/refund", "POST", { description: clean("FECHOU: reembolso aprovado após análise administrativa. Motivo: " + reason, 140).replace(/[\uD800-\uDBFF]$/, "") });
+     } else throw new Error("Esta forma de pagamento exige conciliação manual com o provedor.");
+     const status = billing === "BOLETO" ? "bank_slip_action_required" : "pending";
+     const metadata = { ...obj(order.metadata), refund_status: status, refund_requested_at: new Date().toISOString(), refund_reason: reason,
