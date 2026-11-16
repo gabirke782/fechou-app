@@ -1,0 +1,28 @@
+const fs=require('fs'),vm=require('vm'),ts=require('typescript'),assert=require('node:assert/strict');
+const path=require('node:path');const base=__dirname+path.sep;
+function extract(source,name){const ast=ts.createSourceFile('admin.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);return ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name.text===name).getText(ast)}
+function fixture(source,{row=null,invite=null,conflict=false}={}){
+ const writes=[],reads=[];const db={from(table){let operation='read',payload,filters=[];const q={select(){return q},eq(k,v){filters.push([k,v]);return q},maybeSingle(){return q},upsert(v){operation='upsert';payload=v;return q},insert(v){operation='insert';payload=v;return q},update(v){operation='update';payload=v;return q},then(resolve,reject){if(operation==='read'){reads.push(table);let data=table==='admin_access'?row:invite;if(data&&filters.some(([k,v])=>data[k]!==v))data=null;return Promise.resolve({data,error:null}).then(resolve,reject)}writes.push({table,operation,payload});return Promise.resolve({data:null,error:conflict&&operation==='insert'?{code:'23505'}:null}).then(resolve,reject)}};return q}};
+ const context={ADMIN_EMAIL:'support@example.test',norm:v=>String(v??'').trim().toLowerCase(),asObj:v=>v&&typeof v==='object'?v:{}};vm.createContext(context);vm.runInContext(ts.transpileModule(extract(source,'ensureAdmin'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText,context);
+ return {run:user=>context.ensureAdmin(db,user),writes,reads};
+}
+const source=fs.readFileSync(process.env.ADMIN_API_SOURCE||path.resolve(__dirname,'../../../supabase/functions/admin-api/index.ts'),'utf8'),original=fs.readFileSync(base+'admin-api-v32.ts','utf8'),results=[];
+const user={id:'test-admin',email:'support@example.test',email_confirmed_at:'2026-11-01T00:00:00Z'},permissions={dashboard:true,finance_execute:false};
+const active={user_id:user.id,email:user.email,active:true,permissions};
+const bound={email:user.email,active:true,permissions,claimed_user_id:user.id};
+async function test(name,run){try{await run();results.push({name,passed:true})}catch(e){results.push({name,passed:false,error:String(e)})}}
+(async()=>{
+ await test('Reprodução antes da correção: convite reativa cadastro desativado',async()=>{const f=fixture(original,{row:{...active,active:false},invite:bound});const r=await f.run(user);assert.equal(r.active,true);assert.equal(f.writes[0].operation,'upsert')});
+ await test('Conta administrativa ativa continua autorizada sem escrita',async()=>{const f=fixture(source,{row:active,invite:bound});const r=await f.run(user);assert.equal(r.user_id,user.id);assert.equal(f.writes.length,0);assert.deepEqual(f.reads,['admin_access'])});
+ await test('Cadastro desativado não é reativado por convite ainda ativo',async()=>{const f=fixture(source,{row:{...active,active:false},invite:bound});await assert.rejects(f.run(user),e=>e.status===403);assert.equal(f.writes.length,0);assert.deepEqual(f.reads,['admin_access'])});
+ await test('E-mail divergente em cadastro existente não admite fallback',async()=>{const f=fixture(source,{row:{...active,email:'other@example.test'},invite:bound});await assert.rejects(f.run(user),e=>e.status===403);assert.equal(f.writes.length,0)});
+ await test('Conhecer o e-mail público do suporte não permite reivindicar convite sem UID',async()=>{const f=fixture(source,{invite:{...bound,claimed_user_id:null}});await assert.rejects(f.run(user),e=>e.status===403);assert.equal(f.writes.length,0)});
+ await test('Convite de outro usuário não concede acesso',async()=>{const f=fixture(source,{invite:{...bound,claimed_user_id:'other-user'}});await assert.rejects(f.run(user),e=>e.status===403);assert.equal(f.writes.length,0)});
+ await test('Convite desativado não concede acesso',async()=>{const f=fixture(source,{invite:{...bound,active:false}});await assert.rejects(f.run(user),e=>e.status===403);assert.equal(f.writes.length,0)});
+ await test('Convite já vinculado ao UID pode criar apenas um cadastro novo',async()=>{const f=fixture(source,{invite:bound});const r=await f.run(user);assert.equal(r.user_id,user.id);assert.equal(f.writes.length,1);assert.equal(f.writes[0].operation,'insert');assert.equal(f.writes[0].payload.permissions.finance_execute,false)});
+ await test('Concorrência com cadastro criado ou revogado não sobrescreve autorização',async()=>{const f=fixture(source,{invite:bound,conflict:true});await assert.rejects(f.run(user));assert.equal(f.writes.length,1);assert.equal(f.writes[0].operation,'insert')});
+ await test('Sem e-mail confirmado, nenhuma consulta administrativa é executada',async()=>{const f=fixture(source,{row:active});await assert.rejects(f.run({...user,email_confirmed_at:null}),e=>e.status===403);assert.equal(f.reads.length,0);assert.equal(f.writes.length,0)});
+ await test('Metadados editáveis do usuário não concedem administração',async()=>{const f=fixture(source);await assert.rejects(f.run({...user,user_metadata:{role:'admin',finance_execute:true}}),e=>e.status===403);assert.equal(f.writes.length,0)});
+ await test('Fonte administrativa mantém sintaxe TypeScript válida',()=>assert.equal(ts.transpileModule(source,{reportDiagnostics:true,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).diagnostics.filter(x=>x.category===ts.DiagnosticCategory.Error).length,0));
+ fs.writeFileSync(base+'test-admin-access-results.json',JSON.stringify({type:'Função real; banco simulado; sem mudar permissões de contas reais',results},null,2));console.log(JSON.stringify({passed:results.filter(x=>x.passed).length,total:results.length,failed:results.filter(x=>!x.passed)},null,2));process.exit(results.some(x=>!x.passed)?1:0);
+})();
