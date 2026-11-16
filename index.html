@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-build="V336" data-fechou-version="1.0.3" lang="pt-BR">
+<html data-fechou-revision="R16-2026-11-16" data-fechou-build="V336" data-fechou-version="1.0.3" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-v215-core">
@@ -18231,12 +18231,14 @@ ${
           const when = whenValue ? new Date(whenValue).toLocaleString("pt-BR") : "Aguardando confirmação do pagamento";
           const hasProviderSubscription = !!sub.id;
           const isPendingCheckout = !ok && (!!pending.plan || ["pending", "creating", "created"].includes(status));
-          const message = ok
-            ? "Seu plano está ativo nesta conta e os recursos profissionais estão disponíveis."
+          const paidUntil = sub.access_until && Number.isFinite(Date.parse(sub.access_until)) ? new Date(sub.access_until).toLocaleDateString("pt-BR", {timeZone:"America/Sao_Paulo"}) : "o fim do período já pago";
+          const message = sub.renewal_cancelled === true
+            ? (ok ? "Renovação cancelada. Seu acesso permanece até " + paidUntil + ". Não haverá nova cobrança automática." : "Renovação cancelada. O período de acesso já terminou.")
+            : ok ? "Seu plano está ativo nesta conta e os recursos profissionais estão disponíveis."
             : isPendingCheckout
               ? "O plano foi selecionado. O acesso profissional será liberado após a confirmação do pagamento pelo provedor."
               : "O status será atualizado conforme a confirmação do provedor de pagamento.";
-          return `<section class="fechou-v85-subscription" aria-live="polite"><div class="v85-sub-row"><div><p class="eyebrow">MINHA ASSINATURA</p><h2>${escV(planLabel(plan))}</h2><p>${escV(planAmount(plan))}</p></div><span class="pill ${ok ?"amberpill" : ""}">${escV(sub?.renewal_cancelled ? "Renovação cancelada" : statusLabel(status))}</span></div><p class="muted">${escV(message)}</p><p class="muted">${hasProviderSubscription ? "Última atualização: " : "Situação: "}${escV(when)}</p><div class="actions"><button class="btn secondary" data-act="v85-refresh-subscription" type="button">Atualizar status</button><button class="btn secondary" data-act="page:pricing" type="button">Ver planos</button>${ok ? '<button class="btn secondary" data-act="subscriptioncancel" type="button">Cancelar assinatura</button>' : ""}</div></section>`;
+          return `<section class="fechou-v85-subscription" aria-live="polite"><div class="v85-sub-row"><div><p class="eyebrow">MINHA ASSINATURA</p><h2>${escV(planLabel(plan))}</h2><p>${escV(planAmount(plan))}</p></div><span class="pill ${ok ?"amberpill" : ""}">${escV(sub?.renewal_cancelled ? "Renovação cancelada" : statusLabel(status))}</span></div><p class="muted">${escV(message)}</p><p class="muted">${hasProviderSubscription ? "Última atualização: " : "Situação: "}${escV(when)}</p><div class="actions"><button class="btn secondary" data-act="v85-refresh-subscription" type="button">Atualizar status</button><button class="btn secondary" data-act="page:pricing" type="button">Ver planos</button>${ok && sub.renewal_cancelled !== true ? '<button class="btn secondary" data-act="subscriptioncancel" type="button">Cancelar assinatura</button>' : ""}</div></section>`;
         }
                 function insertSubscriptionPanel() {
           if (state.currentRole !== "Profissional" || !state.supabaseUser)
@@ -21352,15 +21354,16 @@ ${
                 "Entre na conta profissional para cancelar a assinatura."
               );
             const sub = state.subscription || {};
+            if (sub.renewal_cancelled === true) return toast("A renovação desta assinatura já está cancelada.");
             if (!sub.id)
               return toast(
                 "Não encontrei o identificador da assinatura nesta conta. Toque em Atualizar status e tente novamente."
               );
-            if (
-              !(await window.FechouR16.confirmSubscription())
-            )
-              return;
             window.__v113CancelBusy = true;
+            let confirmed = false;
+            try { confirmed = await window.FechouR16.confirmSubscription(); }
+            catch (error) { window.__v113CancelBusy = false; toast("Não foi possível abrir a confirmação. Tente novamente."); return; }
+            if (!confirmed) { window.__v113CancelBusy = false; return; }
             const old = b.textContent;
             b.disabled = true;
             b.textContent = "Cancelando…";
@@ -38875,8 +38878,8 @@ body{min-width:0!important}
   @media(max-width:480px){#app .v305-services-grid-3{gap:5px!important}#app .v305-services-grid-3>.order,#app .v305-services-grid-3>.home-job{padding:7px!important}}
 </style>
 <script id="fechou-v322-5-build-marker">
-  window.FECHOU_BUILD_VERSION="V335-MOBILE-APP-FLOW-AND-CONTRACT-RESUME";
-  window.FECHOU_BUILD_ID="FECHOU_V334_COUNTERPROPOSAL_RPC_AND_BACKEND_FIXES";
+  window.FECHOU_BUILD_VERSION="R16-2026-11-16";
+  window.FECHOU_BUILD_ID="FECHOU_R16_REQUEST_TEAM_REFUND_COMPAT";
   document.documentElement.dataset.fechouBuild="V334";
   document.documentElement.dataset.fechouVersion="V334";
   document.querySelectorAll('meta[name="fechou-build"],meta[name="exylon-hub-version"]').forEach(meta=>meta.setAttribute("content","V334"));
