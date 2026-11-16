@@ -2896,12 +2896,14 @@ document.addEventListener('DOMContentLoaded',run);setInterval(run,1500);
                   "recebendo propostas",
                   "em negociação",
                   "nova solicitação",
+                  "aguardando escolha do cliente",
                 ].includes(
                   String(o.status || "")
                     .trim()
                     .toLowerCase()
                 ) &&
                 Object.prototype.hasOwnProperty.call(CATS, String(o.category || "")) &&
+                String(o.client_id || "") !== String(state.supabaseUser?.id || "") &&
                 !o.selectedProposal &&
                 !o.selectedProposalId &&
                 !o.selected_proposal_id &&
@@ -3104,6 +3106,7 @@ document.addEventListener('DOMContentLoaded',run);setInterval(run,1500);
                 "Recebendo propostas",
                 "Em negociação",
                 "Nova solicitação",
+                "Aguardando escolha do cliente",
               ].includes(o.status) &&
               ![
                 "Concluído",
@@ -3114,7 +3117,10 @@ document.addEventListener('DOMContentLoaded',run);setInterval(run,1500);
                 "Profissional escolhido — aguardando contrato",
               ].includes(o.status) &&
               Object.prototype.hasOwnProperty.call(CATS, String(o.category || "")) &&
-              !(o.proposals || []).length &&
+              String(o.client_id || "") !== String(state.supabaseUser?.id || "") &&
+              !o.professional_id &&
+              !o.selectedProposal &&
+              !o.contract?.accepted &&
               !o.selected_proposal_id &&
               !o.selectedProposalId &&
               !(o.proposals || []).some(
@@ -3932,6 +3938,7 @@ ${
               "₳",
             ],
           ];
+          if (state.supabaseUser) items.push(["signout", "Sair da conta", "Encerre o acesso neste dispositivo.", "↪"]);
           if (state.supabaseUser && state.currentRole === "Profissional") {
             items.push([
               "teams",
@@ -3949,7 +3956,7 @@ ${
             `<section class="panel"><div class="grid">${items
               .map(
                 (x) =>
-                  `<button class="tile" data-act="menuitem:${x[0]}" type="button"><span class="ico">${x[3]}</span><h3>${x[1]}</h3><p>${x[2]}</p></button>`
+                  `<button class="tile" data-act="${x[0] === "signout" ? "authLogout" : "menuitem:" + x[0]}" type="button"><span class="ico">${x[3]}</span><h3>${x[1]}</h3><p>${x[2]}</p></button>`
               )
               .join(
                 ""
@@ -5031,6 +5038,8 @@ ${
           const oid = act.split(":")[1];
           const o = state.orders.find((x) => String(x.id) === String(oid));
           if (!o) return toast("Pedido não encontrado.");
+          if (String(o.client_id || "") === String(state.supabaseUser?.id || ""))
+            return toast("Você não pode enviar proposta para um pedido da sua própria conta.");
           if (
             ![
               "open",
@@ -5038,6 +5047,7 @@ ${
               "Recebendo propostas",
               "Em negociação",
               "Nova solicitação",
+              "Aguardando escolha do cliente",
             ].includes(o.status) ||
             o.selectedProposal ||
             o.contract?.accepted
@@ -5342,6 +5352,7 @@ ${
               "Recebendo propostas",
               "Em negociação",
               "Nova solicitação",
+              "Aguardando escolha do cliente",
             ].includes(o.status) ||
             o.contract?.accepted
           )
@@ -5452,6 +5463,7 @@ ${
               "Recebendo propostas",
               "Em negociação",
               "Nova solicitação",
+              "Aguardando escolha do cliente",
             ].includes(o.status) ||
             o.contract?.accepted
           )
@@ -9493,6 +9505,7 @@ ${
                 "Recebendo propostas",
                 "Em negociação",
                 "Nova solicitação",
+                "Aguardando escolha do cliente",
               ].includes(o.status) &&
                 !(
                   o.selectedProposal &&
@@ -40204,7 +40217,7 @@ button, .btn, [role="button"], a.btn, summary{
   function appState() {
     try {
       if (typeof window.state === 'function') return window.state() || {};
-      return window.state || window.__fechouAppState || {};
+      return window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
     } catch (_) { return {}; }
   }
   function findOrder(id) {
@@ -40640,11 +40653,11 @@ window.fechouNativeBtnClassV335 = function (name) {
   function appState() {
     try {
       if (typeof window.state === 'function') return window.state() || {};
-      return window.state || window.__fechouAppState || {};
+      return window.__fechouV178GetState?.() || window.__fechouAppState || window.state || {};
     } catch (_) { return {}; }
   }
   function uid() {
-    try { return (typeof window.uid === 'function' && window.uid()) || appState().user?.id || appState().currentUser?.id || ''; }
+    try { return String(appState().supabaseUser?.id || appState().user?.id || appState().currentUser?.id || ''); }
     catch (_) { return ''; }
   }
   function role() {
@@ -41544,7 +41557,8 @@ window.fechouNativeBtnClassV335 = function (name) {
     const id = eventId(e);
     if (!raw.force && !remember(id)) return false;
     const copy = resolve(spec, e);
-    addToBell(e, copy);
+    // A notification already loaded from the server must not insert another notification.
+    if (!String(raw.id || '').startsWith('note:')) addToBell(e, copy);
     if (!raw.silent) { queue.push({ e, copy }); showNext(); }
     return true;
   };
@@ -41576,12 +41590,16 @@ window.fechouNativeBtnClassV335 = function (name) {
   /* Diff engine — start after first snapshot, emit only new changes */
   let snap = null;
   let booted = false;
+  let snapshotUser = "";
+  let sessionStartedAt = 0;
 
   function orderSig(o) {
     const c = o.contract || {};
     const props = o.proposals || o.quotes || [];
     return {
       id: String(o.id),
+      changedAt: Math.max(Date.parse(o.updated_at || '') || 0, Date.parse(c.updated_at || '') || 0,
+        ...(Array.isArray(props) ? props.map(p => Date.parse(p.updated_at || p.created_at || '') || 0) : [0])),
       service: o.service || o.title || '',
       direct: isDirect(o),
       payment: String(o.payment_status || ''),
@@ -41605,7 +41623,7 @@ window.fechouNativeBtnClassV335 = function (name) {
     (nextList || []).forEach((n) => {
       const p = prev.get(n.id);
       const base = { orderId: n.id, service: n.service, direct: n.direct };
-      if (!p) return; // don't fire history on first sight of a brand-new list after boot? new orders mid-session are ok
+      if (!p || n.changedAt < sessionStartedAt) return; // Async historical hydration is not a new event.
       if (!p && booted) {
         return;
       }
@@ -41640,6 +41658,14 @@ window.fechouNativeBtnClassV335 = function (name) {
   function tick() {
     try {
       const st = appState();
+      const accountId = uid();
+      if (snapshotUser !== accountId) {
+        snapshotUser = accountId; sessionStartedAt = Date.now();
+        snap = null; booted = false; queue.length = 0;
+        if (showing) closeOverlay(false);
+        ensureSeen();
+      }
+      if (!accountId) return;
       const orders = (st.orders || []).map(orderSig);
       if (!booted) {
         snap = { orders, notifications: (st.notifications || []).map((n) => String(n.id)), ledger: null };
@@ -41651,7 +41677,12 @@ window.fechouNativeBtnClassV335 = function (name) {
       const notes = st.notifications || [];
       notes.forEach((n) => {
         const id = 'note:' + String(n.id || n.title);
+        if (n.data?.v335 === true) { remember(id); return; }
         if (snap.notifications.includes(String(n.id))) return;
+        const createdAt = Date.parse(n.created_at || '');
+        if (!Number.isFinite(createdAt) || createdAt < sessionStartedAt || n.read_at) {
+          remember(id); return;
+        }
         mapServerNotification(n, id);
       });
       snap = { orders, notifications: notes.map((n) => String(n.id)), ledger: snap.ledger };
