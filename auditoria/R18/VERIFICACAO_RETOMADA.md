@@ -42,3 +42,9 @@ Fontes do candidato recuperadas do commit fb030b078cf77c0f0acf398d71d7566731409b
 A revisão automática recusou a consulta de conciliação que reunia identificadores privados de pagamento, valores, referências externas, metadados de webhook e configuração de storage. Motivo informado: a solicitação ampla de continuidade não seria autorização específica suficiente para expor esse conteúdo financeiro. Não houve nova tentativa nem consulta indireta aos mesmos dados após a recusa. Essa consulta permanece dependente de autorização específica.
 
 A implantação R18 segue recusada conforme o checkpoint anterior; não foi repetida ou contornada. Nenhuma alteração funcional, publicação, cobrança, transferência ou reembolso nesta retomada. Sem ambiente local, não foram executados DOM completo, áudio/vídeo real ou capturas finais. O trabalho completo continua pendente.
+
+### Cloudflare — resultado da consulta desta retomada
+
+Sessão autenticada e funcional para leitura. Projeto Pages startup5 confirmado. Última implantação informada: 79143d78-30cf-4c56-9ed1-c5c3912aec7e, 16/11/2026 às 17:49:44 UTC (14:49:44 em Brasília), por Upload Direto, sem conexão com repositório Git. O rótulo main não comprova um commit Git; hash de commit ausente. Prévias públicas por padrão, histórico recente somente de produção. Nenhum login adicional ou alteração foi realizado. A correspondência dos bytes publicados com R17 ou R18 continua sem comprovação.
+
+Foi confirmado por comparação literal que o bloco media-upload-server.ts usado nos 19 testes está presente sem alterações na fonte candidata do commit de referência.
