@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-revision="R16-2026-11-16" data-fechou-build="V336" data-fechou-version="1.0.3" lang="pt-BR">
+<html data-fechou-revision="R17-2026-11-16" data-fechou-build="V336" data-fechou-version="1.0.3" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-v215-core">
@@ -2075,6 +2075,55 @@ var q=false;new MutationObserver(function(){if(q)return;q=true;requestAnimationF
 document.addEventListener('DOMContentLoaded',run);setInterval(run,1500);
 })();
 </script>
+<style id="fechou-r17-service-layout">
+/* Detalhes e registro: escopo restrito; o rodapé do aplicativo é preservado. */
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-record{display:block!important;gap:0!important;background:#10171d!important;border:1px solid #2d3c4d!important;border-radius:24px!important;padding:16px!important;max-width:900px;margin:0 auto 22px;overflow:visible!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-header{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#171f29;border-radius:18px;padding:18px;margin-bottom:18px;min-width:0}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-header>div{min-width:0;flex:1}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-header h2{font-size:clamp(22px,4.8vw,30px)!important;line-height:1.18!important;margin:0 0 8px!important;overflow-wrap:anywhere}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-header p{font-size:13px!important;margin:0!important;overflow-wrap:anywhere}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-status{display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 auto;border:1px solid #5689b9!important;border-radius:999px!important;padding:8px 12px!important;background:#203f5e!important;color:#dbeafb!important;font-size:12px!important;line-height:1.3!important;max-width:45%;white-space:normal!important;text-align:center;overflow-wrap:anywhere;box-sizing:border-box}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-tags{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-tags .pill{border:1px solid #34516a!important;background:transparent!important;color:#cfdae5!important;padding:7px 14px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-location{margin:12px 0!important;font-size:14px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-stats{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;margin:16px 0!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-stats .stat{min-width:0!important;padding:12px 10px!important;border:1px solid #2c4053!important;border-radius:16px!important;background:#171f29!important;display:flex!important;flex-direction:column;gap:7px}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-stats .stat>span{font-size:12px!important;line-height:1.2!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-stats .stat>b{font-size:clamp(17px,4.4vw,26px)!important;line-height:1.15!important;color:#f2f5fa!important;white-space:nowrap!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-description,html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold{border:1px solid #2d4155!important;background:#171f29!important;border-radius:17px!important;margin:12px 0!important;padding:16px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-description h3,html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposals-title,html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-actions-title{font-size:18px!important;margin:0 0 12px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-description p{font-size:14px!important;margin:8px 0!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-description .r17-service-meta{font-size:12px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposals-title,html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-actions-title{margin-top:20px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposals-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal{border:1px solid #2d4155!important;background:#171f29!important;border-radius:17px!important;padding:12px!important;min-width:0!important;display:flex;flex-direction:column;gap:9px}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal-head{align-items:flex-start!important;gap:8px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal-head>div:last-child{min-width:0!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal-head h3{font-size:14px!important;margin:0 0 5px!important;overflow-wrap:anywhere}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal .avatar{width:35px!important;height:35px!important;flex:0 0 35px!important;border-radius:50%!important;background:#2f6fb2!important;color:#fff!important;font-size:16px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal .muted{font-size:11px!important;line-height:1.35!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal-value{display:block;font-size:24px!important;color:#fff!important;white-space:nowrap}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal p{font-size:12px!important;overflow-wrap:anywhere}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal-extra{font-size:12px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal-actions{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;gap:6px!important;margin-top:auto!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposal-actions button{width:auto!important;min-width:0!important;min-height:40px!important;height:auto!important;max-height:none!important;flex:1 1 70px!important;padding:7px!important;font-size:12px!important;white-space:normal!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-actions{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;gap:8px!important;align-items:stretch!important;margin-top:18px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-actions button{width:auto!important;flex:1 1 120px!important;min-width:0!important;min-height:48px!important;height:auto!important;max-height:none!important;font-size:13px!important;white-space:normal!important;margin:0!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-cancel button{width:100%!important;margin-top:12px!important;min-height:48px!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold{padding:0!important;overflow:hidden!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold>summary{list-style:none;display:flex!important;align-items:center;justify-content:space-between;gap:12px;padding:20px 16px!important;font-size:16px!important;font-weight:750;min-height:56px;cursor:pointer}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold>summary::-webkit-details-marker{display:none}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold>summary>span{color:#f39a3d!important;font-size:26px;line-height:1;transition:transform .15s}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold[open]>summary>span{transform:rotate(180deg)}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold>div{padding:0 16px 16px;font-size:14px}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-photos{display:flex;flex-wrap:wrap;gap:8px}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-photo{margin:0;max-width:130px}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-photo img{width:100%!important;height:100px!important;object-fit:cover;border-radius:10px}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-photo figcaption{font-size:11px;overflow-wrap:anywhere}
+@media(max-width:359px){html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-record{padding:10px!important}html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-header{padding:12px!important;align-items:flex-start;flex-wrap:wrap}html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-status{max-width:100%}html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposals-grid{grid-template-columns:1fr!important}}
+@media(prefers-reduced-motion:reduce){html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold>summary>span{transition:none}}
+
+</style>
 </head>
 <body>
 <div class="wrap" id="fechou-v322-5-build-01" data-fechou-build="V336">
@@ -3353,7 +3402,7 @@ document.addEventListener('DOMContentLoaded',run);setInterval(run,1500);
               "◎ Usar GPS",
               "gps",
               "secondary"
-            )} <button type="button" class="api-help" data-apihelp="GPS: permissão do aparelho; mapa: precisa de API" aria-label="Informação sobre integração externa">?</button><span class="helper-text">Use o GPS para preencher a localização automaticamente ou informe o endereço manualmente.</span></div><div class="field"><label class="help-wrap">Raio de atendimento <button type="button" class="help-dot" data-act="togglehelp:radiusHelp" aria-label="Ajuda sobre raio de atendimento">?</button></label><div class="help-tip" id="radiusHelp">Distância máxima aproximada em que você procura profissionais a partir do endereço informado.</div><select data-change="radius">${[
+            )} <button type="button" class="api-help" data-apihelp="GPS: permissão do aparelho; mapa: precisa de API" aria-label="Informação sobre assinatura externa">?</button><span class="helper-text">Use o GPS para preencher a localização automaticamente ou informe o endereço manualmente.</span></div><div class="field"><label class="help-wrap">Raio de atendimento <button type="button" class="help-dot" data-act="togglehelp:radiusHelp" aria-label="Ajuda sobre raio de atendimento">?</button></label><div class="help-tip" id="radiusHelp">Distância máxima aproximada em que você procura profissionais a partir do endereço informado.</div><select data-change="radius">${[
               5, 10, 15, 20, 30, 50, 100,
             ]
               .map(
@@ -3703,11 +3752,11 @@ ${
                 "O cliente paga diretamente ao profissional, fora da plataforma. A plataforma não retém o dinheiro nem processa o pagamento nesta modalidade. As partes devem combinar e guardar comprovantes.",
               ],
               [
-                "Parceiro de pagamentos integrado — indisponível nesta versão",
+                "Parceiro de pagamentos integrado — em breve",
                 "Quando integrado, um provedor externo processará o pagamento. Esta opção ainda não está disponível para cobranças reais.",
               ],
               [
-                "Pagamento protegido — indisponível nesta versão",
+                "Pagamento protegido — em breve",
                 "Modelo em que um provedor poderia manter o valor até uma etapa definida da contratação. Não está ativo nesta versão; não envie dinheiro com base nesta opção.",
               ],
             ]
@@ -3727,11 +3776,11 @@ ${
                           "O cliente paga diretamente ao profissional, fora da plataforma. A plataforma não retém o dinheiro nem processa o pagamento nesta modalidade. As partes devem combinar e guardar comprovantes.",
                         ],
                         [
-                          "Parceiro de pagamentos integrado — indisponível nesta versão",
+                          "Parceiro de pagamentos integrado — em breve",
                           "Quando integrado, um provedor externo processará o pagamento. Esta opção ainda não está disponível para cobranças reais.",
                         ],
                         [
-                          "Pagamento protegido — indisponível nesta versão",
+                          "Pagamento protegido — em breve",
                           "Modelo em que um provedor poderia manter o valor até uma etapa definida da contratação. Não está ativo nesta versão; não envie dinheiro com base nesta opção.",
                         ],
                       ].findIndex((x) => x[0] === name)
@@ -3744,11 +3793,11 @@ ${
                           "O cliente paga diretamente ao profissional, fora da plataforma. A plataforma não retém o dinheiro nem processa o pagamento nesta modalidade. As partes devem combinar e guardar comprovantes.",
                         ],
                         [
-                          "Parceiro de pagamentos integrado — indisponível nesta versão",
+                          "Parceiro de pagamentos integrado — em breve",
                           "Quando integrado, um provedor externo processará o pagamento. Esta opção ainda não está disponível para cobranças reais.",
                         ],
                         [
-                          "Pagamento protegido — indisponível nesta versão",
+                          "Pagamento protegido — em breve",
                           "Modelo em que um provedor poderia manter o valor até uma etapa definida da contratação. Não está ativo nesta versão; não envie dinheiro com base nesta opção.",
                         ],
                       ].findIndex((x) => x[0] === name)
@@ -3757,7 +3806,7 @@ ${
               )
               .join(
                 ""
-              )}</div></div><p>O documento deve ser revisado pelas partes antes do aceite. As opções de assinatura externa aparecem como indisponíveis até que a integração seja implementada e testada.</p><div class="field"><label>Forma de assinatura</label><select data-change="signatureMethod"><option>Aceite eletrônico FECHOU</option><option>Assinatura via Gov.br — indisponível nesta versão</option><option>Provedor de assinatura eletrônica — indisponível nesta versão</option></select><span class="helper-text">A assinatura externa será disponibilizada quando configurada para o serviço.</span></div><label class="check" style="margin:14px 0"><input type="checkbox" id="contractAccepted" ${
+              )}</div></div><p>O documento deve ser revisado pelas partes antes do aceite. As opções de assinatura externa aparecem como indisponíveis até ficarem disponíveis no aplicativo.</p><div class="field"><label>Forma de assinatura</label><select data-change="signatureMethod"><option>Aceite eletrônico FECHOU</option><option>Assinatura via Gov.br — em breve</option><option>Provedor de assinatura eletrônica — em breve</option></select><span class="helper-text">A assinatura externa será disponibilizada quando configurada para o serviço.</span></div><label class="check" style="margin:14px 0"><input type="checkbox" id="contractAccepted" ${
               state.contractAccepted ? "checked" : ""
             }><span>Li o resumo e entendi que orçamento, prazo, escopo, pagamento e regras de cancelamento devem estar definidos antes de confirmar.</span></label><div class="actions">${button(
               state.contractSigned
@@ -3961,7 +4010,7 @@ ${
               )
               .join(
                 ""
-              )}</div><div class="notice">Antes de confirmar uma contratação ou assinatura, confira o preço total, o escopo, as condições aplicáveis e os recursos que estão efetivamente disponíveis nesta versão.</div></section>`;
+              )}</div><div class="notice">Antes de confirmar uma contratação ou assinatura, confira o preço total, o escopo, as condições aplicáveis e os recursos disponíveis.</div></section>`;
         }
         if (state.page === "menudetail") {
           const pages = {
@@ -3979,7 +4028,7 @@ ${
             ],
             policies: [
               "Nossas políticas",
-              `<div class="notice"><b>Política de Privacidade FECHOU · versão pública 1.0.0</b><br>Controlador indicado no aplicativo: Exylon, responsável pela operação do FECHOU. Canal de privacidade: <a href="mailto:fechousuporte@gmail.com?subject=Privacidade%20e%20dados%20pessoais%20-%20FECHOU" style="color:#8fb6e3">fechousuporte@gmail.com</a>. Para informações sobre o responsável pelo tratamento dos seus dados e solicitações de privacidade, utilize esse canal.</div>
+              `<div class="notice"><b>Política de Privacidade FECHOU · versão pública 1.0.0</b><br>Responsável pelos seus dados: Exylon, empresa que opera o FECHOU. Dúvidas sobre privacidade: <a href="mailto:fechousuporte@gmail.com?subject=Privacidade%20e%20dados%20pessoais%20-%20FECHOU" style="color:#8fb6e3">fechousuporte@gmail.com</a>.</div>
 <h3 id="fechou-privacy-v100">1. Quem é responsável e a quem se aplica</h3>
 <p>Esta Política descreve o tratamento de dados pessoais no aplicativo FECHOU, que aproxima clientes e profissionais autônomos, MEIs e prestadores de serviços. Para os tratamentos realizados para operar a plataforma, a Exylon atua como controladora, conforme as decisões que efetivamente toma sobre finalidades e meios. Fornecedores podem atuar como operadores ou, conforme suas próprias atividades e obrigações, como controladores independentes. Clientes e profissionais também podem ser controladores independentes dos dados que trocam diretamente para executar o serviço.</p>
 <h3>2. Dados pessoais tratados</h3>
@@ -3992,7 +4041,7 @@ ${
 <li><b>Suporte e denúncias:</b> conteúdo da solicitação, comunicações, documentos e informações que o usuário decidir fornecer para resolver problemas, contestar cobranças ou denunciar condutas.</li>
 </ul>
 <h3>3. Finalidades e bases legais</h3>
-<p>O tratamento é limitado ao necessário para cada finalidade e utiliza a hipótese legal adequada a cada operação, nos termos da LGPD. As bases mais comuns no funcionamento observado são:</p>
+<p>O tratamento é limitado ao necessário para cada finalidade e utiliza a hipótese legal adequada a cada operação, nos termos da LGPD. As bases mais comuns são:</p>
 <ul>
 <li><b>Criar e administrar contas, autenticar usuários e manter sessões:</b> execução de contrato ou procedimentos preliminares solicitados pelo titular; legítimo interesse em segurança e prevenção a fraude, quando aplicável; e cumprimento de obrigação legal quando exigido.</li>
 <li><b>Exibir perfis, aproximar clientes e profissionais, receber solicitações, propostas e mensagens:</b> execução de contrato ou procedimentos preliminares relacionados à contratação, além do legítimo interesse de viabilizar a conexão solicitada, respeitados os direitos dos titulares.</li>
@@ -4004,28 +4053,28 @@ ${
 <li><b>Atender uso de IA para análise e estimativas:</b> execução do recurso solicitado pelo usuário e legítimo interesse na melhoria/segurança do serviço, quando cabível. O usuário deve revisar as sugestões e decidir se as utiliza.</li>
 </ul>
 <h3>4. Inteligência artificial e estimativas</h3>
-<p>A análise por inteligência artificial utiliza informações da solicitação, como descrição, categoria, serviço, localização, quantidade, horas e áudio fornecido, para sugerir classificação, checklist e estimativa de preço regional. O FECHOU pode utilizar o Google Gemini nesse processamento. Envie apenas as informações necessárias para descrever o serviço.</p>
+<p>Quando você usa a análise de serviço, o FECHOU utiliza inteligência artificial para entender a descrição (e o áudio, se você enviar), organizar um checklist e sugerir uma estimativa de preço da sua região. Para isso, usamos as informações do pedido: descrição, categoria, tipo de serviço, localização informada, quantidade, horas e áudio.</p>
 <p>As respostas da IA são estimativas e sugestões auxiliares, não orçamento garantido, avaliação profissional, laudo técnico ou decisão final. Podem conter erros, imprecisões ou dados desatualizados. Cliente e profissional devem conferir escopo, condições, valores e informações antes de publicar, propor ou contratar. Não utilize o recurso para inserir dados pessoais sensíveis ou informações de terceiros que não sejam necessárias.</p>
 <h3>5. Fornecedores e compartilhamento</h3>
-<p>Os dados podem ser compartilhados na medida necessária com os seguintes serviços identificados no aplicativo:</p>
+<p>Para o FECHOU funcionar, algumas informações são compartilhadas, somente na medida necessária, com empresas parceiras:</p>
 <ul>
-<li><b>Supabase:</b> autenticação da conta, armazenamento de dados e arquivos e proteção do acesso às informações da contratação.</li>
-<li><b>Asaas:</b> processamento de cobranças de serviços e assinaturas, confirmação de pagamentos, reembolsos e repasses.</li>
-<li><b>Clicksign:</b> assinatura eletrônica de contratos quando o fluxo aplicável é utilizado; os dados do documento, identificação dos signatários e informações necessárias à assinatura são encaminhados à integração. O PDF final assinado é associado aos documentos da contratação. Confira o documento e os signatários antes de confirmar sua assinatura.</li>
-<li><b>Google Gemini:</b> apoio à análise automatizada das informações do serviço. Consulte o canal de privacidade para dúvidas sobre esse tratamento.</li>
+<li><b>Armazenamento e acesso à conta (Supabase):</b> guardam com segurança seu cadastro, seus pedidos, suas conversas e os arquivos que você envia (fotos, vídeos, áudios e documentos). O acesso aos arquivos é temporário e restrito às partes da contratação.</li>
+<li><b>Asaas (pagamentos):</b> processa cobranças de serviços e assinaturas, confirma pagamentos e realiza reembolsos.</li>
+<li><b>Clicksign (assinatura eletrônica):</b> quando o contrato é assinado por esse meio, os dados do documento e de quem assina são enviados para registrar a assinatura. O documento final assinado fica junto da sua contratação.</li>
+<li><b>Inteligência artificial:</b> ferramenta usada na análise de serviços e na estimativa de preço, conforme descrito acima.</li>
 <li><b>ViaCEP:</b> consulta do CEP digitado para localizar logradouro, bairro, município e UF.</li>
 <li><b>OpenStreetMap/Nominatim e BigDataCloud:</b> serviços de geocodificação reversa acionados após o usuário solicitar localização pelo aparelho, para converter coordenadas em endereço ou região.</li>
-<li><b>Bibliotecas e distribuição de scripts:</b> jsDelivr e unpkg podem receber endereço IP e informações do navegador ao fornecer recursos necessários para abrir o aplicativo.</li>
-<li><b>Hospedagem e distribuição:</b> a Cloudflare fornece recursos para disponibilizar e proteger o aplicativo e pode tratar dados técnicos de acesso.</li>
+
+<li><b>Hospedagem (Cloudflare):</b> serviço que mantém o aplicativo no ar e pode registrar dados técnicos de conexão, como endereço IP e tipo de aparelho.</li>
 </ul>
 <p>O compartilhamento também pode ocorrer com autoridades públicas quando houver obrigação legal, ordem válida ou necessidade de exercício regular de direitos. O FECHOU não vende dados pessoais. Cada fornecedor recebe apenas os dados necessários à função correspondente, conforme a relação e as configurações efetivamente contratadas.</p>
 <h3>6. Transferência internacional</h3>
-<p>Alguns fornecedores de nuvem, IA, assinatura eletrônica, geolocalização ou infraestrutura podem armazenar ou acessar dados fora do Brasil. Quando houver transferência internacional, o controlador deverá assegurar uma hipótese e as garantias previstas na LGPD e na regulamentação da ANPD, inclusive cláusulas ou mecanismos válidos quando necessários. A confirmação dos países, regiões e cláusulas contratuais depende da documentação dos fornecedores e do painel administrativo.</p>
+<p>Alguns fornecedores de nuvem, IA, assinatura eletrônica, geolocalização ou infraestrutura podem armazenar ou acessar dados fora do Brasil. Quando houver transferência internacional, o controlador deverá assegurar uma hipótese e as garantias previstas na LGPD e na regulamentação da ANPD, inclusive cláusulas ou mecanismos válidos quando necessários.</p>
 <h3>7. Retenção, exclusão e preservação de registros</h3>
 <p>Os dados são mantidos pelo período necessário às finalidades informadas, à operação da conta e da contratação, às obrigações legais/regulatórias, à prevenção a fraude e ao exercício regular de direitos. Propostas, versões de contratos, mensagens, anexos, aceites, comprovantes, registros de execução e evidências podem ser preservados enquanto necessários para demonstrar o que foi ofertado, aceito, pago, executado, contestado ou reembolsado, inclusive após o encerramento da conta, quando houver fundamento legal.</p>
-<p>O período de armazenamento depende da finalidade do tratamento e das obrigações aplicáveis a cada categoria de dado. Solicitações de exclusão são avaliadas considerando também cópias de segurança e registros mantidos pelos fornecedores; dados que não precisem mais ser mantidos deverão ser eliminados, anonimizados ou bloqueados, conforme a lei. Registros necessários à defesa de direitos ou a obrigações legais poderão ser preservados pelo prazo pertinente e com acesso restrito.</p>
+<p>Se você pedir a exclusão dos seus dados, analisamos o pedido caso a caso. Dados que não precisem mais ser guardados serão eliminados, anonimizados ou bloqueados, conforme a lei. Registros necessários para a defesa de direitos ou para cumprir obrigações legais podem ser mantidos pelo prazo exigido, com acesso restrito.</p>
 <h3>8. Segurança e incidentes</h3>
-<p>O FECHOU utiliza controles de autenticação e acesso, proteção das informações, monitoramento e medidas para preservar dados e registros de contratação. Nenhuma medida elimina integralmente o risco. Em caso de incidente com potencial de causar risco ou dano relevante, o controlador avaliará o evento e realizará as comunicações à ANPD e aos titulares nos prazos e condições exigidos pela regulamentação aplicável. O usuário deve proteger sua senha e comunicar suspeitas de acesso indevido.</p>
+<p>O FECHOU usa medidas de proteção, como login com senha, controle de quem pode ver cada informação e proteção dos pagamentos e das assinaturas. Nenhuma medida elimina totalmente o risco. Se ocorrer um incidente que possa causar risco ou dano relevante, avaliaremos o caso e comunicaremos você e a ANPD nos prazos exigidos por lei. Proteja sua senha e avise o suporte se suspeitar de acesso indevido à sua conta.</p>
 <h3>9. Direitos dos titulares</h3>
 <p>Nos termos da LGPD, você pode solicitar: confirmação da existência de tratamento; acesso; correção; anonimização, bloqueio ou eliminação de dados desnecessários, excessivos ou tratados em desconformidade; portabilidade, observada a regulamentação e os segredos comercial e industrial; eliminação dos dados tratados com consentimento, ressalvadas as hipóteses legais de conservação; informação sobre entidades com as quais houve compartilhamento; informação sobre a possibilidade de não consentir e suas consequências; revogação do consentimento; oposição a tratamento realizado em desconformidade com a lei; e revisão de decisões tomadas unicamente com base em tratamento automatizado que afetem seus interesses, nos termos legais.</p>
 <p>Para exercer seus direitos, escreva para <a href="mailto:fechousuporte@gmail.com?subject=Privacidade%20e%20dados%20pessoais%20-%20FECHOU" style="color:#8fb6e3">fechousuporte@gmail.com</a>, assunto “Privacidade e dados pessoais — FECHOU”. Informe o pedido e apenas os dados mínimos necessários para localizar a conta. Poderemos solicitar confirmação proporcional de identidade. A solicitação será analisada e respondida nos prazos legais aplicáveis; o envio do e-mail não significa exclusão imediata. Se entender necessário, você também pode peticionar à ANPD.</p>
@@ -4048,7 +4097,7 @@ ${
 <h3>6. Contratos e aceite eletrônico</h3>
 <p>Quando o fluxo de contratação exigir contrato, o documento será disponibilizado para leitura e aceite. Em fluxos com aceite interno, o aplicativo pode exigir leitura até o final e marcação expressa de concordância. Nos fluxos integrados à Clicksign, a assinatura é encaminhada ao provedor e só será considerada concluída após confirmação do status pelo serviço. O PDF final e os eventos disponíveis podem ser associados ao chat/pedido. Registros eletrônicos, data/hora, identificação da conta e versões do documento poderão ser preservados como evidências. A marca gráfica FECHOU não é assinatura manuscrita de pessoa física e não substitui testemunha quando a lei a exigir. As partes devem guardar cópias dos documentos e conferir o conteúdo antes de assinar.</p>
 <h3>7. Pagamentos, planos, taxas e comissão</h3>
-<p>O aplicativo possui fluxos de pagamento direto entre as partes e fluxos integrados ao provedor de pagamento, conforme a opção exibida para cada contratação. As cobranças realizadas pelo aplicativo são processadas pelo Asaas. Para assinatura profissional, o provedor pode solicitar CPF ou CNPJ do titular; para repasses, o aplicativo mantém dados de tipo e chave Pix do profissional para análise/validação. O status de pagamento, reembolso ou repasse depende da confirmação do provedor e da conciliação do sistema; uma tela de retorno ou comprovante de solicitação, isoladamente, não prova liquidação ou reembolso concluído.</p>
+<p>O aplicativo possui fluxos de pagamento direto entre as partes e fluxos integrados ao provedor de pagamento, conforme a opção exibida para cada contratação. As cobranças integradas são encaminhadas ao Asaas pelo FECHOU. Para assinatura profissional, o provedor pode solicitar CPF ou CNPJ do titular; para repasses, o aplicativo mantém dados de tipo e chave Pix do profissional para análise/validação. O status de pagamento, reembolso ou repasse depende da confirmação do provedor e da conciliação do sistema; uma tela de retorno ou comprovante de solicitação, isoladamente, não prova liquidação ou reembolso concluído.</p>
 <p>Planos profissionais, preços, periodicidade, renovação e recursos incluídos são apresentados na tela de planos e na confirmação da compra. A assinatura profissional é distinta do preço do serviço. No fluxo de pagamento pelo aplicativo, a comissão FECHOU é de 2% sobre a base de repasse do profissional e é descontada desse repasse; ela não é adicionada ao total cobrado do cliente. A tarifa de processamento Asaas deve ser apresentada separadamente e atribuída conforme a cotação aceita. No pagamento direto entre as partes, o FECHOU não recebe nem processa o valor e não registra esse pagamento como saldo de carteira. O valor líquido e as condições de repasse devem ser exibidos ao profissional antes do aceite.</p>
 <p>O FECHOU não solicita que o usuário envie senha, CVV/CVC ou número completo de cartão em chat ou e-mail. Os dados de cartão, quando necessários, são tratados no fluxo do provedor. Não conclua pagamentos por links enviados por terceiros que não correspondam ao fluxo oficial exibido no aplicativo.</p>
 <h3>8. Assinaturas e cancelamento de planos</h3>
@@ -4072,7 +4121,7 @@ ${
             ],
             privacy: [
               "Política de Privacidade",
-              `<div class="notice"><b>Política de Privacidade FECHOU · versão pública 1.0.0</b><br>Controlador indicado no aplicativo: Exylon, responsável pela operação do FECHOU. Canal de privacidade: <a href="mailto:fechousuporte@gmail.com?subject=Privacidade%20e%20dados%20pessoais%20-%20FECHOU" style="color:#8fb6e3">fechousuporte@gmail.com</a>. Para informações sobre o responsável pelo tratamento dos seus dados e solicitações de privacidade, utilize esse canal.</div>
+              `<div class="notice"><b>Política de Privacidade FECHOU · versão pública 1.0.0</b><br>Responsável pelos seus dados: Exylon, empresa que opera o FECHOU. Dúvidas sobre privacidade: <a href="mailto:fechousuporte@gmail.com?subject=Privacidade%20e%20dados%20pessoais%20-%20FECHOU" style="color:#8fb6e3">fechousuporte@gmail.com</a>.</div>
 <h3 id="fechou-privacy-v100">1. Quem é responsável e a quem se aplica</h3>
 <p>Esta Política descreve o tratamento de dados pessoais no aplicativo FECHOU, que aproxima clientes e profissionais autônomos, MEIs e prestadores de serviços. Para os tratamentos realizados para operar a plataforma, a Exylon atua como controladora, conforme as decisões que efetivamente toma sobre finalidades e meios. Fornecedores podem atuar como operadores ou, conforme suas próprias atividades e obrigações, como controladores independentes. Clientes e profissionais também podem ser controladores independentes dos dados que trocam diretamente para executar o serviço.</p>
 <h3>2. Dados pessoais tratados</h3>
@@ -4085,7 +4134,7 @@ ${
 <li><b>Suporte e denúncias:</b> conteúdo da solicitação, comunicações, documentos e informações que o usuário decidir fornecer para resolver problemas, contestar cobranças ou denunciar condutas.</li>
 </ul>
 <h3>3. Finalidades e bases legais</h3>
-<p>O tratamento é limitado ao necessário para cada finalidade e utiliza a hipótese legal adequada a cada operação, nos termos da LGPD. As bases mais comuns no funcionamento observado são:</p>
+<p>O tratamento é limitado ao necessário para cada finalidade e utiliza a hipótese legal adequada a cada operação, nos termos da LGPD. As bases mais comuns são:</p>
 <ul>
 <li><b>Criar e administrar contas, autenticar usuários e manter sessões:</b> execução de contrato ou procedimentos preliminares solicitados pelo titular; legítimo interesse em segurança e prevenção a fraude, quando aplicável; e cumprimento de obrigação legal quando exigido.</li>
 <li><b>Exibir perfis, aproximar clientes e profissionais, receber solicitações, propostas e mensagens:</b> execução de contrato ou procedimentos preliminares relacionados à contratação, além do legítimo interesse de viabilizar a conexão solicitada, respeitados os direitos dos titulares.</li>
@@ -4097,27 +4146,27 @@ ${
 <li><b>Atender uso de IA para análise e estimativas:</b> execução do recurso solicitado pelo usuário e legítimo interesse na melhoria/segurança do serviço, quando cabível. O usuário deve revisar as sugestões e decidir se as utiliza.</li>
 </ul>
 <h3>4. Inteligência artificial e estimativas</h3>
-<p>A análise por inteligência artificial utiliza informações da solicitação, como descrição, categoria, serviço, localização, quantidade, horas e áudio fornecido, para sugerir classificação, checklist e estimativa de preço regional. O FECHOU pode utilizar o Google Gemini nesse processamento. Envie apenas as informações necessárias para descrever o serviço.</p>
+<p>Quando você usa a análise de serviço, o FECHOU utiliza inteligência artificial para entender a descrição (e o áudio, se você enviar), organizar um checklist e sugerir uma estimativa de preço da sua região. Para isso, usamos as informações do pedido: descrição, categoria, tipo de serviço, localização informada, quantidade, horas e áudio.</p>
 <p>As respostas da IA são estimativas e sugestões auxiliares, não orçamento garantido, avaliação profissional, laudo técnico ou decisão final. Podem conter erros, imprecisões ou dados desatualizados. Cliente e profissional devem conferir escopo, condições, valores e informações antes de publicar, propor ou contratar. Não utilize o recurso para inserir dados pessoais sensíveis ou informações de terceiros que não sejam necessárias.</p>
 <h3>5. Fornecedores e compartilhamento</h3>
-<p>Os dados podem ser compartilhados na medida necessária com os seguintes serviços identificados no aplicativo:</p>
+<p>Para o FECHOU funcionar, algumas informações são compartilhadas, somente na medida necessária, com empresas parceiras:</p>
 <ul>
-<li><b>Supabase:</b> autenticação da conta, armazenamento de dados e arquivos e proteção do acesso às informações da contratação.</li>
-<li><b>Asaas:</b> processamento de cobranças de serviços e assinaturas, confirmação de pagamentos, reembolsos e repasses.</li>
-<li><b>Clicksign:</b> assinatura eletrônica de contratos quando o fluxo aplicável é utilizado; os dados do documento, identificação dos signatários e informações necessárias à assinatura são encaminhados à integração. O PDF final assinado é associado aos documentos da contratação.</li>
-<li><b>Google Gemini:</b> apoio à análise automatizada das informações do serviço. Consulte o canal de privacidade para dúvidas sobre esse tratamento.</li>
+<li><b>Armazenamento e acesso à conta (Supabase):</b> guardam com segurança seu cadastro, seus pedidos, suas conversas e os arquivos que você envia (fotos, vídeos, áudios e documentos). O acesso aos arquivos é temporário e restrito às partes da contratação.</li>
+<li><b>Asaas (pagamentos):</b> processa cobranças de serviços e assinaturas, confirma pagamentos e realiza reembolsos.</li>
+<li><b>Clicksign (assinatura eletrônica):</b> quando o contrato é assinado por esse meio, os dados do documento e de quem assina são enviados para registrar a assinatura. O documento final assinado fica junto da sua contratação.</li>
+<li><b>Inteligência artificial:</b> ferramenta usada na análise de serviços e na estimativa de preço, conforme descrito acima.</li>
 <li><b>ViaCEP:</b> consulta do CEP digitado para localizar logradouro, bairro, município e UF.</li>
 <li><b>OpenStreetMap/Nominatim e BigDataCloud:</b> serviços de geocodificação reversa acionados após o usuário solicitar localização pelo aparelho, para converter coordenadas em endereço ou região.</li>
-<li><b>Hospedagem e distribuição:</b> a Cloudflare fornece recursos para disponibilizar e proteger o aplicativo e pode tratar dados técnicos de acesso.</li>
+<li><b>Hospedagem (Cloudflare):</b> serviço que mantém o aplicativo no ar e pode registrar dados técnicos de conexão, como endereço IP e tipo de aparelho.</li>
 </ul>
 <p>O compartilhamento também pode ocorrer com autoridades públicas quando houver obrigação legal, ordem válida ou necessidade de exercício regular de direitos. O FECHOU não vende dados pessoais. Cada fornecedor recebe apenas os dados necessários à função correspondente, conforme a relação e as configurações efetivamente contratadas.</p>
 <h3>6. Transferência internacional</h3>
-<p>Alguns fornecedores de nuvem, IA, assinatura eletrônica, geolocalização ou infraestrutura podem armazenar ou acessar dados fora do Brasil. Quando houver transferência internacional, o controlador deverá assegurar uma hipótese e as garantias previstas na LGPD e na regulamentação da ANPD, inclusive cláusulas ou mecanismos válidos quando necessários. A confirmação dos países, regiões e cláusulas contratuais depende da documentação dos fornecedores e do painel administrativo.</p>
+<p>Alguns fornecedores de nuvem, IA, assinatura eletrônica, geolocalização ou infraestrutura podem armazenar ou acessar dados fora do Brasil. Quando houver transferência internacional, o controlador deverá assegurar uma hipótese e as garantias previstas na LGPD e na regulamentação da ANPD, inclusive cláusulas ou mecanismos válidos quando necessários.</p>
 <h3>7. Retenção, exclusão e preservação de registros</h3>
 <p>Os dados são mantidos pelo período necessário às finalidades informadas, à operação da conta e da contratação, às obrigações legais/regulatórias, à prevenção a fraude e ao exercício regular de direitos. Propostas, versões de contratos, mensagens, anexos, aceites, comprovantes, registros de execução e evidências podem ser preservados enquanto necessários para demonstrar o que foi ofertado, aceito, pago, executado, contestado ou reembolsado, inclusive após o encerramento da conta, quando houver fundamento legal.</p>
-<p>O período de armazenamento depende da finalidade do tratamento e das obrigações aplicáveis a cada categoria de dado. Solicitações de exclusão são avaliadas considerando também cópias de segurança e registros mantidos pelos fornecedores; dados que não precisem mais ser mantidos deverão ser eliminados, anonimizados ou bloqueados, conforme a lei. Registros necessários à defesa de direitos ou a obrigações legais poderão ser preservados pelo prazo pertinente e com acesso restrito.</p>
+<p>Se você pedir a exclusão dos seus dados, analisamos o pedido caso a caso. Dados que não precisem mais ser guardados serão eliminados, anonimizados ou bloqueados, conforme a lei. Registros necessários para a defesa de direitos ou para cumprir obrigações legais podem ser mantidos pelo prazo exigido, com acesso restrito.</p>
 <h3>8. Segurança e incidentes</h3>
-<p>O FECHOU utiliza controles de autenticação e acesso, proteção das informações, monitoramento e medidas para preservar dados e registros de contratação. Nenhuma medida elimina integralmente o risco. Em caso de incidente com potencial de causar risco ou dano relevante, o controlador avaliará o evento e realizará as comunicações à ANPD e aos titulares nos prazos e condições exigidos pela regulamentação aplicável. O usuário deve proteger sua senha e comunicar suspeitas de acesso indevido.</p>
+<p>O FECHOU usa medidas de proteção, como login com senha, controle de quem pode ver cada informação e proteção dos pagamentos e das assinaturas. Nenhuma medida elimina totalmente o risco. Se ocorrer um incidente que possa causar risco ou dano relevante, avaliaremos o caso e comunicaremos você e a ANPD nos prazos exigidos por lei. Proteja sua senha e avise o suporte se suspeitar de acesso indevido à sua conta.</p>
 <h3>9. Direitos dos titulares</h3>
 <p>Nos termos da LGPD, você pode solicitar: confirmação da existência de tratamento; acesso; correção; anonimização, bloqueio ou eliminação de dados desnecessários, excessivos ou tratados em desconformidade; portabilidade, observada a regulamentação e os segredos comercial e industrial; eliminação dos dados tratados com consentimento, ressalvadas as hipóteses legais de conservação; informação sobre entidades com as quais houve compartilhamento; informação sobre a possibilidade de não consentir e suas consequências; revogação do consentimento; oposição a tratamento realizado em desconformidade com a lei; e revisão de decisões tomadas unicamente com base em tratamento automatizado que afetem seus interesses, nos termos legais.</p>
 <p>Para exercer seus direitos, escreva para <a href="mailto:fechousuporte@gmail.com?subject=Privacidade%20e%20dados%20pessoais%20-%20FECHOU" style="color:#8fb6e3">fechousuporte@gmail.com</a>, assunto “Privacidade e dados pessoais — FECHOU”. Informe o pedido e apenas os dados mínimos necessários para localizar a conta. Poderemos solicitar confirmação proporcional de identidade. A solicitação será analisada e respondida nos prazos legais aplicáveis; o envio do e-mail não significa exclusão imediata. Se entender necessário, você também pode peticionar à ANPD.</p>
@@ -4291,142 +4340,51 @@ ${
                 button("Criar solicitação", "page:request") +
                 "</div>");
         }
-        if (state.page === "proposals") {
-          let o =
-            state.orders.find((x) => x.id === state.activeOrderId) ||
-            state.orders[0];
-          if (!o) {
-            a =
-              hero(
-                "Propostas",
-                "Compare ofertas com calma.",
-                "As propostas recebidas aparecem aqui."
-              ) +
-              '<div class="empty">Ainda não há propostas. ' +
-              button("Criar solicitação", "page:request") +
-              "</div>";
-          } else {
-            a =
-              hero(
-                window.modeOf?.(o) === "contract_prepaid" ? "Profissionais interessados" : "Propostas recebidas",
-                window.modeOf?.(o) === "contract_prepaid" ? "Escolha quem executará o serviço." : "Escolha pelo conjunto, não só pelo <span>preço.</span>",
-                window.modeOf?.(o) === "contract_prepaid" ? "O pagamento já foi confirmado e o valor do serviço está fixado." : ""
-              ) +
-              `<section class="panel"><div class="row between"><div><span class="pill amberpill">${esc(
-                o.status
-              )}</span><h2 style="margin-top:10px">${esc(
-                o.service
-              )}</h2><p>${esc(o.description || "Serviço solicitado")} · ${esc(
-                o.location
-              )}</p></div><div><span class="muted">${window.modeOf?.(o) === "contract_prepaid" ? "Valor total já pago (urgência incluída)" : "Total do pedido (urgência incluída)"}</span><div class="price">${money(
-                window.fechouRequestedLaborTotal ? window.fechouRequestedLaborTotal(o) : (o.laborReferencePrice || o.requestedPrice || o.total || o.referencePrice)
-              )}</div></div></div>${window.modeOf?.(o) === "contract_prepaid" ? `<div class="notice">Pagamento confirmado. O valor já pago não pode ser alterado pelo profissional. Compare os perfis, avaliações e disponibilidade antes de selecionar quem executará o serviço.</div>` : `<div class="notice">Você pediu ${o.clientDiscount}% de desconto. Isso é uma preferência de negociação; cada profissional pode oferecer um desconto diferente ou manter seu preço, sem penalidade automática.</div>`}<h3>${window.modeOf?.(o) === "contract_prepaid" ? "Profissionais interessados" : "Propostas recebidas"} (${
-                (o.proposals || []).length
-              })</h3><div class="grid">${(o.proposals || [])
-                .map(
-                  (q, i) =>
-                    `<article class="pro"><div class="row"><div class="avatar">${esc(
-                      q.name
-                        .split(" ")
-                        .map((x) => x[0])
-                        .slice(0, 2)
-                        .join("")
-                    )}</div><div style="flex:1"><h3>${esc(
-                      q.name
-                    )}</h3><span class="muted">${esc(q.category)} · ${esc(
-                      q.city || "Região aproximada"
-                    )}</span><div class="muted">${
-                      (q.rating != null && q.rating !== "" && Number(q.rating) > 0)
-                        ? ("★ " + q.rating + " (" + (q.reviews != null && q.reviews !== "" ? q.reviews : "0") + " avaliações)")
-                        : "★ — (sem avaliações ainda)"
-                    } ${
-                      q.verified ? "· Identidade verificada" : ""
-                    }</div></div></div>${window.modeOf?.(o) === "contract_prepaid" ? `<div class="total"><span>Valor já pago pelo cliente</span><b>${money(q.price || o.total)}</b></div><div class="notice">Preço fixo da contratação. O profissional não envia orçamento nem altera o valor.</div>` : `<div class="total"><span>Total solicitado (mão de obra + urgência)</span><b>${money(window.fechouRequestedLaborTotal ? window.fechouRequestedLaborTotal(o) : (o.laborReferencePrice || o.requestedPrice || o.total || o.referencePrice))}</b></div><div class="total"><span>Desconto oferecido</span><b>${q.discount}%</b></div><div class="total final"><span>Preço proposto pelo profissional</span><span style="color:var(--amber2)">${money(q.price)}</span></div><div class="notice"><b>Forma de pagamento solicitada:</b> ${esc(q.paymentMethod || q.metadata?.payment_method || "Direto entre as partes")}</div>`}<p>${esc(q.conditions || q.message || (window.modeOf?.(o) === "contract_prepaid" ? "Tenho interesse em executar este serviço pelo valor já pago pelo cliente." : ""))}</p><div class="muted">Disponibilidade: ${esc(
-                      q.availability
-                    )} · Materiais: ${esc(
-                      q.materials
-                    )}</div><div class="actions">${
-                    (q.selected || String(o.selectedProposalId || o.selected_proposal_id || o.selectedProposal?.id || "") === String(q.id))
-                      ? `<span class="pill">Proposta selecionada</span>`
-                      : `${button("Ver perfil", `proposalprofile:${o.id}:${i}`, "secondary small")}${window.modeOf?.(o) === "contract_prepaid" ? "" : button("Fazer contraproposta", `counterproposal:${o.id}:${i}`, "secondary small")}${button("Escolher profissional", `chooseproposal:${o.id}:${i}`, "small")}`
-                  }</div></article>`
-                )
-                .join(
-                  ""
-                )}</div>${window.modeOf?.(o) === "contract_prepaid" ? '<div class="notice">O cliente escolhe o profissional pelo perfil, avaliações e disponibilidade. O valor do serviço permanece fixo.</div>' : ""}${button(
-                "Ver registro completo",
-                `openarchive:${o.id}`,
-                "secondary"
-              )}${button(
-                "Voltar aos pedidos",
-                "page:orders",
-                "secondary"
-              )}</section>`;
-          }
-        }
-        if (state.page === "archive") {
-          let o =
-            state.orders.find((x) => x.id === state.activeOrderId) ||
-            state.orders[0];
-          a =
-            hero(
-              "Arquivo do serviço",
-              "Tudo registrado em um só lugar.",
-              "Fotos, descrição original, propostas, contrato, mensagens e evidências organizados por contratação."
-            ) +
-            (o
-              ? `<section class="panel"><div class="row between"><div><span class="pill amberpill">ID ${
-                  o.id
-                }</span><h2 style="margin-top:10px">${esc(
-                  o.service
-                )}</h2><p>${esc(o.location)} · Criado em ${esc(
-                  o.createdAt
-                )}</p></div><span class="pill">${esc(
-                  (window.fechouFriendlyStatusLabel && window.fechouFriendlyStatusLabel(o.status)) || o.status
-                )}</span></div><div class="grid"><div class="stat"><span class="muted">${window.fechouDisplayOrderPriceLabel ? window.fechouDisplayOrderPriceLabel(o) : "Total estimado do pedido"}</span><b>${money(
-                  window.fechouDisplayOrderPrice ? window.fechouDisplayOrderPrice(o) : (window.fechouRequestedLaborTotal ? window.fechouRequestedLaborTotal(o) : (o.laborReferencePrice || o.requestedPrice || o.total || o.referencePrice))
-                )}</b></div><div class="stat"><span class="muted">Desconto pedido</span><b>${
-                  o.clientDiscount ?? 0
-                }%</b></div><div class="stat"><span class="muted">Propostas</span><b>${
-                  (o.proposals || []).length
-                }</b></div></div><div class="divider"></div><h3>Descrição original</h3><p>${esc(
-                  o.description || "Nenhuma descrição informada."
-                )}</p><div class="total"><span>Urgência</span><b>${esc(
-                  o.urgency || "Normal"
-                )}</b></div><div class="total"><span>Data desejada</span><b>${esc(
-                  o.date || "A combinar"
-                )}</b></div><div class="total"><span>Quantidade</span><b>${
-                  o.quantity || 1
-                }</b></div><div class="divider"></div><h3>Fotos enviadas pelo cliente (${
-                  (o.photos || []).length
-                })</h3>${
-                  (o.photos || []).length
-                    ? `<div class="row">${o.photos
-                        .map(
-                          (ph, i) =>
-                            `<div class="photo-item"><img class="photo" src="${
-                              ph.url
-                            }" alt="Foto inicial ${
-                              i + 1
-                            }"><span class="helper-text">${esc(
-                              ph.name || "Foto do local"
-                            )}</span></div>`
-                        )
-                        .join("")}</div>`
-                    : '<div class="empty">Nenhuma foto anexada a esta solicitação.</div>'
-                }<div class="divider"></div><h3>Trilha de registros</h3><div class="check"><span>✓</span><div><b>Solicitação criada</b><p>${esc(
-                  o.createdAt
-                )}</p></div></div><div class="check"><span>✓</span><div><b>Propostas e descontos</b><p>As ofertas e contrapropostas ficam associadas ao pedido.</p></div></div><div class="check"><span>◷</span><div><b>Contrato, execução e pagamento</b><p>Assinatura, armazenamento permanente, pagamentos e trilha auditável usam integrações externas.</p><button type="button" class="api-help" data-apihelp="Arquivo permanente e backups: servidor/banco + armazenamento de arquivos. Sugestão inicial: Supabase." aria-label="Informação sobre integração externa">?</button></div></div><div class="actions">${(o.selectedProposalId || o.selected_proposal_id || o.selectedProposal?.id) ? `<span class="pill">Proposta selecionada</span>` : button(
-                  "Ver propostas",
-                  `openproposals:${o.id}`
-                )}${button(
-                  "Voltar aos pedidos",
-                  "page:orders",
-                  "secondary"
-                )}</div></section>`
-              : '<div class="empty"><h3>Seu arquivo será organizado aqui</h3><p>Crie uma solicitação para começar o histórico.</p>' +
-                button("Criar solicitação", "page:request") +
-                "</div>");
+// Chamado pelo renderizador principal: mantém os controladores existentes.
+function renderServiceRecord(o, archive = false) {
+  const prepaid = window.modeOf?.(o) === 'contract_prepaid';
+  const offers = Array.isArray(o.proposals) ? o.proposals : [];
+  const selectedId = String(o.selectedProposalId || o.selected_proposal_id || o.selectedProposal?.id || '');
+  const finished = !!window.fechouIsServiceCompleted?.(o);
+  const cancelled = /cancelad|cancelled|canceled/i.test(String(o.status || o.service_state || ''));
+  const status = (window.fechouFriendlyStatusLabel?.(o.status) || o.status || 'Recebendo propostas');
+  const value = window.fechouDisplayOrderPrice?.(o) ?? window.fechouRequestedLaborTotal?.(o) ?? o.laborReferencePrice ?? o.requestedPrice ?? o.total ?? o.referencePrice ?? 0;
+  const title = o.service || o.title || 'Serviço';
+  const shortId = String(o.id || '').slice(0, 8);
+  const date = /^\d{2}\/\d{2}\/\d{4}/.test(String(o.createdAt || '')) ? o.createdAt : (window.fechouFormatDateTime?.(o.created_at || o.createdAt) || o.createdAt || 'Data não informada');
+  const safeMedia = value => { try { const u = new URL(String(value || ''), location.origin); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? esc(u.href) : ''; } catch (_) { return ''; } };
+  const photos = (Array.isArray(o.photos) ? o.photos : []).map((ph,i) => {
+    const url = safeMedia(typeof ph === 'string' ? ph : ph.url);
+    return url ? `<figure class="r17-photo"><img class="photo" src="${url}" alt="Foto do local ${i+1}" loading="lazy"><figcaption>${esc(ph.name || 'Foto do local')}</figcaption></figure>` : '';
+  }).join('');
+  const details = `<p>${esc(o.description || 'Nenhuma descrição informada.')}</p><p class="muted r17-service-meta">Urgência: ${esc(o.urgency || 'Normal')} · Data: ${esc(String(o.date || 'A combinar').replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1'))} · Qtde: ${esc(o.quantity || 1)}</p>`;
+  const cards = offers.map((q,i) => {
+    const name = String(q.name || 'Profissional');
+    const chosen = q.selected || (selectedId && selectedId === String(q.id));
+    const canChoose = !selectedId && !finished && !cancelled;
+    const rating = Number(q.rating) > 0 ? `★ ${esc(Number(q.rating).toLocaleString('pt-BR', {maximumFractionDigits:1}))}${q.reviews != null ? ' · '+esc(q.reviews)+' avaliações' : ''}` : 'Sem avaliações ainda';
+    const history = Array.isArray(q.negotiationHistory) ? q.negotiationHistory : [];
+    return `<article class="pro r17-proposal"><div class="row r17-proposal-head"><div class="avatar">${esc(name.trim().slice(0,1).toUpperCase())}</div><div><h3>${esc(name)}</h3><span class="muted">${rating}</span></div></div><span class="muted">${prepaid ? 'Valor já pago pelo cliente' : 'Valor proposto'}</span><strong class="r17-proposal-value">${money(prepaid ? (q.price || o.total) : q.price)}</strong>${q.conditions || q.message ? `<p>${esc(q.conditions || q.message)}</p>` : ''}<details class="r17-proposal-extra"><summary>Mais informações</summary><p>${esc(q.category || o.category || '')} · ${esc(q.city || 'Região aproximada')}</p><p>Disponibilidade: ${esc(q.availability || 'A combinar')}<br>Materiais: ${esc(q.materials || 'A combinar')}</p>${!prepaid ? `<p>Desconto oferecido: ${esc(q.discount ?? 0)}%<br>Pagamento: ${esc(q.paymentMethod || q.metadata?.payment_method || 'Direto entre as partes')}</p>` : ''}${history.map(h=>`<p>${esc(h.by || '')} · ${esc(h.at || '')}<br>${money(h.price)} · ${esc(h.note || '')}</p>`).join('')}</details><div class="actions r17-proposal-actions">${button('Ver perfil', `proposalprofile:${o.id}:${i}`, 'secondary small')}${chosen ? '<span class="pill">Proposta selecionada</span>' : canChoose ? button(prepaid ? 'Escolher profissional' : 'Aceitar', `chooseproposal:${o.id}:${i}`, 'small') + (!prepaid ? button('Contraproposta', `counterproposal:${o.id}:${i}`, 'secondary small') : '') : ''}</div></article>`;
+  }).join('') || '<p class="empty">Ainda não há propostas. Quando um profissional enviar, ela aparece aqui.</p>';
+  const fold = (label, body) => `<details class="r17-record-fold"><summary>${label}<span aria-hidden="true">⌄</span></summary><div>${body}</div></details>`;
+  const chat = selectedId ? button('Abrir chat', `openchat:${o.id}`) : '';
+  const header = `<header class="r17-service-header"><div><h2>${archive ? 'Registro completo' : esc(title)}</h2><p class="muted">${archive ? esc(title)+' · ' : ''}Pedido #${esc(shortId)}${archive ? '' : ' · '+esc(date)}</p></div><span class="pill r17-service-status">${esc(status)}</span></header>`;
+  const stats = `<div class="r17-service-stats"><div class="stat"><span class="muted">${prepaid ? 'Total pago' : archive ? 'Total estimado' : 'Total estimado'}</span><b>${money(value)}</b></div><div class="stat"><span class="muted">Desconto</span><b>${esc(o.clientDiscount ?? 0)}%</b></div><div class="stat"><span class="muted">Propostas</span><b>${offers.length}</b></div></div>`;
+  const payment = `<p><b>${prepaid ? 'Pagamento pelo aplicativo + contrato' : 'Pagamento direto entre as partes'}</b></p>${prepaid ? `<p>Status do pagamento: ${esc(({approved:'Confirmado',confirmed:'Confirmado',received:'Recebido',pending:'Aguardando confirmação',refunded:'Reembolsado',cancelled:'Cancelado'})[String(o.payment_status || '').toLowerCase()] || 'Consulte o histórico financeiro na carteira.')}</p>${o.refund_status ? `<p>Reembolso: ${esc(({pending:'Em processamento',refunded:'Confirmado',approved:'Aprovado',failed:'Falhou'})[o.refund_status] || 'Consulte o histórico na carteira.')}</p>` : ''}` : '<p>O valor é combinado diretamente entre cliente e profissional. Este pagamento não gera saldo ou repasse pelo FECHOU.</p>'}<p class="muted">Solicitação criada em ${esc(date)}. Os registros financeiros ficam sujeitos à confirmação do provedor.</p>`;
+  const body = archive
+    ? stats + fold('Descrição e fotos', details + (photos ? `<div class="r17-service-photos">${photos}</div>` : '<p class="muted">Nenhuma foto anexada a esta solicitação.</p>'))
+      + fold('Propostas e contrapropostas', `<div class="r17-proposals-grid">${cards}</div>`)
+      + fold('Contrato', `<p>${prepaid ? 'Os documentos e as assinaturas desta contratação podem ser consultados na conversa.' : 'Esta solicitação usa pagamento direto entre as partes.'}</p>${chat || '<p class="muted">A conversa fica disponível após a seleção do profissional.</p>'}`)
+      + fold('Mensagens e evidências', `<p>Consulte as mensagens, os anexos e as fotos de antes, durante e depois na conversa desta contratação.</p>${chat || '<p class="muted">Ainda não há profissional selecionado.</p>'}`)
+      + fold('Pagamento e histórico', payment)
+      + `<div class="actions r17-service-actions">${chat}${button('Voltar aos pedidos','page:orders','secondary')}</div>`
+    : `<div class="r17-service-tags"><span class="pill">${esc(o.category || 'Serviço')}</span><span class="pill">${prepaid ? 'Pagamento pelo aplicativo' : 'Pagamento direto'}</span></div><p class="muted r17-location">${esc(o.location || 'Região aproximada')}</p>${stats}<div class="r17-description"><h3>Descrição</h3>${details}${photos ? `<details><summary>Fotos do local</summary><div class="r17-service-photos">${photos}</div></details>` : ''}</div>${prepaid ? '<p class="notice">Pagamento confirmado. Compare perfis, avaliações e disponibilidade; o valor já pago não pode ser alterado pelo profissional.</p>' : ''}<h3 class="r17-proposals-title">${prepaid ? 'Profissionais interessados' : 'Propostas recebidas'} (${offers.length})</h3><div class="grid r17-proposals-grid">${cards}</div><h3 class="r17-actions-title">Ações</h3><div class="actions r17-service-actions">${button('Ver registro completo',`openarchive:${o.id}`)}${chat}${button('Voltar aos pedidos','page:orders','secondary')}</div>${!finished && !cancelled && String(o.client_id || '') === String(state.supabaseUser?.id || '') ? `<div class="r17-service-cancel">${button('Solicitar cancelamento',`v121-cancel-order:${o.id}`,'danger')}</div>` : ''}`;
+  return `<section class="panel r17-service-record${archive ? ' r17-archive' : ''}" data-order-id="${esc(o.id)}">${header}${body}</section>`;
+}
+
+        if (state.page === "proposals" || state.page === "archive") {
+          const o = state.orders.find(x => String(x.id) === String(state.activeOrderId));
+          a = o ? renderServiceRecord(o, state.page === "archive") : '<section class="panel"><h2>Serviço não encontrado</h2><p>Volte aos pedidos e selecione o serviço para consultar seus registros.</p>' + button("Voltar aos pedidos", "page:orders", "secondary") + '</section>';
         }
         if (state.page === "counterproposal") {
           const o = state.orders.find((x) => x.id === state.activeOrderId);
@@ -5197,7 +5155,7 @@ ${
                 }
                 render();
                 toast(
-                  "Aceite do profissional registrado no Supabase. O chat desta contratação foi liberado."
+                  "Aceite do profissional registrado. O chat desta contratação foi liberado."
                 );
                 try {
                   if (typeof window.ewLoadChat === "function")
@@ -5395,7 +5353,7 @@ ${
             .then(() => {
               render();
               toast(
-                "Profissional selecionado e pedido atualizado no Supabase."
+                "Profissional selecionado e pedido atualizado."
               );
               return go("contract");
             })
@@ -5690,9 +5648,9 @@ ${
         const pop = document.createElement("div");
         pop.className = "api-pop";
         pop.innerHTML =
-          '<b>Integração externa necessária</b><div style="margin-top:4px">' +
+          '<b>Recurso ainda não disponível</b><div style="margin-top:4px">' +
           esc(
-            b.dataset.apihelp || "Este recurso precisa de um serviço externo."
+            b.dataset.apihelp || "Este recurso ainda não está disponível."
           ) +
           "</div>";
         document.body.appendChild(pop);
@@ -5709,41 +5667,14 @@ ${
 
       (function () {
         const oldRender = render;
-        const apiMap = {
-          "Transcrição de áudio":
-            "Integração de reconhecimento de fala; monitore os limites e a qualidade da transcrição.",
-          "GPS:":
-            "GPS do próprio aparelho não exige API. Para mapas, geocodificação e rotas: Google Maps Platform (cotas gratuitas por SKU) ou MapLibre + provedor de tiles/geocoding de baixo custo.",
-          "Arquivo permanente":
-            "Supabase Free para banco, autenticação e Storage no início; atenção às cotas e pausas por inatividade no plano gratuito.",
-          "Moderação de fotos":
-            "A revisão de conteúdo pode combinar regras de segurança e análise automática.",
-          "transcrição:":
-            "Serviço de transcrição de áudio; custo por uso, não mensalidade fixa.",
-          "Armazenamento e verificação":
-            "Supabase Storage para documentos privados; verificação automática KYC só quando necessária, pois costuma gerar custo.",
-          "Login social":
-            "Google Identity Services/Firebase Authentication ou Supabase Auth; use a opção com cota gratuita que melhor encaixar na arquitetura.",
-          "Login social e verificação":
-            "Google Identity Services/Firebase Authentication ou Supabase Auth; use a opção com cota gratuita que melhor encaixar na arquitetura.",
-          "E-mail":
-            "Resend ou Firebase Cloud Messaging para notificações; e-mail transacional costuma ter cota gratuita inicial.",
-          pagamentos:
-            "Provedor integrado para processamento de pagamentos e assinaturas, conforme os fluxos habilitados; consulte as tarifas aplicáveis.",
-          assinatura:
-            "Assinatura eletrônica: Gov.br quando o caso e a integração forem elegíveis; para assinatura via API, avaliar provedor especializado pelo custo por documento.",
-        };
+        const apiMap = {};
         function apiExplain(text) {
-          for (const k in apiMap) if (text.includes(k)) return apiMap[k];
-          return (
-            text +
-            " Serviço externo deve ser escolhido pela menor combinação de custo, limites gratuitos, LGPD e facilidade de integração."
-          );
+          return "Este recurso ainda não está disponível. Em breve estará liberado.";
         }
         function patchApiDots() {
           document.querySelectorAll(".api-help").forEach((b) => {
             b.dataset.apihelp = apiExplain(
-              b.dataset.apihelp || "Integração externa necessária."
+              b.dataset.apihelp || "Recurso ainda não disponível."
             );
           });
         }
@@ -6006,7 +5937,7 @@ ${
           } catch (primaryErr) {
             console.error("FECHOU: falha na Edge Function oficial do Supabase", action, primaryErr);
             const networkErr = new Error(
-              "Não foi possível conectar à Edge Function oficial do Supabase. Verifique a implantação da função e a sessão. Origem atual: " + String(location.origin || "não identificada") + ". Se o aplicativo usa domínio próprio, cadastre esta origem exata no secret FECHOU_ALLOWED_ORIGINS ou configure FECHOU_APP_URL na Edge Function. Detalhe: " +
+              "Não foi possível conectar agora. Confira sua internet e tente novamente. Detalhe: " +
                 String(primaryErr?.message || primaryErr)
             );
             networkErr.name = primaryErr?.name === "ExylonTimeoutError" ? "ExylonTimeoutError" : "ExylonNetworkError";
@@ -6080,7 +6011,7 @@ ${
             if (data?.ok !== true || data?.service !== "eworkers-api")
               throw new Error("O servidor respondeu em formato inesperado.");
             if (pill) { pill.textContent = "● API conectada"; pill.style.color = "#35c98a"; }
-            if (result) result.textContent = "Servidor respondeu. A configuração privada das integrações não é exposta neste teste público.";
+            if (result) result.textContent = "Conexão funcionando.";
             toast("API conectada.");
           } catch (err) {
             if (pill) {
@@ -6722,7 +6653,7 @@ ${
           const user = authResult.data?.user;
           if (!user)
             throw new Error(
-              "Sessão Supabase expirada ou ausente. Saia e entre novamente na conta de cliente."
+              "Sua sessão expirou. Saia e entre novamente na sua conta."
             );
           state.supabaseUser = user;
           const description =
@@ -7263,7 +7194,7 @@ ${
         async function ewSignup() {
           if (!ewSupabase)
             return toast(
-              "A conexão do FECHOU ainda não foi inicializada. Isso não confirma falha na sua internet. Abra Configurações → Diagnóstico de conexão e tente novamente."
+              "Não foi possível conectar agora. Recarregue a página e tente novamente."
             );
           const email = (state.authEmail || "").trim();
           const password = state.authPassword || "";
@@ -7358,7 +7289,7 @@ ${
         async function ewLogin() {
           if (!ewSupabase)
             return toast(
-              "A conexão do FECHOU ainda não foi inicializada. Isso não confirma falha na sua internet. Abra Configurações → Diagnóstico de conexão e tente novamente."
+              "Não foi possível conectar agora. Recarregue a página e tente novamente."
             );
           const email = (state.authEmail || "").trim();
           const password = state.authPassword || "";
@@ -7418,7 +7349,7 @@ ${
         async function ewLogout() {
           if (!ewSupabase)
             return toast(
-              "A conexão do FECHOU ainda não foi inicializada. Isso não confirma falha na sua internet. Abra Configurações → Diagnóstico de conexão e tente novamente."
+              "Não foi possível conectar agora. Recarregue a página e tente novamente."
             );
           const { error } = await ewSupabase.auth.signOut();
           if (error) return toast("Não foi possível sair: " + error.message);
@@ -7444,7 +7375,7 @@ ${
         async function ewSaveProfile(roleExpected) {
           if (!ewSupabase)
             return toast(
-              "A conexão do FECHOU ainda não foi inicializada. Isso não confirma falha na sua internet. Abra Configurações → Diagnóstico de conexão e tente novamente."
+              "Não foi possível conectar agora. Recarregue a página e tente novamente."
             );
           const { data: authData, error: authError } =
             await ewSupabase.auth.getUser();
@@ -8183,7 +8114,7 @@ ${
         ewSignup = async function () {
           if (!ewSupabase)
             return toast(
-              "Não consegui carregar o Supabase. Recarregue o aplicativo."
+              "Não foi possível carregar o aplicativo. Recarregue a página."
             );
           const email = (state.authEmail || "").trim(),
             password = state.authPassword || "";
@@ -8575,7 +8506,7 @@ ${
             JSON.stringify(details, null, 2);
           box.dataset.diagnostic = report;
           box.innerHTML =
-            '<b style="font-size:16px">Não foi possível abrir o pagamento da assinatura.</b><p style="margin:7px 0 10px">O diagnóstico abaixo inclui o código HTTP, o código retornado pela API e a mensagem original do servidor, quando disponíveis. Copie e envie para localizar a causa.</p><div style="padding:10px;border:1px solid #704141;border-radius:8px;background:#180d0d;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace" id="ew-subscription-diagnostic"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="ew-subscription-copy">Copiar diagnóstico</button><button type="button" class="btn secondary" id="ew-subscription-retry">Tentar novamente</button><button type="button" class="btn secondary" id="ew-subscription-dismiss">Fechar aviso</button></div><p id="ew-subscription-copy-status" aria-live="polite" style="font-size:12px;margin-bottom:0"></p>';
+            '<b style="font-size:16px">Não foi possível abrir o pagamento da assinatura.</b><p style="margin:7px 0 10px">Tente novamente em instantes. Se o problema continuar, copie os detalhes abaixo e envie ao suporte (fechousuporte@gmail.com).</p><div style="padding:10px;border:1px solid #704141;border-radius:8px;background:#180d0d;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace" id="ew-subscription-diagnostic"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="ew-subscription-copy">Copiar detalhes</button><button type="button" class="btn secondary" id="ew-subscription-retry">Tentar novamente</button><button type="button" class="btn secondary" id="ew-subscription-dismiss">Fechar aviso</button></div><p id="ew-subscription-copy-status" aria-live="polite" style="font-size:12px;margin-bottom:0"></p>';
           const diagnostic = box.querySelector("#ew-subscription-diagnostic");
           if (diagnostic) diagnostic.textContent = report;
           const copy = box.querySelector("#ew-subscription-copy");
@@ -8596,16 +8527,16 @@ ${
                   ta.remove();
                   if (!ok)
                     throw Error(
-                      "O navegador bloqueou a cópia automática. Selecione o texto do diagnóstico e copie manualmente."
+                      "O navegador bloqueou a cópia automática. Selecione o texto dos detalhes e copie manualmente."
                     );
                 }
                 if (status)
                   status.textContent =
-                    "Diagnóstico copiado. Cole-o aqui na conversa.";
+                    "Detalhes copiados. Envie ao suporte: fechousuporte@gmail.com.";
               } catch (copyErr) {
                 if (status)
                   status.textContent =
-                    "Não foi possível copiar automaticamente. Selecione o diagnóstico exibido e copie manualmente.";
+                    "Não foi possível copiar automaticamente. Selecione os detalhes exibidos e copie manualmente.";
               }
             };
           const retry = box.querySelector("#ew-subscription-retry");
@@ -8808,7 +8739,7 @@ ${
             );
             if (error) return toast(ewFriendlyError(error));
             toast(
-              "Link de recuperação enviado. O e-mail está configurado para voltar ao FECHOU."
+              "Link de recuperação enviado. Confira seu e-mail."
             );
           },
           true
@@ -10695,9 +10626,9 @@ ${
           const paymentDescriptions = {
             "Direto entre as partes":
               "O cliente combina e paga diretamente ao profissional, por exemplo via PIX ou transferência. A FECHOU não recebe, retém nem confirma esse dinheiro. As partes devem conferir os dados e guardar comprovantes. O status do pagamento não será confirmado automaticamente pela plataforma.",
-            "Parceiro de pagamentos integrado — indisponível nesta versão":
+            "Parceiro de pagamentos integrado — em breve":
               "Esta modalidade será processada por um provedor de pagamentos conectado ao aplicativo. Quando ativada, o checkout, a confirmação e os estornos dependerão do provedor. Enquanto estiver marcada como indisponível, não é possível pagar por esta opção.",
-            "Pagamento protegido — indisponível nesta versão":
+            "Pagamento protegido — em breve":
               "Seria um fluxo em que o pagamento é processado por um provedor e liberado conforme condições previamente informadas, com procedimento para cancelamento e disputa. Não está ativo nesta versão e não deve ser entendido como garantia ou custódia de dinheiro pela FECHOU.",
           };
           document.querySelectorAll(".payment-help-item").forEach((item) => {
@@ -12009,11 +11940,11 @@ ${
                 const saved = check?.data?.profile_data?.photo;
                 if (check?.error || !saved) {
                   toast(
-                    "A foto foi mantida neste aparelho, mas o Supabase não confirmou o salvamento. Confira a coluna profile_data e as permissões UPDATE da tabela profiles."
+                    "A foto foi mantida neste aparelho, mas não foi possível salvá-la agora. Tente novamente em instantes."
                   );
                 } else {
                   safeSet(photoKey(), saved);
-                  toast("Foto de perfil salva e confirmada no Supabase.");
+                  toast("Foto de perfil salva.");
                 }
               } catch (err) {
                 console.warn("Verificação da foto no Supabase", err);
@@ -12300,7 +12231,7 @@ ${
                 raw.includes("schema cache") ||
                 raw.includes("does not exist")
               )
-                return "A tabela orders está com colunas diferentes das esperadas pelo aplicativo. Confira o esquema da tabela e a mensagem completa do Supabase.";
+                return "Não foi possível concluir agora. Tente novamente em instantes.";
             }
             return typeof originalFriendlyError === "function"
               ? originalFriendlyError(error, context)
@@ -12607,7 +12538,7 @@ ${
             } catch (e) {
               if (!isSchemaError(e)) throw e;
               throw new Error(
-                "O perfil básico foi salvo, mas a tabela profiles não tem a coluna profile_data necessária para persistir os dados complementares e a foto. É preciso aplicar a migração do Supabase."
+                "Seu perfil básico foi salvo, mas não foi possível salvar a foto e os dados complementares agora. Tente novamente em instantes."
               );
             }
             const incomingFile =
@@ -12677,7 +12608,7 @@ ${
             try {
               localStorage.setItem("ew_currentRole", uiRole);
             } catch (_) {}
-            say("Perfil salvo e sincronizado com o Supabase.");
+            say("Perfil salvo.");
             if (typeof window.go === "function") window.go("home");
             else if (typeof window.render === "function") window.render();
           } catch (e) {
@@ -13393,7 +13324,7 @@ ${
           modal.innerHTML =
             '<section class="v53-modal" role="dialog" aria-modal="true" aria-labelledby="v53-signature-title"><h2 id="v53-signature-title">Confirmar aceite do contrato</h2><p>Você está prestes a registrar seu aceite eletrônico das condições apresentadas para <b>' +
             v53Esc(o.service || o.category || "serviço") +
-            '</b>.</p><p class="v53-small">Este botão registra o aceite pelo fluxo disponível no FECHOU. Não representa assinatura GOV.br ou Clicksign: esses provedores só podem ser apresentados como assinatura externa quando a integração real estiver configurada e validada.</p><div class="notice"><b>Antes de continuar:</b> confira valor da proposta, escopo, prazo, forma de pagamento e regras de cancelamento no documento.</div><div id="v53-signature-status" class="v53-small" aria-live="polite"></div><div class="actions"><button type="button" class="btn" id="v53-signature-confirm">Confirmar aceite eletrônico</button><button type="button" class="btn secondary" id="v53-signature-cancel">Voltar ao contrato</button></div></section>';
+            '</b>.</p><p class="v53-small">Este botão registra seu aceite eletrônico dentro do FECHOU. Ele não é uma assinatura GOV.br nem Clicksign.</p><div class="notice"><b>Antes de continuar:</b> confira valor da proposta, escopo, prazo, forma de pagamento e regras de cancelamento no documento.</div><div id="v53-signature-status" class="v53-small" aria-live="polite"></div><div class="actions"><button type="button" class="btn" id="v53-signature-confirm">Confirmar aceite eletrônico</button><button type="button" class="btn secondary" id="v53-signature-cancel">Voltar ao contrato</button></div></section>';
           document.body.appendChild(modal);
           modal.querySelector("#v53-signature-cancel").onclick = () =>
             modal.remove();
@@ -16771,7 +16702,7 @@ ${
           const report =
             "DIAGNÓSTICO DO CHECKOUT — FECHOU\n" + JSON.stringify(d, null, 2);
           box.innerHTML =
-            '<b style="font-size:16px;color:#ff9999">O checkout da assinatura não abriu.</b><p style="margin:7px 0 10px">Envie este diagnóstico na conversa para eu corrigir a causa. Nenhum dado de cartão é coletado por este relatório.</p><pre id="ew-checkout-diagnostic-text" style="margin:0;padding:10px;border:1px solid #704141;border-radius:8px;background:#180d0d;color:#fff;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace"></pre><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" id="ew-checkout-diagnostic-copy" class="btn">Copiar diagnóstico</button><button type="button" id="ew-checkout-diagnostic-retry" class="btn secondary">Tentar novamente</button><button type="button" id="ew-checkout-diagnostic-close" class="btn secondary">Fechar aviso</button></div><p id="ew-checkout-diagnostic-status" aria-live="polite" style="font-size:12px;margin-bottom:0"></p>';
+            '<b style="font-size:16px;color:#ff9999">O checkout da assinatura não abriu.</b><p style="margin:7px 0 10px">Envie este diagnóstico na conversa para eu corrigir a causa. Nenhum dado de cartão é coletado por este relatório.</p><pre id="ew-checkout-diagnostic-text" style="margin:0;padding:10px;border:1px solid #704141;border-radius:8px;background:#180d0d;color:#fff;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace"></pre><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" id="ew-checkout-diagnostic-copy" class="btn">Copiar detalhes</button><button type="button" id="ew-checkout-diagnostic-retry" class="btn secondary">Tentar novamente</button><button type="button" id="ew-checkout-diagnostic-close" class="btn secondary">Fechar aviso</button></div><p id="ew-checkout-diagnostic-status" aria-live="polite" style="font-size:12px;margin-bottom:0"></p>';
           box.querySelector("#ew-checkout-diagnostic-text").textContent =
             report;
           const anchor =
@@ -16786,7 +16717,7 @@ ${
               try {
                 await navigator.clipboard.writeText(report);
                 st.textContent =
-                  "Diagnóstico copiado. Cole-o aqui na conversa.";
+                  "Detalhes copiados. Envie ao suporte: fechousuporte@gmail.com.";
               } catch (_) {
                 const ta = document.createElement("textarea");
                 ta.value = report;
@@ -16975,7 +16906,7 @@ ${
             );
           if (p === "teste") {
             const activated = await window.ewApi("subscription/activate-test", {});
-            if (!activated?.ok) throw Error("O servidor não confirmou a ativação do Plano Teste.");
+            if (!activated?.ok) throw Error("Não foi possível confirmar a ativação do Plano Teste. Tente novamente.");
             if (activated.subscription) appState.subscription = activated.subscription;
             if (!activated.preserved_active_subscription) {
               appState.subscriptionPlan = "teste";
@@ -21370,7 +21301,7 @@ ${
             try {
               if (typeof window.ewApi !== "function")
                 throw new Error(
-                  "A integração de assinatura não está disponível neste carregamento."
+                  "A assinatura eletrônica não está disponível agora. Tente novamente em instantes."
                 );
               const result = await window.ewApi("subscription/cancel", {
                 id: sub.id,
@@ -21404,7 +21335,7 @@ ${
                 };
               } else
                 throw new Error(
-                  "O servidor não confirmou o cancelamento. Nenhuma alteração local foi marcada como concluída."
+                  "Não foi possível confirmar o cancelamento. Tente novamente."
                 );
               try {
                 const { data, error } = await ewSupabase
@@ -23102,7 +23033,7 @@ ${
           state.page = "proposals";
           render();
           safeToast(
-            "Contraproposta salva no Supabase e enviada ao profissional."
+            "Contraproposta enviada ao profissional."
           );
         }
         async function acceptCounterproposal(orderId, proposalId) {
@@ -23714,7 +23645,7 @@ ${
           const [primary, legacy] = await Promise.all([primaryPromise, legacyPromise]);
           if (primary.error)
             throw new Error(
-              "Não foi possível carregar as mensagens desta proposta. Aplique a migração FECHOU V139 Parte 2: " +
+              "Não foi possível carregar as mensagens desta proposta. Tente novamente. " +
                 primary.error.message
             );
           let rows = [...(legacy?.error ? [] : (legacy?.data || [])), ...(primary.data || [])];
@@ -24143,7 +24074,7 @@ ${
               : currentPartySigned
                 ? (client ? "Sua assinatura foi registrada. Aguardando a assinatura do profissional." : "Sua assinatura foi registrada. Aguardando a assinatura do cliente.")
                 : clientSignedNow
-                  ? "O cliente já assinou. Assine com a Clicksign usando o token enviado ao seu e-mail."
+                  ? "O cliente já assinou. Assine com a Clicksign usando o código enviado ao seu e-mail."
                   : professionalSignedNow
                     ? "O profissional já assinou. Aguardando a assinatura do cliente."
                     : (prepaidMode ? "Leia o documento e assine com a Clicksign. O aceite interno não substitui a assinatura eletrônica." : "Leia o documento antes de confirmar seu aceite.");
@@ -25782,7 +25713,7 @@ body #app .fechou-profile-progress>div:first-child b {
               try {
                 if (typeof window.ewApi !== "function")
                   throw new Error(
-                    "API FECHOU não inicializada. Recarregue o aplicativo."
+                    "Não foi possível carregar. Recarregue o aplicativo."
                   );
                 if (typeof window.fechouOpsApi !== "function") throw new Error("O serviço seguro de cancelamento está indisponível. Atualize o aplicativo.");
                 const result = await window.fechouOpsApi("service/cancel", {
@@ -27448,7 +27379,7 @@ body #app .fechou-profile-progress>div:first-child b {
         const callApi = async (action, payload = {}) => {
           if (typeof window.ewApi !== "function")
             throw new Error(
-              "API FECHOU não inicializada. Recarregue o aplicativo."
+              "Não foi possível carregar. Recarregue o aplicativo."
             );
           const r = await window.ewApi(action, payload);
           if (r?.ok === false)
@@ -27811,7 +27742,7 @@ body #app .fechou-profile-progress>div:first-child b {
         function payoutTransferLabel(attempt) {
           const status = String(attempt?.status || "").toLowerCase();
           const provider = String(attempt?.provider_status || "").toUpperCase();
-          if (status === "pending" && provider === "DONE") return "Aguardando confirmação oficial do webhook";
+          if (status === "pending" && provider === "DONE") return "Aguardando a confirmação do pagamento";
           const labels = {
             initiating: "Enviando ao Asaas",
             unknown: "Resultado desconhecido — conciliação necessária",
@@ -27946,7 +27877,7 @@ body #app .fechou-profile-progress>div:first-child b {
               : ""
           }<details class="panel v134-wallet-ledger-panel v134-wallet-collapse"><summary class="v134-wallet-collapse-head"><span class="v134-wallet-ledger-heading"><b>Extrato de movimentações</b><small>Veja cada movimentação, sua data e a situação atual.</small></span></summary><div class="v134-wallet-collapse-body"><div class="v134-wallet-ledger-actions"><button class="btn secondary" type="button" data-v134-refresh-wallet>Atualizar</button></div>${ledger}<div class="v134-helper"><b>Como funciona:</b> pagamento recebido não significa que já foi repassado. A liberação depende da conclusão confirmada, de eventual revisão e da liquidação efetiva da transferência pelo prestador de pagamento. Se houver disputa, o saldo permanece em análise até decisão registrada.</div></div></details>${
             supportAdminEnabled
-              ? `<section class="panel"><div class="row between"><div><h2>Central de revisão da rede</h2><p class="muted">Somente contas autorizadas no backend. Registre o motivo de cada decisão.</p></div><button class="btn secondary" type="button" data-v134-refresh-wallet>Atualizar</button></div><h3>Casos em aberto</h3>${
+              ? `<section class="panel"><div class="row between"><div><h2>Central de revisão da rede</h2><p class="muted">Somente contas autorizadas. Registre o motivo de cada decisão.</p></div><button class="btn secondary" type="button" data-v134-refresh-wallet>Atualizar</button></div><h3>Casos em aberto</h3>${
                   supportRows.length
                     ? supportRows
                         .map(
@@ -30283,7 +30214,7 @@ body #app .fechou-profile-progress>div:first-child b {
             const t = el.textContent || "";
             if (/Confira seu e-mail para confirmar a conta/i.test(t))
               el.textContent =
-                "Cadastro criado. Se o projeto Supabase estiver configurado sem confirmação de e-mail, você entra imediatamente. O telefone é opcional e pode ser cadastrado no perfil para recuperação/contato.";
+                "Cadastro criado. Se pedirmos a confirmação do seu e-mail, confira sua caixa de entrada. O telefone é opcional e pode ser cadastrado no perfil.";
           });
         }
         function afterRender() {
@@ -32856,7 +32787,7 @@ body #app .v156-service-payment .notice{color:#c8d9e9!important;background:#1326
                 code: String(e?.code || e?.apiCode || e?.apiResponse?.code || e?.error_code || "") || null,
                 http_status: e?.httpStatus || e?.apiDiagnostic?.http_status || null,
                 request_id: e?.apiRequestId || e?.apiDiagnostic?.request_id || null,
-                message: String(e?.message || e || "Falha sem mensagem do Supabase").slice(0, 700),
+                message: String(e?.message || e || "Não foi possível concluir").slice(0, 700),
                 details: String(e?.details || e?.apiResponse?.details || "").slice(0, 700),
                 hint: String(e?.hint || e?.apiResponse?.hint || "").slice(0, 500),
                 order_id: String(o.id),
@@ -34022,7 +33953,7 @@ body.fechou-v181-profile-scroll .wrap{padding-bottom:calc(108px + env(safe-area-
  const cpfModal=()=>new Promise(resolve=>{
   document.getElementById('fechou-v182-cpf-overlay')?.remove();
   const overlay=document.createElement('div');overlay.id='fechou-v182-cpf-overlay';
-  overlay.innerHTML='<section id="fechou-v182-cpf-dialog" role="dialog" aria-modal="true" aria-labelledby="fechou-v182-cpf-title"><h2 id="fechou-v182-cpf-title">Dados para cobrança</h2><p>O provedor de pagamento solicitou o CPF ou CNPJ do titular para criar a assinatura. O documento será enviado ao provedor pelo servidor seguro e não será salvo no armazenamento local do aparelho.</p><label for="fechou-v182-cpf-input">CPF ou CNPJ do titular</label><input id="fechou-v182-cpf-input" inputmode="numeric" autocomplete="off" maxlength="18" placeholder="000.000.000-00"><small id="fechou-v182-cpf-error" role="alert" style="display:block;color:#ffb7a5;margin-top:6px"></small><div class="actions"><button type="button" class="btn secondary" data-v182-cpf-cancel>Cancelar</button><button type="button" class="btn" data-v182-cpf-submit>Continuar</button></div></section>';
+  overlay.innerHTML='<section id="fechou-v182-cpf-dialog" role="dialog" aria-modal="true" aria-labelledby="fechou-v182-cpf-title"><h2 id="fechou-v182-cpf-title">Dados para cobrança</h2><p>O provedor de pagamento solicitou o CPF ou CNPJ do titular para criar a assinatura. O documento será enviado com segurança ao provedor de pagamento e não ficará salvo no seu aparelho.</p><label for="fechou-v182-cpf-input">CPF ou CNPJ do titular</label><input id="fechou-v182-cpf-input" inputmode="numeric" autocomplete="off" maxlength="18" placeholder="000.000.000-00"><small id="fechou-v182-cpf-error" role="alert" style="display:block;color:#ffb7a5;margin-top:6px"></small><div class="actions"><button type="button" class="btn secondary" data-v182-cpf-cancel>Cancelar</button><button type="button" class="btn" data-v182-cpf-submit>Continuar</button></div></section>';
   document.body.appendChild(overlay);const input=overlay.querySelector('#fechou-v182-cpf-input'),error=overlay.querySelector('#fechou-v182-cpf-error');
   const finish=value=>{overlay.remove();resolve(value)};
   overlay.querySelector('[data-v182-cpf-cancel]').onclick=()=>finish(null);
@@ -34035,7 +33966,7 @@ body.fechou-v181-profile-scroll .wrap{padding-bottom:calc(108px + env(safe-area-
   const data={acao:'subscription/prepare',plano:plan,etapa:error?.apiDiagnostic?.stage||error?.diagnostic?.stage||'preparacao_checkout',codigo:error?.apiCode||error?.code||null,http_status:error?.httpStatus||error?.apiDiagnostic?.http_status||null,origem:location.origin,request_id:error?.apiRequestId||error?.apiResponse?.request_id||null,mensagem:String(error?.message||error||'Falha desconhecida').slice(0,1000),horario:new Date().toISOString()};
   let box=document.getElementById('ew-subscription-feedback');if(!box){box=document.createElement('section');box.id='ew-subscription-feedback';box.setAttribute('role','alert');}
   box.style.cssText='display:block;position:relative;z-index:2147483647;margin:14px 0;padding:15px;border:2px solid #b87942;border-radius:12px;background:#21170f;color:#fff;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box';
-  box.innerHTML='<b style="font-size:15px;color:#ffd2a8">Não foi possível iniciar a assinatura.</b><p style="margin:7px 0 10px;color:#e5d5c6">O plano selecionado foi mantido. Confira o diagnóstico para identificar a etapa que falhou.</p><textarea id="fechouSubscriptionDiagnostic" readonly rows="8" style="width:100%;box-sizing:border-box;background:#120e0b;color:#fff;border:1px solid #6c4b32;border-radius:8px;padding:10px;font:11px/1.5 monospace"></textarea><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button type="button" class="btn" data-v182-copy>Copiar diagnóstico</button><button type="button" class="btn secondary" data-v182-retry>Tentar novamente</button><button type="button" class="btn secondary" data-v182-close>Fechar</button></div>';
+  box.innerHTML='<b style="font-size:15px;color:#ffd2a8">Não foi possível iniciar a assinatura.</b><p style="margin:7px 0 10px;color:#e5d5c6">O plano selecionado foi mantido. Confira o diagnóstico para identificar a etapa que falhou.</p><textarea id="fechouSubscriptionDiagnostic" readonly rows="8" style="width:100%;box-sizing:border-box;background:#120e0b;color:#fff;border:1px solid #6c4b32;border-radius:8px;padding:10px;font:11px/1.5 monospace"></textarea><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button type="button" class="btn" data-v182-copy>Copiar detalhes</button><button type="button" class="btn secondary" data-v182-retry>Tentar novamente</button><button type="button" class="btn secondary" data-v182-close>Fechar</button></div>';
   const report='DIAGNÓSTICO DE ASSINATURA — FECHOU\n'+JSON.stringify(data,null,2);box.querySelector('textarea').value=report;
   box.querySelector('[data-v182-copy]').onclick=async()=>{try{await navigator.clipboard.writeText(report);toast('Diagnóstico copiado.');}catch(_){const t=box.querySelector('textarea');t.focus();t.select();toast('Selecione o diagnóstico e copie manualmente.')}};
   box.querySelector('[data-v182-retry]').onclick=()=>{box.remove();window.ExylonHubSubscription(plan).catch(()=>{})};box.querySelector('[data-v182-close]').onclick=()=>box.remove();
@@ -34311,7 +34242,7 @@ async function checkout(o){
    required(r,!testMode||Math.abs(base-6)<.005,'O servidor retornou um valor de teste diferente de R$ 6,00. Nenhuma cobrança foi criada. Atualize a configuração e o pedido de teste no servidor; o aplicativo não altera uma cotação bancária assinada.');
    const expectedPlatform=testMode?0:round(payoutBase*.02);
    const computed=round(base+provider);
-   required(r,Math.abs(platform-expectedPlatform)<.011&&Math.abs(computed-total)<.011&&(testMode||Math.abs(Number(q.professional_net)-(payoutBase-platform))<.011),'Cotação rejeitada: a comissão deve ser 2% da base de repasse do profissional, o líquido precisa bater com a comissão e ela não pode ser adicionada ao total do cliente. Atualize a cotação no servidor.');
+   required(r,Math.abs(platform-expectedPlatform)<.011&&Math.abs(computed-total)<.011&&(testMode||Math.abs(Number(q.professional_net)-(payoutBase-platform))<.011),'Não foi possível calcular o valor deste pedido. Atualize a cotação e tente novamente.');
    quote=q;
    $('#v189-fees',d.box).innerHTML=`<div><span>Valor do serviço</span><b>${money(base)}</b></div><div class="v214-admin-fee"><span>Tarifa de processamento Asaas<small>${testMode?'Tarifa conforme cotação de teste':'Tarifa informada pelo Asaas para este meio'}</small></span><b>${money(provider)}</b></div>${!testMode?`<small class="v322-fee-note">Comissão FECHOU: 2% sobre o repasse do profissional (${money(platform)}), descontada do valor profissional e não adicionada ao pagamento do cliente.</small>`:'<small>Comissão suspensa no pedido de teste.</small>'}<div class="total"><span>Total a pagar</span><b>${money(total)}</b></div><small>Cotação válida até ${esc(new Date(q.expires_at).toLocaleTimeString('pt-BR'))}. O valor será novamente conferido pelo servidor antes da cobrança.</small>`;
    pay.textContent='Pagar '+money(total);update();
@@ -34375,12 +34306,12 @@ function showPayment(r,o){
 
 async function statusPayment(o,navigate=false){const r=await api('orders/publication-status',{order_id:String(o.id),protocol_version:189});const fresh=r.order;if(!fresh?.id||String(fresh.id)!==String(o.id))throw new Error('Não foi possível confirmar o status do pedido.');Object.assign(o,fresh);const s=state();if(r.payment_confirmed===true&&r.publication_status==='published'&&paid(fresh)){s.v189Pending=(s.v189Pending||[]).filter(x=>String(x.id)!==String(o.id));s.orders=[fresh,...(s.orders||[]).filter(x=>String(x.id)!==String(o.id))];if(navigate){s.activeOrderId=fresh.id;s.budget=fresh;s.page='proposals';refresh();note('Pagamento confirmado. Seu pedido está publicado.');}pendingBanner();return true}pendingBanner();return false}
 function openOrder(o,proposalId=null){const s=state();s.activeOrderId=o.id;s.activeProposalId=proposalId||null;s.budget=o;s.__v134Wallet=false;s.page=s.currentRole==='Profissional'?'myquotes':(/cancelad|cancelled/i.test(String(o.status||''))?'orders':'proposals');refresh();requestAnimationFrame(()=>{const target=[...document.querySelectorAll('[data-v148-order-id]')].find(el=>String(el.dataset.v148OrderId)===String(o.id));if(target){target.scrollIntoView({behavior:'smooth',block:'center'});target.classList.add('v148-notification-target')}})}
-function pendingBanner(){const s=state(),id=uid();let list=(s.v189Pending||[]).concat(s.orders||[]).filter((o,i,a)=>a.findIndex(x=>String(x.id)===String(o.id))===i&&String(o.client_id)===id&&mode(o)==='contract_prepaid'&&o.publication_status==='awaiting_payment'&&!paid(o));list.sort((a,b)=>(Date.parse(b.created_at||b.createdAt||0)||0)-(Date.parse(a.created_at||a.createdAt||0)||0));const old=$('#fechou-v189-pending');if(!id||s.currentRole==='Profissional'||!list.length){old?.remove();return}let host=old;if(!host){host=document.createElement('section');host.id='fechou-v189-pending';const app=$('#app');if(!app)return;app.prepend(host)}const signature=JSON.stringify(list.map(x=>[x.id,x.total,x.publication_status]));if(host.dataset.signature===signature)return;host.dataset.signature=signature;const renderCard=o=>`<article class="fc-pending-card"><b>${esc(o.service||o.title||'Serviço')}</b> · Pedido #${esc(String(o.id).slice(0,8))} · ${money(o.total)}${(o.temporary_test_price===true||o.metadata?.temporary_test_price===true||o.metadata?.temporary_test_payment_only===true)&&Number(o.total)!==6?'<small class="fc-legacy-test-note">Teste: valor esperado R$ 6,00. Este registro antigo precisa ser atualizado e conciliado no servidor antes de pagar.</small>':''}<div class="actions"><button type="button" data-v189-pay="${esc(o.id)}">Pagar agora</button><button type="button" data-v189-cancel="${esc(o.id)}">Cancelar pagamento</button></div></article>`;host.innerHTML=`<strong>Pagamento pendente · ${list.length} ${list.length===1?'solicitação':'solicitações'}</strong><p>${esc(explanation)}</p>${renderCard(list[0])}${list.length>1?`<details class="fc-pending-more"><summary>Mostrar mais ${list.length-1} ${list.length-1 === 1 ? "solicitação" : "solicitações"}</summary><div class="fc-pending-more-list">${list.slice(1).map(renderCard).join('')}</div></details>`:''}`;}
+function pendingBanner(){const s=state(),id=uid();let list=(s.v189Pending||[]).concat(s.orders||[]).filter((o,i,a)=>a.findIndex(x=>String(x.id)===String(o.id))===i&&String(o.client_id)===id&&mode(o)==='contract_prepaid'&&o.publication_status==='awaiting_payment'&&!paid(o));list.sort((a,b)=>(Date.parse(b.created_at||b.createdAt||0)||0)-(Date.parse(a.created_at||a.createdAt||0)||0));const old=$('#fechou-v189-pending');if(!id||s.currentRole==='Profissional'||!list.length){old?.remove();return}let host=old;if(!host){host=document.createElement('section');host.id='fechou-v189-pending';const app=$('#app');if(!app)return;app.prepend(host)}const signature=JSON.stringify(list.map(x=>[x.id,x.total,x.publication_status]));if(host.dataset.signature===signature)return;host.dataset.signature=signature;const renderCard=o=>`<article class="fc-pending-card"><b>${esc(o.service||o.title||'Serviço')}</b> · Pedido #${esc(String(o.id).slice(0,8))} · ${money(o.total)}${(o.temporary_test_price===true||o.metadata?.temporary_test_price===true||o.metadata?.temporary_test_payment_only===true)&&Number(o.total)!==6?'<small class="fc-legacy-test-note">Teste: valor esperado R$ 6,00. Este pedido precisa ser atualizado antes do pagamento.</small>':''}<div class="actions"><button type="button" data-v189-pay="${esc(o.id)}">Pagar agora</button><button type="button" data-v189-cancel="${esc(o.id)}">Cancelar pagamento</button></div></article>`;host.innerHTML=`<strong>Pagamento pendente · ${list.length} ${list.length===1?'solicitação':'solicitações'}</strong><p>${esc(explanation)}</p>${renderCard(list[0])}${list.length>1?`<details class="fc-pending-more"><summary>Mostrar mais ${list.length-1} ${list.length-1 === 1 ? "solicitação" : "solicitações"}</summary><div class="fc-pending-more-list">${list.slice(1).map(renderCard).join('')}</div></details>`:''}`;}
 const v275PendingCancelInFlight = new Set();
 async function cancelPayment(o){
  const orderId=String(o?.id||"");
  if(!orderId||v275PendingCancelInFlight.has(orderId))return;
- const d=dialog('Cancelar pedido e pagamento',`<p>Pedido: <b>${esc(o.service||o.title||'Serviço solicitado')}</b> · ${money(o.total)}</p><p>Informe o motivo para registrar a solicitação. O servidor consultará o estado da cobrança antes de encerrar a publicação.</p><label for="v275-pending-cancel-reason">Motivo do cancelamento</label><textarea id="v275-pending-cancel-reason" maxlength="500" rows="4" placeholder="Descreva por que deseja cancelar…"></textarea><p class="v189-error" role="alert"></p>`,btn('Voltar','back',true)+btn('Confirmar cancelamento','cancel'));
+ const d=dialog('Cancelar pedido e pagamento',`<p>Pedido: <b>${esc(o.service||o.title||'Serviço solicitado')}</b> · ${money(o.total)}</p><p>Informe o motivo para registrar a solicitação. Vamos conferir a cobrança antes de encerrar a publicação.</p><label for="v275-pending-cancel-reason">Motivo do cancelamento</label><textarea id="v275-pending-cancel-reason" maxlength="500" rows="4" placeholder="Descreva por que deseja cancelar…"></textarea><p class="v189-error" role="alert"></p>`,btn('Voltar','back',true)+btn('Confirmar cancelamento','cancel'));
  const reasonField=$('#v275-pending-cancel-reason',d.box),cancelButton=$('[data-v189=cancel]',d.box);
  $('[data-v189=back]',d.box).onclick=d.close;
  cancelButton.onclick=async e=>{
@@ -34390,7 +34321,7 @@ async function cancelPayment(o){
   v275PendingCancelInFlight.add(orderId);e.target.disabled=true;e.target.textContent='Verificando cobrança…';
   try{
    const r=await api('orders/cancel-publication',{order_id:orderId,reason,idempotency_key:'cancel-publication:'+orderId});
-   required(r,r.cancelled===true&&String(r.order?.id||'')===orderId&&r.order?.publication_status==='cancelled','O servidor ainda não confirmou o cancelamento da publicação. Consulte o status antes de tentar novamente.');
+   required(r,r.cancelled===true&&String(r.order?.id||'')===orderId&&r.order?.publication_status==='cancelled','O cancelamento da publicação ainda não foi confirmado. Consulte o status antes de tentar novamente.');
    Object.assign(o,r.order);state().v189Pending=(state().v189Pending||[]).filter(x=>String(x.id)!==orderId);lastSync=0;d.close();refresh();window.__fechouRefreshPendingPayments?.();
    note('Publicação cancelada. Isso não comprova estorno: eventual reembolso só será concluído após confirmação do Asaas.');
   }catch(err){
@@ -34665,7 +34596,7 @@ if(typeof originalCreate==='function'){
 }
 async function googleAvailable(){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);try{const url=String(window.EW__URL||window.EW_SUPABASE_URL||'').replace(/\/$/,'');const key=window.EW__PUBLISHABLE_KEY||window.EW_SUPABASE_PUBLISHABLE_KEY;const r=await fetch(url+'/auth/v1/settings',{headers:{apikey:key},signal:controller.signal});if(!r.ok)throw new Error('Não foi possível verificar o acesso com Gmail. Tente novamente.');const cfg=await r.json();if(cfg.external?.google!==true)throw new Error('Unsupported provider: provider is not enabled');return true}finally{clearTimeout(timer)}}
 const resendUntil=new Map();
-function authUI(){const panel=$('#app .v165-auth-panel');if(!panel)return;const email=String(state().authEmail||'').trim().toLowerCase();const pending=window.FechouV215?.confirmationSent(email)===true;const existing=$('[data-v189-resend]',panel);if(existing){existing.hidden=!pending;return;}if(!pending)return;const b=document.createElement('button');b.type='button';b.className='btn secondary v189-clickable';b.dataset.v189Resend='1';b.textContent='Reenviar e-mail de confirmação';panel.append(b);b.onclick=async()=>{const email=String(state().authEmail||state().authPendingEmail||'').trim().toLowerCase();if(!window.FechouV215?.confirmationSent(email))return note('Crie a conta e aguarde o primeiro envio antes de solicitar o reenvio.');if(!/^\S+@\S+\.\S+$/.test(email))return note('Informe o e-mail usado no cadastro.');if((resendUntil.get(email)||0)>Date.now())return note('Aguarde um minuto antes de solicitar outro e-mail.');b.disabled=true;try{const c=db()||await window.fechouEnsureSupabaseClient?.();if(!c?.auth?.resend)throw new Error('Serviço de confirmação indisponível.');const r=await c.auth.resend({type:'signup',email,options:{emailRedirectTo:location.origin+location.pathname}});if(r.error)throw r.error;resendUntil.set(email,Date.now()+60000);note('Solicitação de reenvio registrada. Verifique a caixa de entrada e o spam. O envio depende da configuração de e-mail do aplicativo.')}catch(e){note(/rate|limit/i.test(String(e?.message||''))?'Limite temporário de envios. Aguarde antes de tentar novamente.':'Não foi possível solicitar o e-mail de confirmação. O administrador precisa verificar o serviço de envio.')}finally{b.disabled=false}}}
+function authUI(){const panel=$('#app .v165-auth-panel');if(!panel)return;const email=String(state().authEmail||'').trim().toLowerCase();const pending=window.FechouV215?.confirmationSent(email)===true;const existing=$('[data-v189-resend]',panel);if(existing){existing.hidden=!pending;return;}if(!pending)return;const b=document.createElement('button');b.type='button';b.className='btn secondary v189-clickable';b.dataset.v189Resend='1';b.textContent='Reenviar e-mail de confirmação';panel.append(b);b.onclick=async()=>{const email=String(state().authEmail||state().authPendingEmail||'').trim().toLowerCase();if(!window.FechouV215?.confirmationSent(email))return note('Crie a conta e aguarde o primeiro envio antes de solicitar o reenvio.');if(!/^\S+@\S+\.\S+$/.test(email))return note('Informe o e-mail usado no cadastro.');if((resendUntil.get(email)||0)>Date.now())return note('Aguarde um minuto antes de solicitar outro e-mail.');b.disabled=true;try{const c=db()||await window.fechouEnsureSupabaseClient?.();if(!c?.auth?.resend)throw new Error('Serviço de confirmação indisponível.');const r=await c.auth.resend({type:'signup',email,options:{emailRedirectTo:location.origin+location.pathname}});if(r.error)throw r.error;resendUntil.set(email,Date.now()+60000);note('Solicitação de reenvio registrada. Verifique a caixa de entrada e o spam.')}catch(e){note(/rate|limit/i.test(String(e?.message||''))?'Limite temporário de envios. Aguarde antes de tentar novamente.':'Não foi possível solicitar o e-mail de confirmação. O administrador precisa verificar o serviço de envio.')}finally{b.disabled=false}}}
 const previousQuoteContract=window.__fechouOpenQuoteContract;
 if(typeof previousQuoteContract==='function')window.__fechouOpenQuoteContract=async function(orderId,action,reservedPrintWindow){const o=active(orderId);if(o&&mode(o)==='contract_prepaid'){return contractReview(o,{print:String(action||'').toLowerCase()==='print',reservedPrintWindow});}return previousQuoteContract.apply(this,arguments)};
 const originalReview=window.__fechouOpenContractReview;if(typeof originalReview==='function')window.__fechouOpenContractReview=async function(o){o=o||active();if(mode(o)==='contract_prepaid')return contractReview(o);return originalReview.apply(this,arguments)};
@@ -34796,7 +34727,7 @@ document.documentElement.lang='pt-BR';/* marcador intermediário removido; V309 
   if(state.tab==='chat'){
    if(!approved.length){html+=`<section class="v212-card"><h3>Chat da equipe ainda bloqueado</h3><p class="v212-muted">O grupo só é ativado depois que o cliente aprova pelo menos um colaborador. Convites aceitos aguardam essa aprovação.</p></section>`}
    else{
-    html+=`<section class="v212-card"><h3>Comunicação da equipe</h3><p class="v212-muted">Mensagens operacionais e anexos podem ser enviados sem ocupar a vez de fala. Mensagens de conversa exigem a vez concedida pelo cliente.</p><div class="v212-chat-list">${messages.length?messages.map(m=>{const mine=String(m.sender_id)===uid();const attachments=(m.attachments||[]).map(a=>{let u='';try{const x=new URL(a.url);if(x.protocol==='https:'&&x.hostname==='ziubcqxmxialhmwevtiy.supabase.co')u=x.href}catch(_){}if(!u)return '';if(a.type==='image')return `<img src="${esc(u)}" alt="${esc(a.name||'Imagem anexada')}" loading="lazy">`;if(a.type==='video')return `<video src="${esc(u)}" controls playsinline></video>`;if(a.type==='audio')return `<audio src="${esc(u)}" controls></audio>`;return ''}).join('');return `<article class="v212-message ${mine?'mine':''}"><small>${esc(m.sender_name||'Participante')} · ${esc(m.message_kind==='operational'?'Atualização operacional':'Conversa')} · ${esc(m.created_at?new Date(m.created_at).toLocaleString('pt-BR'):'')}</small>${esc(m.message_text||'')}${attachments}</article>`}).join(''):'<p class="v212-muted">Nenhuma mensagem ainda.</p>'}</div><div class="v212-warning">Não compartilhe telefone, WhatsApp, e-mail, links, perfis externos ou pagamentos por fora. O servidor também aplica esse bloqueio.</div><form data-v212-form="message"><label>Mensagem</label><textarea name="message_text" maxlength="3000" placeholder="Escreva uma mensagem para a equipe…"></textarea><div class="v212-grid" style="margin-top:7px"><div><label>Tipo</label><select name="message_kind"><option value="operational">Atualização operacional (sem fila)</option><option value="speech">Conversa (exige vez concedida)</option></select></div><div><label>Anexos (até 4, 8 MB cada)</label><input name="attachments" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/ogg,audio/webm" multiple></div></div><div class="v212-actions"><button class="v212-btn" type="submit">Enviar mensagem</button><button class="v212-btn secondary" type="button" data-v212-action="refresh">Atualizar chat</button><button class="v212-btn secondary" type="button" data-v212-action="request-turn">Solicitar vez de fala</button>${client&&turns.some(t=>t.status==='pending')?`<button class="v212-btn" type="button" data-v212-action="grant-next">Conceder próxima vez</button>`:''}</div></form><section style="margin-top:12px"><h3>Fila de fala</h3>${turns.length?turns.map((t,i)=>`<div class="v212-person"><div class="v212-avatar">${i+1}</div><div class="v212-person-main"><b>${esc(t.user_name||'Participante')}</b><div class="v212-muted">${esc(statusLabel(t.status))}${t.expires_at?' · expira '+esc(new Date(t.expires_at).toLocaleTimeString('pt-BR')):''}</div>${client&&t.status==='pending'&&i===turns.findIndex(x=>x.status==='pending')?`<div class="v212-actions"><button class="v212-btn" data-v212-action="grant-turn" data-turn-id="${esc(t.id)}" type="button">Conceder fala</button></div>`:''}</div></div>`).join(''):'<p class="v212-muted">Fila vazia.</p>'}</section></section>`;
+    html+=`<section class="v212-card"><h3>Comunicação da equipe</h3><p class="v212-muted">Mensagens operacionais e anexos podem ser enviados sem ocupar a vez de fala. Mensagens de conversa exigem a vez concedida pelo cliente.</p><div class="v212-chat-list">${messages.length?messages.map(m=>{const mine=String(m.sender_id)===uid();const attachments=(m.attachments||[]).map(a=>{let u='';try{const x=new URL(a.url);if(x.protocol==='https:'&&x.hostname==='ziubcqxmxialhmwevtiy.supabase.co')u=x.href}catch(_){}if(!u)return '';if(a.type==='image')return `<img src="${esc(u)}" alt="${esc(a.name||'Imagem anexada')}" loading="lazy">`;if(a.type==='video')return `<video src="${esc(u)}" controls playsinline></video>`;if(a.type==='audio')return `<audio src="${esc(u)}" controls></audio>`;return ''}).join('');return `<article class="v212-message ${mine?'mine':''}"><small>${esc(m.sender_name||'Participante')} · ${esc(m.message_kind==='operational'?'Atualização operacional':'Conversa')} · ${esc(m.created_at?new Date(m.created_at).toLocaleString('pt-BR'):'')}</small>${esc(m.message_text||'')}${attachments}</article>`}).join(''):'<p class="v212-muted">Nenhuma mensagem ainda.</p>'}</div><div class="v212-warning">Não compartilhe telefone, WhatsApp, e-mail, links, perfis externos ou pagamentos por fora. O FECHOU também bloqueia esse tipo de envio.</div><form data-v212-form="message"><label>Mensagem</label><textarea name="message_text" maxlength="3000" placeholder="Escreva uma mensagem para a equipe…"></textarea><div class="v212-grid" style="margin-top:7px"><div><label>Tipo</label><select name="message_kind"><option value="operational">Atualização operacional (sem fila)</option><option value="speech">Conversa (exige vez concedida)</option></select></div><div><label>Anexos (até 4, 8 MB cada)</label><input name="attachments" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/ogg,audio/webm" multiple></div></div><div class="v212-actions"><button class="v212-btn" type="submit">Enviar mensagem</button><button class="v212-btn secondary" type="button" data-v212-action="refresh">Atualizar chat</button><button class="v212-btn secondary" type="button" data-v212-action="request-turn">Solicitar vez de fala</button>${client&&turns.some(t=>t.status==='pending')?`<button class="v212-btn" type="button" data-v212-action="grant-next">Conceder próxima vez</button>`:''}</div></form><section style="margin-top:12px"><h3>Fila de fala</h3>${turns.length?turns.map((t,i)=>`<div class="v212-person"><div class="v212-avatar">${i+1}</div><div class="v212-person-main"><b>${esc(t.user_name||'Participante')}</b><div class="v212-muted">${esc(statusLabel(t.status))}${t.expires_at?' · expira '+esc(new Date(t.expires_at).toLocaleTimeString('pt-BR')):''}</div>${client&&t.status==='pending'&&i===turns.findIndex(x=>x.status==='pending')?`<div class="v212-actions"><button class="v212-btn" data-v212-action="grant-turn" data-turn-id="${esc(t.id)}" type="button">Conceder fala</button></div>`:''}</div></div>`).join(''):'<p class="v212-muted">Fila vazia.</p>'}</section></section>`;
    }
   }
   body.innerHTML=html;
@@ -35070,7 +35001,7 @@ document.documentElement.lang='pt-BR';/* marcador intermediário removido; V309 
   if(s.currentRole&&!['profissional','professional'].includes(String(s.currentRole).toLowerCase()))throw new Error("A assinatura está disponível somente para contas profissionais.");
   if(p==="teste"){
    const result=await api("subscription/activate-test",{});
-   if(!result?.ok&&!result?.subscription&&!result?.preserved_active_subscription)throw new Error("O servidor não confirmou a ativação do Plano Teste.");
+   if(!result?.ok&&!result?.subscription&&!result?.preserved_active_subscription)throw new Error("Não foi possível confirmar a ativação do Plano Teste. Tente novamente.");
    if(result?.subscription){s.subscription=result.subscription;s.subscriptionPlan=String(result.subscription.plan||"teste");s.proPlan=s.subscriptionPlan;}
    else if(result?.preserved_active_subscription&&result.subscription){s.subscription=result.subscription;s.subscriptionPlan=String(result.subscription.plan||"mensal");s.proPlan=s.subscriptionPlan;}
    s.subscriptionCheckoutPending=null;
@@ -37581,7 +37512,7 @@ body{min-width:0!important}
           if (index >= 0) s.orders[index] = {...s.orders[index], ...result.order};
         }
         errorField.style.color = '#b9e4ce';
-        errorField.textContent = 'Solicitação registrada pelo servidor. Acompanhe o estado do pedido na carteira e nas notificações. O reembolso só será considerado concluído após confirmação do Asaas.';
+        errorField.textContent = 'Solicitação registrada. Acompanhe o estado do pedido na carteira e nas notificações. O reembolso só será considerado concluído após confirmação do Asaas.';
         submit.textContent = 'Solicitação registrada';
         submit.disabled = true;
         reasonField.disabled = true;
@@ -38890,7 +38821,7 @@ body{min-width:0!important}
   @media(max-width:480px){#app .v305-services-grid-3{gap:5px!important}#app .v305-services-grid-3>.order,#app .v305-services-grid-3>.home-job{padding:7px!important}}
 </style>
 <script id="fechou-v322-5-build-marker">
-  window.FECHOU_BUILD_VERSION="R16-2026-11-16";
+  window.FECHOU_BUILD_VERSION="R17-2026-11-16";
   window.FECHOU_BUILD_ID="FECHOU_R16_REQUEST_TEAM_REFUND_COMPAT";
   document.documentElement.dataset.fechouBuild="V334";
   document.documentElement.dataset.fechouVersion="V334";
@@ -44326,6 +44257,86 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 html body #app .fechou-v85-subscription p.fechou-nosub-msg:not(#x){display:block!important;font-size:13px!important;line-height:1.45!important;color:#c9d3df!important;margin:6px 0 10px!important}
 html body #app .fechou-v85-subscription:has(.fechou-nosub-msg):not(#x){display:block!important}
 html body #app .fechou-v85-subscription:has(.fechou-nosub-msg) button:not(#x){width:100%!important}
+</style>
+<script id="fechou-fix-r13-grid">
+/* R13 — 9.2: o destaque do botão grade/lista acompanha o modo ativo */
+(function(){function sync(){try{document.querySelectorAll('.v305-grid-toggle').forEach(function(b){var on=b.getAttribute('aria-pressed')==='true';var s=b.querySelectorAll('.fechou-gi');if(s.length<2)return;s[0].classList.toggle('on',!on);s[1].classList.toggle('on',on);});}catch(e){}}
+var t=null;function later(){if(t)return;t=setTimeout(function(){t=null;sync();},60);}
+function start(){sync();try{new MutationObserver(later).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-pressed']});}catch(e){}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();})();
+</script>
+<style id="fechou-fix-r13-grid-css">
+html body #app .v305-grid-toggle .fechou-gi.on:not(#x){background:#2f6fb2!important;color:#fff!important;border-color:#4f7fb8!important;box-shadow:none!important}
+</style>
+<style id="fechou-fix-r13-dup">
+/* R13 — pedido do cliente: total e aviso de materiais apareciam duas vezes */
+html body #app article.order .v135-price-breakdown ~ .total.final:not(#x),html body #app article.order .v135-price-breakdown ~ p.muted:not(#x),html body #app article.order .v135-price-breakdown ~ p:empty:not(#x){display:none!important}
+</style>
+<style id="fechou-fix-r13-menu">
+/* R13 — regra das cores: interrogação e setas em laranja */
+html body #app button.tile[data-act^="menuitem:"]:not(#x):not(#y):not(#z)::after{color:#f59a2e!important;border-color:#f59a2e!important;-webkit-text-fill-color:#f59a2e!important}
+html body #app button.tile .v100-faq-mark:not(#x){color:inherit!important}
+</style>
+<style id="fechou-fix-r13-wallet">
+/* R13 — carteira: os três botões do topo com o mesmo tamanho de letra */
+html body #app .v189-wallet-tabs button:not(#x){font-size:12px!important;font-weight:800!important;white-space:nowrap}
+</style>
+<script id="fechou-fix-r13-nosub">
+/* R13 — na tela de planos, o cartão "sem assinatura" não repete o botão Ver planos */
+(function(){function sync(){try{var pg=window.__fechouAppState&&window.__fechouAppState.page;document.querySelectorAll('.fechou-v85-subscription:has(.fechou-nosub-msg) button').forEach(function(b){b.style.display=(pg==='pricing')?'none':'';});}catch(e){}}
+var t=null;function later(){if(t)return;t=setTimeout(function(){t=null;sync();},80);}
+function start(){sync();try{new MutationObserver(later).observe(document.body,{childList:true,subtree:true});}catch(e){}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();})();
+</script>
+<style id="fechou-fix-r13-request">
+/* R13 — Solicitar serviço: o exemplo aparecia solto e de novo dentro do bloco "Exemplo" */
+html body #app small.v189-service-examples:not(#x){display:none!important}
+</style>
+<style id="fechou-fix-r13-select">
+/* R13 — regra das cores: seleção é azul (escolha da forma de pagamento) */
+html body #app .v134-pay-choice[aria-pressed="true"]:not(#x){border-color:#4f7fb8!important;box-shadow:0 0 0 1px #4f7fb8 inset!important}
+html body #app .v134-pay-choice[aria-pressed="true"] .v137-payment-radio:not(#x){border-color:#4f8fd8!important;background:transparent!important}
+html body #app .v134-pay-choice[aria-pressed="true"] .v137-payment-radio:not(#x)::after,html body #app .v134-pay-choice[aria-pressed="true"] .v137-payment-radio:not(#x)::before{background:#4f8fd8!important;border-color:#4f8fd8!important}
+</style>
+<style id="fechou-fix-r13-profile">
+/* R13 — perfil: a porcentagem aparecia duas vezes (no quadro e na barra) */
+html body #app .fechou-profile-completion-stat:not(#x){display:none!important}
+html body #app .fechou-profile-stats:not(#x){grid-template-columns:repeat(2,minmax(0,1fr))!important}
+</style>
+<style id="fechou-fix-r13-footer">
+/* R13 — rodapé: a aba tocada fica laranja (como no original), indicando onde o usuário clicou */
+html body #app nav.bottom-nav button.active:not(#x):not(#y):not(#z),html body #app nav.bottom-nav button[aria-current="page"]:not(#x):not(#y):not(#z){color:#fff!important;background:linear-gradient(135deg,#8e572e,#c17c43)!important;border-color:#dfa66d!important;box-shadow:0 3px 12px #0004!important}
+</style>
+<style id="fechou-fix-r13-values">
+/* R13 — valores e números em branco, sem quebrar no meio */
+html body #app .stat > b:not(#x){color:#fff!important;white-space:nowrap!important;font-size:clamp(15px,4.8vw,20px)!important}
+</style>
+<script id="fechou-fix-r13-text">
+/* R13 — textos: código do pedido curto, sem "·" sobrando e aviso quando não há propostas */
+(function(){
+var UUID=/\b(?:ID\s+)?([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+function fix(){try{
+ var app=document.getElementById('app');if(!app)return;
+ var w=document.createTreeWalker(app,NodeFilter.SHOW_TEXT,null),n,L=[];
+ while((n=w.nextNode()))L.push(n);
+ L.forEach(function(x){var v=x.nodeValue;if(!v||!v.trim())return;var o=v;
+  v=v.replace(UUID,function(m,a){return (/^ID\s/i.test(m)?'Pedido ':'')+'#'+a;});
+  if(/^\s*·\s+\S/.test(v)&&!x.previousSibling&&x.parentElement&&x.parentElement.children.length===0)v=v.replace(/^\s*·\s+/,'');
+  if(/\S\s+·\s*$/.test(v)&&x.parentElement&&x.parentElement.children.length===0)v=v.replace(/\s+·\s*$/,'');
+  if(v!==o)x.nodeValue=v;});
+ app.querySelectorAll('h2,h3,h4,strong,b').forEach(function(h){
+  if(/^Propostas recebidas\s*\(0\)$/i.test((h.textContent||'').trim())){
+   var box=h.parentElement;if(box&&!box.querySelector('.fechou-noprop')&&!(box.parentElement&&box.parentElement.querySelector('.fechou-noprop'))){
+    var p=document.createElement('p');p.className='muted fechou-noprop';p.textContent='Ainda não há propostas. Quando um profissional enviar, ela aparece aqui.';p.style.cssText='margin:12px 0;padding:18px 14px;text-align:center;font-size:14px;border:1px dashed rgba(120,150,190,.45);border-radius:14px';box.parentElement.insertBefore(p,box.nextSibling);}}});
+}catch(e){}}
+var t=null;function later(){if(t)return;t=setTimeout(function(){t=null;fix();},90);}
+function start(){fix();try{new MutationObserver(later).observe(document.body,{childList:true,subtree:true});}catch(e){}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();})();
+</script>
+<style id="fechou-fix-r14-azul">
+/* R14 - botao grade/lista: borda azul */
+html body #app button.v305-grid-toggle:not(#x):not(#y){border:1.5px solid #4f7fb8!important;box-shadow:0 2px 10px #0006!important}
+html body #app .v305-grid-toggle .fechou-gi.on:not(#x):not(#y){background:#2f6fb2!important;color:#fff!important;box-shadow:none!important}
 </style>
 <style id="fechou-r14-semantic-colors">
 /* R14: correção de semântica das cores, sem alterar a estrutura da carteira ou os símbolos dos meios de pagamento. */
