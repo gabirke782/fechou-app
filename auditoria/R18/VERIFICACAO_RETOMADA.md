@@ -29,3 +29,16 @@ Os testes não comprovam transações reais, contratos, assinaturas, repasses ou
 ESTADO-R18.md registra que a revisão automática recusou a implantação central R18 e uma tentativa menor de conciliação. Não contém o motivo detalhado da rejeição; esta retomada não tentou contorná-la nem repetiu o deploy.
 
 Permanecem: implantação central autorizada pelo mecanismo de aprovação; publicação compatível; sincronização do boleto com consulta atual ao provedor; recuperação do webhook; correção e captura final da carteira/reembolso; recaptura das ferramentas do chat; fluxo autenticado completo (propostas, equipe, contrato/assinatura, mensagens, mídias antes/durante/depois, conclusão, aprovação, pagamentos/reembolsos/repasse); Apple Sign In/configuração do provedor; validação do painel financeiro; auditoria integral. R18 não está aprovado para publicação nesta retomada.
+
+## Nova retomada — verificações executadas no V8
+
+Fontes do candidato recuperadas do commit fb030b078cf77c0f0acf398d71d7566731409b3c. O ambiente de shell permanece indisponível. Foi possível executar partes isoladas do código em V8, sem Node ou Deno.
+
+- 19/19 verificações dos helpers de mídia: limites de quantidade e tamanho, formatos, normalização M4A/WAV, autorização por papel, sessão, caminho da conta, travessia, falha de assinatura e validação do objeto armazenado.
+- 7/7 verificações de v195Pending: limite de consultas, isolamento por cliente, recusa de profissional, falha do provedor, saída do pedido confirmado e preservação de estado concorrente. A primeira execução encontrou indisponibilidade de structuredClone no helper de teste; substituído por cópia JSON dos dados fictícios, sem alterar o aplicativo, e repetido.
+- Resultados: RETOMADA_TESTES_V8_20261116.json. Foram removidas mecanicamente as anotações TypeScript apenas para executar as funções isoladas. Não houve compilação integral, banco, storage ou provedor real nesses testes. Não somar estes resultados aos antigos como se fossem uma homologação real.
+- Supabase confirmou novamente eworkers-api v332, admin-api v33 com JWT, fechou-auto-refund v16 e ops v26. Health sem alertas; os avisos de segurança anteriores permanecem. Nenhum grant, política ou configuração paga foi alterado.
+
+A revisão automática recusou a consulta de conciliação que reunia identificadores privados de pagamento, valores, referências externas, metadados de webhook e configuração de storage. Motivo informado: a solicitação ampla de continuidade não seria autorização específica suficiente para expor esse conteúdo financeiro. Não houve nova tentativa nem consulta indireta aos mesmos dados após a recusa. Essa consulta permanece dependente de autorização específica.
+
+A implantação R18 segue recusada conforme o checkpoint anterior; não foi repetida ou contornada. Nenhuma alteração funcional, publicação, cobrança, transferência ou reembolso nesta retomada. Sem ambiente local, não foram executados DOM completo, áudio/vídeo real ou capturas finais. O trabalho completo continua pendente.
