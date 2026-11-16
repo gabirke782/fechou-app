@@ -161,7 +161,10 @@ function canUseTemporaryTestPrice(userId: string): boolean {
   return isAdmin(userId) || explicitlyAllowed || configured.includes(userId);
 }
 function getRole(profile: Record<string, any>, _user: Record<string, any>) {
-  return String(profile.role || "").toLowerCase();
+  // O perfil persistido é a fonte de autorização. Metadados editáveis do Auth não concedem função.
+  const role = String(profile.role || "").trim().toLowerCase();
+  return ["professional", "profissional"].includes(role) ? "professional"
+    : ["client", "cliente"].includes(role) ? "client" : "";
 }
 function parseProfileData(profile: Record<string, any>) {
   return asObject(profile.profile_data);
@@ -2675,6 +2678,21 @@ async function getWalletRefundRequests(ctx: any) {
   return { ok: true, requests };
 }
 
+async function assertPayoutReviewEligibility(ctx: any, orderId: string) {
+  const info = await getOrder(ctx.admin, orderId);
+  if (String(info.professionalId || "") !== String(ctx.user.id))
+    throw Object.assign(new Error("Esta contratação não possui repasse para a sua conta."), { status: 403 });
+  const serviceState = String(info.order.service_state || info.meta.service_state || "").toLowerCase();
+  if (!info.accepted || info.paymentMode !== "contract_prepaid" || String(info.order.payment_status || "").toLowerCase() !== "approved" || serviceState !== "completed")
+    throw Object.assign(new Error("O repasse só pode ser solicitado após a confirmação do pagamento e da conclusão do serviço."), { status: 409, code: "PAYOUT_NOT_ELIGIBLE" });
+  const refundStatus = String(info.order.refund_status || info.meta.refund_status || "").toLowerCase();
+  if (["refund_pending", "pending", "requested", "processing", "refunded", "partially_refunded"].includes(refundStatus))
+    throw Object.assign(new Error("Esta contratação possui reembolso em análise ou confirmado. O repasse está bloqueado."), { status: 409, code: "PAYOUT_REFUND_PENDING" });
+  const { data: cases, error } = await ctx.admin.from("fechou_service_cases").select("id").eq("order_id", orderId).in("status", ["open", "in_review"]).limit(1);
+  if (error) throw Object.assign(new Error("Não foi possível conferir as contestações. Tente novamente em instantes."), { status: 503, code: "PAYOUT_CASE_CHECK_UNAVAILABLE" });
+  if (cases?.length) throw Object.assign(new Error("Há uma contestação aberta. Aguarde a análise antes de solicitar o repasse."), { status: 409, code: "PAYOUT_CASE_OPEN" });
+}
+
 async function requestWalletPayoutReview(ctx: any) {
   ensureUserRole(getRole(ctx.profile, ctx.user), "professional");
   const { data: payout, error: payoutError } = await ctx.admin.from("fechou_payout_profiles")
@@ -2699,13 +2717,15 @@ async function requestWalletPayoutReview(ctx: any) {
   for (const row of rows) {
     const old = map.get(String(row.order_id));
     if (old && ["requested_review", "under_review", "transfer_pending", "paid"].includes(String(old.status || ""))) continue;
+    // Revalidar a contratação: um lançamento antigo liberado não autoriza uma nova solicitação sozinho.
+    await assertPayoutReviewEligibility(ctx, String(row.order_id));
     const record = {
       user_id: ctx.user.id, order_id: String(row.order_id), amount: Number(Number(row.amount).toFixed(2)),
       status: "requested_review", pix_key_type: String(payout.pix_key_type || ""), pix_key_last4: String(payout.pix_key || "").slice(-4),
       review_reason: null, updated_at: new Date().toISOString(),
     };
     const write = old
-      ? await ctx.admin.from("fechou_wallet_payout_requests").update(record).eq("id", old.id)
+      ? await ctx.admin.from("fechou_wallet_payout_requests").update(record).eq("id", old.id).eq("status", old.status)
       : await ctx.admin.from("fechou_wallet_payout_requests").insert(record);
     if (write.error) {
       // UNIQUE(user_id,order_id) torna a solicitação idempotente sob cliques concorrentes.
