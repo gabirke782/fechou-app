@@ -207,30 +207,30 @@ async function ensureAdmin(db: any, user: any) {
     .eq("user_id", user.id).maybeSingle();
   if (error) throw new Error("Não foi possível validar a autorização administrativa.");
 
-  if (row && row.active && norm(row.email) === email) return row;
+  if (row) {
+    if (row.active === true && norm(row.email) === email) return row;
+    // Um convite antigo não pode reativar uma autorização revogada.
+    throw Object.assign(new Error("Acesso administrativo desativado ou não autorizado para esta conta."), { status: 403 });
+  }
 
   const { data: invite, error: inviteError } = await db.from("admin_access_invites")
     .select("email,active,permissions,claimed_user_id")
     .eq("email", email).eq("active", true).maybeSingle();
   if (inviteError) throw new Error("Não foi possível validar o convite administrativo.");
 
-  if (invite && (email === ADMIN_EMAIL || invite.claimed_user_id === user.id)) {
+  if (invite && invite.claimed_user_id === user.id) {
     if (invite.claimed_user_id && invite.claimed_user_id !== user.id) {
       throw Object.assign(new Error("Este convite administrativo já foi utilizado por outra conta."), { status: 403 });
     }
     const permissions = asObj(invite.permissions);
-    const { error: insertError } = await db.from("admin_access").upsert({
+    const { error: insertError } = await db.from("admin_access").insert({
       user_id: user.id,
       email,
       active: true,
       permissions,
       created_by: null
-    }, { onConflict: "user_id" });
+    });
     if (insertError) throw new Error("Não foi possível vincular a conta à lista administrativa.");
-    await db.from("admin_access_invites").update({
-      claimed_user_id: user.id,
-      claimed_at: new Date().toISOString()
-    }).eq("email", email).eq("active", true);
     return { user_id: user.id, email, active: true, permissions };
   }
 
