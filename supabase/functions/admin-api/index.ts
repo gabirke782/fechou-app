@@ -75,8 +75,8 @@ const getCorsHeaders = (req: Request) => {
     try {
       const u = new URL(origin);
       allowed = allowedOrigins.includes(u.origin) || appUrl === u.origin ||
-        (u.protocol === "https:" && (u.hostname.endsWith(".pages.dev") || u.hostname.endsWith(".workers.dev"))) ||
-        ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && u.protocol === "http:");
+        ["https://admpainel-6js.pages.dev", "https://startup5.pages.dev"].includes(u.origin) ||
+        (ASAAS_ENV === "sandbox" && (u.hostname === "localhost" || u.hostname === "127.0.0.1") && u.protocol === "http:");
     } catch { allowed = false; }
   }
   return {
