@@ -128,6 +128,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
       window.fechouIsServiceCompleted = function (o) {
         var serviceState = String((o && (o.service_state || (o.metadata && o.metadata.service_state) || o.serviceState)) || "").trim().toLowerCase();
         var status = String((o && o.status) || "").trim().toLowerCase();
+        if (/cancel/.test(serviceState) || /cancel/.test(status)) return false;
         return serviceState === "completed" || serviceState === "complete" || status.indexOf("conclu") >= 0 || status === "completed" || status === "complete" || !!(o && (o.completedAtISO || o.completed_at));
       };
       window.fechouFriendlyStatusLabel = function (value) {
@@ -24089,14 +24090,15 @@ ${
           const peerStatusClass = peerOnline ? "fc-online" : "fc-away";
           const initials = String(otherName).trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase() || "F";
           const serviceState = String(o.service_state || o.metadata?.service_state || "pending").toLowerCase();
-          const completed = ["completed","complete","done","service_completed"].includes(serviceState);
+          const cancelled = /cancel/.test(serviceState) || /cancel/.test(String(o.status || "").toLowerCase());
+          const completed = !cancelled && ["completed","complete","done","service_completed"].includes(serviceState);
           const waitingClient = serviceState === "awaiting_customer_confirmation";
           let serviceAction = "";
           let serviceLabel = "Aguardando início";
           if (serviceState === "in_progress" && !client) { serviceAction = "complete"; serviceLabel = "Finalizar serviço"; }
           else if (waitingClient && client) { serviceAction = "approve"; serviceLabel = "Aprovar serviço"; }
           else if (waitingClient && !client) { serviceAction = "already_completed"; serviceLabel = "Serviço finalizado — aguardando cliente"; }
-          else if (!client && !completed && !["in_progress","awaiting_customer_confirmation","support_review"].includes(serviceState)) {
+          else if (!client && !cancelled && !completed && !["in_progress","awaiting_customer_confirmation","support_review"].includes(serviceState)) {
             const contractActive = (typeof window.fechouBothSigned === "function")
               ? window.fechouBothSigned(o)
               : (directAgreed || !!(o.contract?.client_accepted_at && o.contract?.professional_accepted_at && modeOf(o) !== "contract_prepaid"));
@@ -24104,6 +24106,7 @@ ${
             if (contractActive && (modeOf(o) !== "contract_prepaid" || paid)) { serviceAction = "start"; serviceLabel = "Iniciar serviço"; }
           }
           if (completed || serviceState === "support_review") serviceLabel = completed ? "Serviço concluído" : "Em análise";
+          if (cancelled) { serviceAction = ""; serviceLabel = "Serviço cancelado"; }
 
           let previousMessageDay = "";
           const renderedMessages = visibleMessages.length ? visibleMessages.map((m) => {
@@ -34738,7 +34741,7 @@ document.documentElement.lang='pt-BR';/* marcador intermediário removido; V309 
  function orderEligible(o){if(!o)return false;const selected=selectedProposal(o);if(!selected)return false;const myUid=uid();if(role()==='Cliente')return true;const q=(o.proposals||[]).find(x=>String(x.id)===String(selected));return String(o.professional_id||'')===myUid||String(q?.professional_id||'')===myUid||!!(o.contract?.accepted||o.contract?.status==='active'||q?.status==='accepted'||q?.selected)}
  function addButton(card,orderId){
   const o=(st().orders||[]).find(x=>String(x.id)===String(orderId));if(!o||o.archived_at)return;
-  const candidate=role()==='Profissional'&&!o.professional_id&&!o.selected_proposal_id&&String(o.status||'').toLowerCase()==='open';
+  const candidate=role()==='Profissional'&&String(o.client_id||'')!==uid()&&!o.professional_id&&!selectedProposal(o)&&['open','novo','recebendo propostas','em negociação','nova solicitação','aguardando escolha do cliente'].includes(String(o.status||'').trim().toLowerCase())&&(o.proposals||[]).some(p=>String(p.professional_id||'')===uid()&&['pending','accepted'].includes(String(p.status||'').toLowerCase()));
   if(!orderEligible(o)&&!candidate)return;
   const actions=card.querySelector('.actions')||card;
   if(!card.querySelector('[data-v212-open]')){
