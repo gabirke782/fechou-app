@@ -71,21 +71,24 @@ const SIGNED_CONTRACT_BUCKET = "fechou-signed-contracts";
 const requestIds = new WeakMap<Request, string>();
 function requestId(req: Request) { return requestIds.get(req) || req.headers.get("x-fechou-request-id") || crypto.randomUUID(); }
 const configuredOrigins = (Deno.env.get("FECHOU_ALLOWED_ORIGINS") || "").split(",").map((x) => x.trim()).filter(Boolean);
+const normalizeCorsOrigin = (value: string) => {
+  try { return new URL(value.trim()).origin; } catch { return ""; }
+};
+const eworkersAllowedOrigins = new Set([
+  ...configuredOrigins.map(normalizeCorsOrigin),
+  normalizeCorsOrigin(Deno.env.get("FECHOU_APP_URL") || ""),
+  "https://startup5.pages.dev",
+  "http://localhost",
+  "http://127.0.0.1",
+].filter(Boolean));
+function eworkersOriginAllowed(origin: string) {
+  return !origin || eworkersAllowedOrigins.has(normalizeCorsOrigin(origin));
+}
 function corsHeadersFor(req: Request) {
   const origin = req.headers.get("origin") || "";
-  let allowed = !origin;
-  if (origin) {
-    try {
-      const parsed = new URL(origin);
-      const exact = configuredOrigins.includes(parsed.origin) || (Deno.env.get("FECHOU_APP_URL") || "").replace(/\/$/, "") === parsed.origin;
-      const codeSandbox = parsed.protocol === "https:" && (parsed.hostname.endsWith(".csb.app") || parsed.hostname.endsWith(".codesandbox.io"));
-      const cloudflarePages = parsed.protocol === "https:" && parsed.hostname.endsWith(".pages.dev");
-      const localDev = (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") && parsed.protocol === "http:";
-      allowed = exact || codeSandbox || cloudflarePages || localDev;
-    } catch (_) { allowed = false; }
-  }
+  const allowed = eworkersOriginAllowed(origin);
   return {
-    ...(allowed && origin ? { "Access-Control-Allow-Origin": origin } : {}),
+    ...(allowed && origin ? { "Access-Control-Allow-Origin": normalizeCorsOrigin(origin) } : {}),
     "Vary": "Origin",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-api-version, x-fechou-request-id",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -115,32 +118,89 @@ function text(value: unknown, max = 5000): string {
 function validUuid(value: unknown): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 }
+// Reutiliza o cliente entre requisições no mesmo isolate: mantém pool HTTP e cache JWKS.
+let sharedAdminClient: ReturnType<typeof createClient> | null = null;
+const verifiedClaimsCache = new Map<string, { claims: Record<string, any>; expiresAt: number }>();
+const profileCache = new Map<string, { profile: Record<string, any>; expiresAt: number }>();
+function trimCache<K,V extends {expiresAt:number}>(cache:Map<K,V>,max:number) {
+  const now=Date.now();
+  for (const [key,value] of cache) if (value.expiresAt<=now) cache.delete(key);
+  while (cache.size>max) { const first=cache.keys().next().value; if(first===undefined)break; cache.delete(first); }
+}
 function adminClient() {
   if (!SERVICE_ROLE_KEY) throw new Error("Falta o secret SUPABASE_SERVICE_ROLE_KEY na Edge Function.");
-  return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+  if (!sharedAdminClient) sharedAdminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  return sharedAdminClient;
 }
 async function authenticate(req: Request, admin: ReturnType<typeof adminClient>) {
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.replace(/^Bearer\s+/i, "").trim();
-  if (!token || !PUBLISHABLE_KEY) throw Object.assign(new Error("Sessão ausente ou chave pública do Supabase não configurada."), {
+  const authorization = req.headers.get("authorization") || "";
+  const token = authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!token) throw Object.assign(new Error("Sessão ausente. Entre novamente para continuar."), {
     status: 401, code: "SUPABASE_SESSION_MISSING",
     diagnostic: { stage: "supabase_authenticate", provider: "supabase", provider_status: 401, retryable: false },
   });
-  const userClient = createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-  const { data, error } = await userClient.auth.getUser(token);
-  if (error || !data?.user) throw Object.assign(new Error("A sessão do FECHOU não foi validada pelo servidor. Atualize a sessão e entre novamente se necessário."), {
-    status: 401, code: "SUPABASE_SESSION_INVALID",
-    diagnostic: { stage: "supabase_authenticate", provider: "supabase", provider_status: 401, retryable: true },
-  });
-  const { data: profile, error: profileError } = await admin
-    .from("profiles").select("id,role,full_name,phone,profile_data").eq("id", data.user.id).maybeSingle();
-  if (profileError) throw Object.assign(new Error(`Não foi possível consultar o perfil: ${profileError.message}`), { status: 500 });
-  return { user: data.user, profile: profile || {}, admin };
+
+  // verify_jwt fica desabilitado no gateway legado para aceitar tokens ES256.
+  // A validação criptográfica e de expiração é feita aqui por getClaims(),
+  // usando o JWKS do projeto (cacheado pelo supabase-js), sem getUser() por chamada.
+  let claims: Record<string, any>;
+  try {
+    const tokenDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+    const tokenKey = Array.from(new Uint8Array(tokenDigest)).map(v=>v.toString(16).padStart(2,"0")).join("");
+    const cachedClaims = verifiedClaimsCache.get(tokenKey);
+    if (cachedClaims && cachedClaims.expiresAt > Date.now()) {
+      claims = cachedClaims.claims;
+    } else {
+      const { data, error } = await admin.auth.getClaims(token);
+      if (error || !data?.claims) throw error || new Error("JWT sem claims verificadas");
+      claims = asObject(data.claims);
+      const tokenExp = Number(claims.exp || 0) * 1000;
+      const cacheUntil = Math.min(Date.now() + 20000, tokenExp ? tokenExp - 5000 : Date.now());
+      if (cacheUntil > Date.now()) {
+        verifiedClaimsCache.set(tokenKey,{claims,expiresAt:cacheUntil});
+        trimCache(verifiedClaimsCache,500);
+      }
+    }
+  } catch (cause) {
+    throw Object.assign(new Error("A sessão do FECHOU não foi validada. Atualize a sessão e entre novamente."), {
+      status: 401, code: "SUPABASE_SESSION_INVALID",
+      diagnostic: { stage: "supabase_jwks_verify", provider: "supabase", provider_status: 401, retryable: true },
+      cause,
+    });
+  }
+
+  const userId = String(claims.sub || "");
+  if (!validUuid(userId) || String(claims.role || "") !== "authenticated") {
+    throw Object.assign(new Error("É necessário entrar em uma conta FECHOU para executar esta ação."), {
+      status: 401, code: "SUPABASE_SESSION_INVALID",
+      diagnostic: { stage: "supabase_claims_check", provider: "supabase", provider_status: 401, retryable: false },
+    });
+  }
+
+  const user = {
+    id: userId,
+    email: claims.email || null,
+    phone: claims.phone || null,
+    role: claims.role,
+    aud: claims.aud,
+    user_metadata: asObject(claims.user_metadata),
+    app_metadata: asObject(claims.app_metadata),
+  };
+  let profile = profileCache.get(userId)?.profile || null;
+  if (!profile) {
+    const { data, error: profileError } = await admin
+      .from("profiles").select("id,role,full_name,phone,profile_data").eq("id", userId).maybeSingle();
+    if (profileError) throw Object.assign(new Error(`Não foi possível consultar o perfil: ${profileError.message}`), {
+      status: 503, code: "PROFILE_LOOKUP_FAILED",
+      diagnostic: { stage: "profile_lookup", provider: "supabase_db", retryable: true },
+    });
+    profile = data || {};
+    profileCache.set(userId,{profile,expiresAt:Date.now()+5000});
+    trimCache(profileCache,500);
+  }
+  return { user, profile: { ...profile }, admin };
 }
 function isAdmin(userId: string): boolean {
   const ids = (Deno.env.get("EW_ADMIN_USER_IDS") || "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -257,9 +317,18 @@ async function getOrder(admin: ReturnType<typeof adminClient>, orderId: string) 
   const paymentModeRaw = String(order.payment_method || order.payment_flow || order.client_payment_preference ||
     meta.payment_method || meta.payment_flow || meta.client_payment_preference || "direct").toLowerCase();
   const paymentMode = /asaas|fechou|prepaid|checkout/.test(paymentModeRaw) ? "contract_prepaid" : "direct";
-  // A contratação direta é concluída pela confirmação da modalidade por ambas as partes,
-  // sem criar contrato Clicksign ou exigir assinatura/pagamento pela plataforma.
+  // Pagamento direto só dispensa Clicksign quando nenhuma das partes solicitou contrato.
+  // Solicitações pendentes ou aceitas, contratos opcionais e intenção explícita na proposta
+  // precisam da assinatura eletrônica antes de liberar o início do serviço.
+  const directContractRequested = paymentMode === "direct" && (
+    meta.contract_required === true ||
+    ["pending", "accepted"].includes(String(meta.direct_contract_request_status || "").toLowerCase()) ||
+    proposal.metadata?.generate_contract === true ||
+    proposal.metadata?.contract_requested === true ||
+    proposal.metadata?.generate_contract === "yes"
+  );
   const directAgreed = paymentMode === "direct" &&
+    !directContractRequested &&
     (meta.payment_mode_agreed === "direct" || (String(order.status || "").toLowerCase() === "contracted" && Boolean(order.selected_proposal_id)));
   const accepted = contract.accepted === true || contract.status === "active" ||
     Boolean((contract.client_accepted_at && contract.professional_accepted_at) || order.contract_accepted === true) || directAgreed;
@@ -686,6 +755,44 @@ async function handleAi(payload: Record<string, any>, admin: ReturnType<typeof a
   return { ok: true, analysis, model: GEMINI_MODEL, cached: false };
 }
 
+
+async function storageWithTimeout<T>(work: () => Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(label + " excedeu " + ms + " ms.")), ms);
+  });
+  try { return await Promise.race([work(), timeout]); }
+  finally { if (timer) clearTimeout(timer); }
+}
+async function storageRetry<T>(work: () => Promise<T>, attempts = 3, baseMs = 400): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try { return await work(); }
+    catch (error) {
+      last = error;
+      const message = String((error as Error)?.message || error);
+      const retryable = /544|504|503|timeout|excedeu|network|fetch|temporar/i.test(message);
+      if (!retryable || i === attempts - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, baseMs * (i + 1) * (i + 1)));
+    }
+  }
+  throw last;
+}
+async function signedStorageUrls(db: any, bucket: string, paths: string[], expires: number) {
+  return await storageRetry(async () => {
+    const result = await storageWithTimeout(
+      () => db.storage.from(bucket).createSignedUrls(paths, expires),
+      8000,
+      "Storage createSignedUrls"
+    );
+    if (result.error) {
+      const status = (result.error as any).statusCode || (result.error as any).status || "";
+      throw new Error("Storage " + status + ": " + result.error.message);
+    }
+    return result.data || [];
+  }, 3, 400);
+}
+
 async function signOrderMedia(ctx: any, payload: Record<string, any>) {
   const orderId = text(payload.order_id, 120);
   if (!orderId) throw Object.assign(new Error("Pedido não informado."), { status: 400 });
@@ -714,18 +821,31 @@ async function signOrderMedia(ctx: any, payload: Record<string, any>) {
   const photos = Array.isArray(order.photos) ? order.photos : Array.isArray(meta.photos) ? meta.photos : [];
   const protectedPrepaid = /contract_prepaid|prepaid|asaas|fechou|checkout/i.test(String(order.payment_method||order.payment_flow||order.client_payment_preference||""));
   const attachments = protectedPrepaid && !order.service_started_at ? [] : (Array.isArray(meta.attachments) ? meta.attachments : []);
-  const signOne = async (item: any) => {
-    const path = text(item?.path || item?.storage_path || item?.storagePath, 500);
-    if (!path) return { ...item, url: "" };
-    // Uploaded request media is always under the owner's UID and this order ID.
-    const allowedPrefix = `${String(order.client_id)}/${String(order.id)}/`;
+  const allItems = [...photos, ...attachments];
+  const uniquePaths = [...new Set(allItems.map((item: any) => text(item?.path || item?.storage_path || item?.storagePath, 500)).filter(Boolean))];
+  const allowedPrefix = `${String(order.client_id)}/${String(order.id)}/`;
+  for (const path of uniquePaths) {
     if (!path.startsWith(allowedPrefix)) throw Object.assign(new Error("Caminho de anexo não pertence a este pedido."), { status: 403 });
-    const { data, error: signError } = await ctx.admin.storage.from("eworkers-chat").createSignedUrl(path, 60 * 60);
-    if (signError || !data?.signedUrl) throw Object.assign(new Error(`Não foi possível liberar a foto/anexo: ${signError?.message || "URL não gerada"}`), { status: 500 });
-    return { ...item, path, url: data.signedUrl };
+  }
+  const signedByPath = new Map<string, string>();
+  if (uniquePaths.length) {
+    const signedRows = await signedStorageUrls(ctx.admin, "eworkers-chat", uniquePaths, 60 * 60).catch((error: any) => {
+      throw Object.assign(new Error("Não foi possível liberar as fotos/anexos após três tentativas: " + text(error?.message || error, 500)), { status: 503, code: "STORAGE_SIGNED_URL_UNAVAILABLE" });
+    });
+    (signedRows || []).forEach((entry: any, index: number) => {
+      const path = text(entry?.path || uniquePaths[index], 500);
+      const url = text(entry?.signedUrl || entry?.signedURL, 2000);
+      if (path && url) signedByPath.set(path, url);
+    });
+    const missing = uniquePaths.filter(path => !signedByPath.has(path));
+    if (missing.length) throw Object.assign(new Error("Não foi possível gerar todas as URLs seguras dos anexos."), { status: 500 });
+  }
+  const signItem = (item: any) => {
+    const path = text(item?.path || item?.storage_path || item?.storagePath, 500);
+    return { ...item, ...(path ? { path, url: signedByPath.get(path) || "" } : { url: "" }) };
   };
-  const signedPhotos = await Promise.all(photos.map(signOne));
-  const signedAttachments = await Promise.all(attachments.map(signOne));
+  const signedPhotos = photos.map(signItem);
+  const signedAttachments = attachments.map(signItem);
   return { ok: true, photos: signedPhotos, attachments: signedAttachments };
 }
 
@@ -766,12 +886,20 @@ async function updateOrderMedia(ctx: any, payload: Record<string, any>) {
     .select("*").maybeSingle();
   if (error) throw Object.assign(new Error("Não foi possível vincular os anexos ao pedido: " + error.message), { status: 500 });
   if (!saved) throw Object.assign(new Error("O pedido mudou de etapa. Atualize a tela antes de anexar arquivos."), { status: 409 });
-  const sign = async (item: any) => {
-    const { data, error: signError } = await ctx.admin.storage.from("eworkers-chat").createSignedUrl(item.path, 60*60);
-    if (signError || !data?.signedUrl) throw Object.assign(new Error("Não foi possível preparar a visualização de um dos anexos."), { status: 500 });
-    return { ...item, url: data.signedUrl };
-  };
-  return { ok: true, order: saved, photos: await Promise.all(photos.map(sign)), attachments: await Promise.all(safe.map(sign)) };
+  const uploadPaths = [...new Set(safe.map((item: any) => item.path))];
+  const signedByPath = new Map<string, string>();
+  if (uploadPaths.length) {
+    const { data: signedRows, error: signError } = await ctx.admin.storage.from("eworkers-chat").createSignedUrls(uploadPaths, 60 * 60);
+    if (signError) throw Object.assign(new Error("Não foi possível preparar a visualização dos anexos."), { status: 500 });
+    (signedRows || []).forEach((entry: any, index: number) => {
+      const path = text(entry?.path || uploadPaths[index], 500);
+      const url = text(entry?.signedUrl || entry?.signedURL, 2000);
+      if (path && url) signedByPath.set(path, url);
+    });
+    if (uploadPaths.some(path => !signedByPath.has(path))) throw Object.assign(new Error("Não foi possível preparar todas as fotos/anexos."), { status: 500 });
+  }
+  const signItem = (item: any) => ({ ...item, url: signedByPath.get(item.path) || "" });
+  return { ok: true, order: saved, photos: photos.map(signItem), attachments: safe.map(signItem) };
 }
 async function setOrderPaymentMode(ctx: any, payload: Record<string, any>) {
   ensureUserRole(getRole(ctx.profile, ctx.user), "client");
@@ -819,6 +947,7 @@ async function createServiceCheckout(req: Request, ctx: any, payload: Record<str
   const info = await getOrder(ctx.admin, orderId);
   if (String(info.order.client_id) !== String(ctx.user.id)) throw Object.assign(new Error("Somente o cliente que criou o pedido pode iniciar o pagamento."), { status: 403 });
   if (info.paymentMode !== "contract_prepaid") throw Object.assign(new Error("Este pedido foi configurado para pagamento direto entre as partes, não pelo pagamento do aplicativo."), { status: 409 });
+  throw Object.assign(new Error("A cobrança após a contratação foi desativada. No FECHOU, o pagamento protegido é iniciado uma única vez na publicação do pedido."), { status: 409, code: "LEGACY_SERVICE_CHECKOUT_DISABLED" });
   if (!info.accepted) throw Object.assign(new Error("O contrato precisa estar aceito antes de iniciar o pagamento."), { status: 409 });
   const { data: signature, error: signatureError } = await ctx.admin.from("fechou_electronic_signatures")
     .select("signature_status,client_signed_at,professional_signed_at,signed_pdf_storage_path")
@@ -1461,6 +1590,18 @@ async function refreshSubscription(ctx: any) {
     }
   }
 
+  if (sub.cancel_at_period_end === true && sub.access_until) {
+    const accessUntilMs = Date.parse(String(sub.access_until));
+    if (Number.isFinite(accessUntilMs)) {
+      const stillPaid = accessUntilMs > Date.now();
+      sub = { ...sub, status: stillPaid ? "active" : "expired", cancel_at_period_end: stillPaid,
+        renewal_cancelled: true, updated_at: new Date().toISOString() };
+      pd.subscription = sub;
+      if (!stillPaid) delete pd.subscription_checkout_pending;
+      await storeProfileData(ctx.admin, ctx.user.id, pd);
+    }
+  }
+
   const finalStatus = String(sub.status || "").toLowerCase();
   const sameCheckout = !pending.checkout_id || !sub.checkout_id || String(pending.checkout_id) === String(sub.checkout_id);
   if (["active", "authorized"].includes(finalStatus) && sameCheckout) {
@@ -1500,51 +1641,117 @@ async function refreshSubscription(ctx: any) {
   const pendingStatus = Object.keys(pending).length && !active ? pending : null;
   return { ok: true, payment_confirmed: active, subscription: active ? sub : null, last_subscription: sub.plan ? sub : null, pending_subscription: pendingStatus };
 }
+function addSubscriptionCycleDate(baseValue: string, cycleValue: string): string | null {
+  const base = new Date(baseValue);
+  if (!Number.isFinite(base.getTime())) return null;
+  const cycle = String(cycleValue || "MONTHLY").toUpperCase();
+  const result = new Date(base);
+  if (cycle === "WEEKLY") result.setUTCDate(result.getUTCDate() + 7);
+  else if (cycle === "BIWEEKLY") result.setUTCDate(result.getUTCDate() + 14);
+  else {
+    const months = cycle === "YEARLY" || cycle === "ANNUALLY" ? 12 : cycle === "SEMIANNUALLY" ? 6 : cycle === "QUARTERLY" ? 3 : 1;
+    const day = result.getUTCDate();
+    result.setUTCDate(1);
+    result.setUTCMonth(result.getUTCMonth() + months);
+    const lastDay = new Date(Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)).getUTCDate();
+    result.setUTCDate(Math.min(day, lastDay));
+  }
+  return result.toISOString();
+}
+
 async function cancelSubscription(ctx: any, payload: Record<string, any>) {
   ensureUserRole(getRole(ctx.profile, ctx.user), "professional");
   const pd = parseProfileData(ctx.profile);
   const sub = asObject(pd.subscription);
+  const now = new Date();
+  const nowIso = now.toISOString();
   if (sub.provider === "manual_test" && String(sub.plan || "").toLowerCase() === "teste") {
-    // O administrador continua sendo o único que concede o acesso de teste; o titular autenticado pode encerrá-lo.
-    pd.subscription = { ...sub, status: "cancelled", cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    pd.subscription = { ...sub, status: "cancelled", cancelled_at: nowIso, updated_at: nowIso };
     delete pd.subscription_checkout_pending;
     await storeProfileData(ctx.admin, ctx.user.id, pd);
     return { ok: true, message: "O acesso de teste foi encerrado para esta conta.", subscription: pd.subscription };
   }
   const id = text(payload.id, 120);
   if (!id || !sub.id || id !== String(sub.id)) throw Object.assign(new Error("A assinatura informada não pertence a esta conta ou ainda não foi criada pelo FECHOU."), { status: 403 });
-  if(sub.renewal_mode==="manual"&&String(id).startsWith("manual_cycle:")){
-    const paymentId=String(sub.checkout_id||"");
-    if(paymentId){
-      try{
-        const remotePayment=await asaasRequest("/payments/"+encodeURIComponent(paymentId),"GET");
-        const remoteStatus=String(remotePayment.status||"").toUpperCase();
-        if(!["RECEIVED","CONFIRMED","RECEIVED_IN_CASH","REFUNDED","DELETED","CANCELED","CANCELLED"].includes(remoteStatus))
-          await asaasRequest("/payments/"+encodeURIComponent(paymentId),"DELETE");
-      }catch(e){console.warn("FECHOU manual renewal cancellation: provider invoice reconciliation required.",text((e as Error)?.message||e,240));}
+
+  let paidThrough: string | null = null;
+  let renewalStopped = false;
+  if (sub.renewal_mode === "manual" && String(id).startsWith("manual_cycle:")) {
+    const paymentId = String(sub.checkout_id || "");
+    if (paymentId) {
+      const remotePayment = await asaasRequest("/payments/" + encodeURIComponent(paymentId), "GET");
+      const remoteStatus = String(remotePayment.status || "").toUpperCase();
+      const paid = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(remoteStatus);
+      if (paid) {
+        const paidAt = remotePayment.paymentDate || remotePayment.confirmedDate || remotePayment.clientPaymentDate || remotePayment.dateCreated;
+        const planCycle = String(sub.plan || "").toLowerCase() === "anual" ? "YEARLY" : String(sub.plan || "").toLowerCase() === "semestral" ? "SEMIANNUALLY" : String(sub.cycle || "MONTHLY");
+        paidThrough = addSubscriptionCycleDate(String(paidAt || sub.activated_at || sub.created_at || ""), planCycle);
+        renewalStopped = true;
+      } else {
+        if (!["REFUNDED", "DELETED", "CANCELED", "CANCELLED", "OVERDUE"].includes(remoteStatus)) {
+          await asaasRequest("/payments/" + encodeURIComponent(paymentId), "DELETE");
+        }
+        renewalStopped = true;
+      }
+    } else {
+      renewalStopped = true;
     }
-    pd.subscription={...sub,status:"cancelled",cancelled_at:new Date().toISOString(),updated_at:new Date().toISOString()};
-    delete pd.subscription_checkout_pending;
-    await storeProfileData(ctx.admin,ctx.user.id,pd);
-    return {ok:true,message:"A renovação manual foi encerrada e a cobrança em aberto foi cancelada quando ainda estava pendente.",subscription:pd.subscription};
-  }
-  try {
-    await asaasRequest(`/subscriptions/${encodeURIComponent(id)}`, "DELETE");
-  } catch (cancelError) {
-    const cancelStatus = Number((cancelError as any)?.providerStatus || 0);
-    if (![400,404].includes(cancelStatus)) {
-      throw Object.assign(new Error("O Asaas não confirmou o cancelamento da assinatura. Atualize o status antes de tentar novamente; a renovação foi mantida protegida."), { status: 409, code: "SUBSCRIPTION_CANCEL_UNCONFIRMED", diagnostic: { stage: "subscription_cancel", provider: "asaas", provider_status: cancelStatus || null, retryable: true } });
-    }
+  } else {
     let remote: any = null;
-    try { remote = await asaasRequest(`/subscriptions/${encodeURIComponent(id)}`, "GET"); } catch (_) {}
-    const remoteStatus = String(remote?.status || "").toUpperCase();
-    if (!["INACTIVE","EXPIRED","DELETED"].includes(remoteStatus)) {
-      throw Object.assign(new Error("O Asaas não confirmou que a assinatura está inativa. Nenhuma alteração local foi feita para evitar divergência de cobrança."), { status: 409, code: "SUBSCRIPTION_CANCEL_UNCONFIRMED" });
+    try {
+      remote = await asaasRequest("/subscriptions/" + encodeURIComponent(id), "GET");
+    } catch (readError) {
+      throw Object.assign(new Error("Não foi possível consultar a assinatura no Asaas antes do cancelamento. Nenhuma alteração foi feita."), { status: 409, code: "SUBSCRIPTION_CANCEL_UNCONFIRMED" });
+    }
+    const nextDue = String(remote?.nextDueDate || sub.next_due_date || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(nextDue)) {
+      paidThrough = nextDue + "T23:59:59.999-03:00";
+    } else {
+      const paidAt = String(sub.last_payment_date || sub.activated_at || sub.created_at || "");
+      paidThrough = addSubscriptionCycleDate(paidAt, String(remote?.cycle || sub.cycle || "MONTHLY"));
+    }
+    try {
+      await asaasRequest("/subscriptions/" + encodeURIComponent(id), "DELETE");
+      renewalStopped = true;
+    } catch (cancelError) {
+      const cancelStatus = Number((cancelError as any)?.providerStatus || 0);
+      if (![400, 404].includes(cancelStatus)) {
+        throw Object.assign(new Error("O Asaas não confirmou o cancelamento da renovação. O acesso e a assinatura foram preservados; atualize o status antes de tentar novamente."), { status: 409, code: "SUBSCRIPTION_CANCEL_UNCONFIRMED", diagnostic: { stage: "subscription_cancel", provider: "asaas", provider_status: cancelStatus || null, retryable: true } });
+      }
+      let verify: any = null;
+      try { verify = await asaasRequest("/subscriptions/" + encodeURIComponent(id), "GET"); } catch (_) {}
+      if (!["INACTIVE", "EXPIRED", "DELETED"].includes(String(verify?.status || "").toUpperCase())) {
+        throw Object.assign(new Error("O Asaas não confirmou que a renovação foi encerrada. Nenhuma alteração local foi feita."), { status: 409, code: "SUBSCRIPTION_CANCEL_UNCONFIRMED" });
+      }
+      renewalStopped = true;
+      if (!paidThrough && verify?.endDate) paidThrough = String(verify.endDate).includes("T") ? String(verify.endDate) : String(verify.endDate) + "T23:59:59.999-03:00";
     }
   }
-  pd.subscription = { ...sub, status: "cancelled", updated_at: new Date().toISOString() };
+
+  const accessUntilMs = paidThrough ? Date.parse(paidThrough) : NaN;
+  const keepAccess = renewalStopped && Number.isFinite(accessUntilMs) && accessUntilMs > now.getTime();
+  pd.subscription = {
+    ...sub,
+    status: keepAccess ? "active" : "expired",
+    provider_status: renewalStopped && sub.provider !== "manual_test" ? "INACTIVE" : sub.provider_status,
+    cancel_at_period_end: keepAccess,
+    renewal_cancelled: renewalStopped,
+    renewal_cancelled_at: nowIso,
+    access_until: keepAccess ? new Date(accessUntilMs).toISOString() : (paidThrough || nowIso),
+    cancelled_at: nowIso,
+    updated_at: nowIso
+  };
+  delete pd.subscription_checkout_pending;
   await storeProfileData(ctx.admin, ctx.user.id, pd);
-  return { ok: true, message: "Assinatura cancelada. O Asaas confirmou que a renovação foi encerrada.", subscription: pd.subscription };
+  return {
+    ok: true,
+    renewal_cancelled: renewalStopped,
+    access_until: pd.subscription.access_until,
+    subscription: pd.subscription,
+    message: keepAccess
+      ? "Renovação cancelada. Seu acesso continua ativo até o fim do período já pago e não haverá nova cobrança."
+      : "Renovação cancelada. Não há período pago futuro a preservar; o acesso foi encerrado."
+  };
 }
 async function createLedgerEntry(admin: ReturnType<typeof adminClient>, row: Record<string, any>) {
   try {
@@ -1568,17 +1775,11 @@ async function createLedgerEntry(admin: ReturnType<typeof adminClient>, row: Rec
   }
 }
 async function resolveProfessionalPayoutNet(admin: any, info: any, orderId: string) {
-  const explicit = Number(info?.order?.professional_net ?? info?.meta?.professional_net ?? info?.proposal?.professional_net ?? 0);
-  if (Number.isFinite(explicit) && explicit > 0) return Number(explicit.toFixed(2));
-  const professionalId = String(info?.professionalId || "");
+  const professionalId = String(info?.professionalId || info?.order?.professional_id || "");
   if (!professionalId) return 0;
-  const { data, error } = await admin.from("fechou_wallet_ledger").select("amount,status")
-    .eq("user_id", professionalId).eq("order_id", orderId).eq("entry_type", "payout").maybeSingle();
-  if (error) throw Object.assign(new Error(`Não foi possível conferir o valor líquido previamente registrado para o profissional: ${error.message}`), { status: 500 });
-  const status = String(data?.status || "").toLowerCase();
-  const recorded = Number(data?.amount || 0);
-  if (["held", "release_ready", "available", "paid"].includes(status) && Number.isFinite(recorded) && recorded > 0) return Number(recorded.toFixed(2));
-  return 0;
+  const base = Number(info?.order?.metadata?.professional_payout_base || info?.meta?.professional_payout_base || info?.order?.total || info?.amount || 0);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  return Number((base * 0.98).toFixed(2));
 }
 
 async function updateOrderFromPayment(admin: ReturnType<typeof adminClient>, orderId: string, payment: Record<string, any>, status: string) {
@@ -1700,6 +1901,82 @@ async function readServiceEvidenceCounts(admin: any, orderId: string) {
   return counts;
 }
 
+
+async function serviceContestReply(ctx: any, payload: Record<string, any>) {
+  const orderId = text(payload.order_id, 100);
+  if (!validUuid(orderId)) throw Object.assign(new Error("Identificador da contratação inválido."), { status: 400 });
+  const message = text(payload.message, 5000);
+  if (message.length < 8) throw Object.assign(new Error("Descreva sua resposta com pelo menos oito caracteres."), { status: 400 });
+  const photosInput = Array.isArray(payload.photos) ? payload.photos : [];
+  if (photosInput.length > 5) throw Object.assign(new Error("A resposta permite no máximo cinco fotos."), { status: 400 });
+  const photos = photosInput.map((item: any) => {
+    if (typeof item === "string") return text(item, 2048);
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw Object.assign(new Error("Anexo inválido."), { status: 400 });
+    const cleanItem: Record<string, any> = {};
+    for (const key of ["storage_path", "storage_bucket", "path", "url", "file_name", "name", "mime_type", "size", "file_size", "phase"]) {
+      if (item[key] !== undefined && item[key] !== null) {
+        cleanItem[key] = typeof item[key] === "number" ? Math.max(0, Math.min(Number(item[key]) || 0, 25_000_000)) : text(item[key], 2048);
+      }
+    }
+    if (!Object.keys(cleanItem).length) throw Object.assign(new Error("Anexo inválido."), { status: 400 });
+    return cleanItem;
+  });
+  if (JSON.stringify(photos).length > 40_000) throw Object.assign(new Error("Os dados das fotos excedem o limite permitido."), { status: 413 });
+
+  const info = await getOrder(ctx.admin, orderId);
+  const professionalId = String(info.professionalId || info.order.professional_id || "");
+  if (!professionalId || professionalId !== String(ctx.user.id)) {
+    throw Object.assign(new Error("Somente o profissional selecionado desta contratação pode responder à contestação."), { status: 403 });
+  }
+
+  const { data: activeCases, error: caseReadError } = await ctx.admin.from("fechou_service_cases")
+    .select("id,status,metadata").eq("order_id", orderId)
+    .eq("case_type", "customer_contest_completion").in("status", ["open", "in_review"])
+    .order("created_at", { ascending: false }).limit(1);
+  if (caseReadError) throw Object.assign(new Error("Não foi possível validar a contestação aberta: " + caseReadError.message), { status: 503 });
+  const activeCase = activeCases?.[0];
+  if (!activeCase) throw Object.assign(new Error("Não existe uma contestação aguardando resposta para esta contratação."), { status: 409 });
+
+  const paths = photos.map((item: any) => typeof item === "string" ? item : String(item.storage_path || item.path || ""))
+    .filter(Boolean);
+  if (paths.length) {
+    if (paths.length !== photos.length || paths.some((path: string) => !path.startsWith(String(ctx.user.id) + "/" + orderId + "/evidence/contest_reply/"))) {
+      throw Object.assign(new Error("Uma ou mais fotos não pertencem a esta resposta."), { status: 403 });
+    }
+    const { data: evidenceRows, error: evidenceError } = await ctx.admin.from("fechou_service_evidence")
+      .select("storage_path").eq("order_id", orderId).eq("uploader_id", ctx.user.id)
+      .eq("phase", "contest_reply").in("storage_path", paths);
+    if (evidenceError) throw Object.assign(new Error("Não foi possível validar as fotos da resposta: " + evidenceError.message), { status: 503 });
+    const stored = new Set((evidenceRows || []).map((row: any) => String(row.storage_path)));
+    if (paths.some((path: string) => !stored.has(path))) throw Object.assign(new Error("Uma foto ainda não foi arquivada como evidência da contestação."), { status: 409 });
+  }
+
+  const { data: previousReplies, error: previousError } = await ctx.admin.from("fechou_contest_replies")
+    .select("id,created_at").eq("order_id", orderId).eq("author_id", ctx.user.id)
+    .order("created_at", { ascending: false }).limit(1);
+  if (previousError) throw Object.assign(new Error("Não foi possível verificar uma resposta anterior: " + previousError.message), { status: 503 });
+  if (previousReplies?.length) {
+    return { ok: true, id: previousReplies[0].id, created_at: previousReplies[0].created_at, reused: true };
+  }
+
+  const { data: row, error: insertError } = await ctx.admin.from("fechou_contest_replies")
+    .insert({ order_id: orderId, author_id: ctx.user.id, message, photos })
+    .select("id, order_id, author_id, message, photos, created_at").single();
+  if (insertError) throw Object.assign(new Error("Não foi possível registrar a resposta à contestação: " + insertError.message), { status: 500 });
+
+  const caseMeta = { ...(activeCase.metadata || {}), professional_reply_id: row.id, professional_replied_at: new Date().toISOString() };
+  const { error: caseUpdateError } = await ctx.admin.from("fechou_service_cases")
+    .update({ status: "in_review", metadata: caseMeta }).eq("id", activeCase.id).in("status", ["open", "in_review"]);
+  if (caseUpdateError) throw Object.assign(new Error("A resposta foi salva, mas a atualização do caso precisa de análise administrativa: " + caseUpdateError.message), { status: 503 });
+
+  const clientId = String(info.order.client_id || "");
+  if (validUuid(clientId)) {
+    await notifyOrderParticipant(ctx.admin, clientId, orderId, "contest-reply:" + String(row.id),
+      "contest_reply", "Resposta da contestação", "O profissional respondeu à contestação deste serviço. A contratação continua em análise.");
+  }
+  return { ok: true, id: row.id, created_at: row.created_at, photos_count: photos.length };
+}
+
 async function serviceAction(ctx: any, action: string, payload: Record<string, any>) {
   const orderId = text(payload.order_id, 100);
   if (!orderId) throw Object.assign(new Error("Pedido não informado."), { status: 400 });
@@ -1746,6 +2023,12 @@ async function serviceAction(ctx: any, action: string, payload: Record<string, a
     meta.service_started_at = nowIso;
     log("service_started", "Profissional registrou o início do serviço.");
     await updateOrder(ctx.admin, orderId, { ...meta, service_history: history }, "Serviço em execução", {service_started_at:nowIso});
+    if (info.paymentMode !== "contract_prepaid") {
+      await notifyOrderParticipant(ctx.admin, String(info.order.client_id), orderId,
+        "service_started_direct", "service_started",
+        "O profissional iniciou o serviço",
+        "O profissional registrou o início do serviço. O pagamento desta contratação é combinado diretamente entre as partes.");
+    }
     const { error: initialPhotoReminderError } = await ctx.admin.from("notifications").insert({
       user_id: ctx.user.id,
       type: "service_photo_before_reminder",
@@ -1755,6 +2038,53 @@ async function serviceAction(ctx: any, action: string, payload: Record<string, a
     });
     if (initialPhotoReminderError) console.warn("FECHOU: não foi possível criar o lembrete da foto inicial.", initialPhotoReminderError.message);
     return { ok: true, service_state: "in_progress", started_at: nowIso, location_recorded: !!meta.service_start_location, message: "Início do serviço registrado no histórico." };
+  }
+
+  if (action === "service/contest-completion") {
+    if (!client) throw Object.assign(new Error("Somente o cliente que contratou o serviço pode contestar a conclusão."), { status: 403 });
+    if (state !== "awaiting_customer_confirmation") throw Object.assign(new Error("Não há uma conclusão aguardando contestação."), { status: 409 });
+    const reason = text(payload.reason || payload.message || "", 5000);
+    if (reason.length < 8) throw Object.assign(new Error("Descreva o problema com pelo menos oito caracteres."), { status: 400 });
+    const photos = Array.isArray(payload.photos) ? payload.photos.slice(0, 5) : [];
+    const photoPaths = photos.map((item: any) => typeof item === "string" ? text(item, 2048) : text(item?.storage_path || item?.path, 2048)).filter(Boolean);
+    if (photos.length > 5 || (photos.length && photoPaths.length !== photos.length)) throw Object.assign(new Error("Uma ou mais fotos da contestação são inválidas."), { status: 400 });
+    if (photoPaths.some((path: string) => !path.startsWith(String(ctx.user.id) + "/" + orderId + "/evidence/contest/"))) {
+      throw Object.assign(new Error("Uma foto não pertence a esta contestação."), { status: 403 });
+    }
+    if (photoPaths.length) {
+      const { data: evidenceRows, error: evidenceError } = await ctx.admin.from("fechou_service_evidence")
+        .select("storage_path").eq("order_id", orderId).eq("uploader_id", ctx.user.id)
+        .eq("phase", "contest").in("storage_path", photoPaths);
+      if (evidenceError) throw Object.assign(new Error("Não foi possível validar as fotos da contestação: " + evidenceError.message), { status: 503 });
+      const stored = new Set((evidenceRows || []).map((row: any) => String(row.storage_path)));
+      if (photoPaths.some((path: string) => !stored.has(path))) throw Object.assign(new Error("Uma ou mais fotos ainda não foram arquivadas como evidência."), { status: 409 });
+    }
+    const { data: existingCases, error: existingCaseError } = await ctx.admin.from("fechou_service_cases")
+      .select("id,status,created_at").eq("order_id", orderId)
+      .eq("case_type", "customer_contest_completion").in("status", ["open", "in_review"])
+      .order("created_at", { ascending: false }).limit(1);
+    if (existingCaseError) throw Object.assign(new Error("Não foi possível conferir uma contestação já aberta: " + existingCaseError.message), { status: 503 });
+    if (existingCases?.length) return { ok: true, case_id: existingCases[0].id, reused: true, message: "A contestação já foi registrada e continua em análise." };
+
+    const caseMetadata = { photos, submitted_by_role: "client", event_key: "customer-contest:" + orderId };
+    const { data: newCase, error: caseInsertError } = await ctx.admin.from("fechou_service_cases").insert({
+      order_id: orderId, opened_by: ctx.user.id, case_type: "customer_contest_completion",
+      reason, status: "open", response_due_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+      metadata: caseMetadata
+    }).select("id,created_at").single();
+    if (caseInsertError) throw Object.assign(new Error("Não foi possível abrir a contestação: " + caseInsertError.message), { status: 500 });
+
+    meta.service_state = "support_review";
+    meta.contest_submitted_at = nowIso;
+    meta.active_service_case_id = newCase.id;
+    log("completion_contested", reason);
+    await updateOrder(ctx.admin, orderId, { ...meta, service_history: history }, "Contestação enviada — em análise", {
+      service_state: "support_review", contest_submitted_at: nowIso
+    });
+    if (info.professionalId) await notifyOrderParticipant(ctx.admin, String(info.professionalId), orderId,
+      "service-contest:" + String(newCase.id), "service_contest_received",
+      "Cliente contestou a conclusão", "O cliente informou um problema e enviou uma contestação. Abra a conversa para responder.");
+    return { ok: true, case_id: newCase.id, message: "Contestação enviada. A contratação e os valores permanecem bloqueados até a análise." };
   }
 
   if (action === "service/submit-completion") {
@@ -1771,7 +2101,7 @@ async function serviceAction(ctx: any, action: string, payload: Record<string, a
     meta.completion_submitted_at = nowIso;
     meta.completion_deadline_at = due;
     log("completion_submitted", "Profissional enviou a conclusão; prazo de 24 horas para o cliente.");
-    await updateOrder(ctx.admin, orderId, { ...meta, service_history: history }, "Aguardando confirmação do cliente");
+    await updateOrder(ctx.admin, orderId, { ...meta, service_history: history }, "Aguardando confirmação do cliente", { completion_submitted_at: nowIso, completion_deadline_at: due });
     await notifyOrderParticipant(ctx.admin, String(info.order.client_id), orderId, "completion_submitted", "service_completion_pending", "Serviço aguardando sua confirmação", "O profissional registrou a conclusão. Confira as fotos e os registros no chat antes de confirmar ou contestar.");
     return { ok: true, message: "Conclusão registrada. O cliente tem 24 horas para confirmar ou contestar." };
   }
@@ -1816,13 +2146,13 @@ async function serviceAction(ctx: any, action: string, payload: Record<string, a
     }
     await updateOrder(
       ctx.admin, orderId, { ...meta, service_history: history }, "Serviço concluído",
-      info.paymentMode === "contract_prepaid" ? {
+      { completed_at: nowIso, ...(info.paymentMode === "contract_prepaid" ? {
         payout_status: "release_ready",
         payout_release_ready_at: nowIso,
         payout_error: null,
         professional_net: Number(net.toFixed(2)),
         platform_fee: Number((Number(info.amount||info.order.total||0)-net).toFixed(2))
-      } : {}
+      } : {}) }
     );
     const rating = Number(payload.rating);
     if (info.professionalId && Number.isFinite(rating) && rating >= 1 && rating <= 5) {
@@ -1855,9 +2185,14 @@ async function serviceAction(ctx: any, action: string, payload: Record<string, a
       await notifyOrderParticipant(ctx.admin, String(info.professionalId), orderId, "service-review:"+orderId,
         "service_review_received", "Você recebeu uma avaliação", "O cliente registrou uma avaliação de "+rating+" de 5 estrelas para este serviço.");
     }
-    if (info.professionalId) await notifyOrderParticipant(ctx.admin, String(info.professionalId), orderId, "completion_approved", "service_completion_approved", "Conclusão confirmada pelo cliente", "O cliente confirmou a conclusão do serviço. O valor líquido está liberado para solicitar repasse; a transferência ainda depende da confirmação do Asaas.");
-    await notifyOrderParticipant(ctx.admin, String(info.order.client_id), orderId, "completion_approved_client", "service_completion_approved_client", "Serviço concluído e repasse autorizado", "A conclusão foi confirmada. O valor líquido foi liberado para solicitação de repasse; a transferência só será considerada concluída após a confirmação do Asaas.");
-    return { ok: true, message: "Conclusão confirmada. O valor líquido de todo pagamento real foi liberado para solicitar repasse. A transferência ainda depende da verificação da chave Pix, da análise de segurança e da confirmação do Asaas." };
+    if (info.paymentMode === "contract_prepaid") {
+      if (info.professionalId) await notifyOrderParticipant(ctx.admin, String(info.professionalId), orderId, "completion_approved", "service_completion_approved", "Conclusão confirmada pelo cliente", "O cliente confirmou a conclusão do serviço. O valor líquido está liberado para solicitar repasse; a transferência ainda depende da confirmação do Asaas.");
+      await notifyOrderParticipant(ctx.admin, String(info.order.client_id), orderId, "completion_approved_client", "service_completion_approved_client", "Serviço concluído e repasse autorizado", "A conclusão foi confirmada. O valor líquido foi liberado para solicitação de repasse; a transferência só será considerada concluída após a confirmação do Asaas.");
+      return { ok: true, message: "Conclusão confirmada. O valor líquido foi liberado para solicitar repasse, sujeito à verificação da chave Pix, à análise de segurança e à confirmação do Asaas." };
+    }
+    if (info.professionalId) await notifyOrderParticipant(ctx.admin, String(info.professionalId), orderId, "completion_approved_direct", "service_completion_approved", "Serviço concluído", "A conclusão foi confirmada pelo cliente. O pagamento desta contratação é combinado diretamente entre as partes; não há repasse nem liberação de saldo pelo aplicativo.");
+    await notifyOrderParticipant(ctx.admin, String(info.order.client_id), orderId, "completion_approved_client_direct", "service_completion_approved_client", "Serviço concluído", "Você confirmou a conclusão do serviço. O pagamento desta contratação é combinado diretamente entre as partes; não há repasse nem liberação de saldo pelo aplicativo.");
+    return { ok: true, message: "Conclusão confirmada. Nesta modalidade, o pagamento é combinado diretamente entre as partes; não há repasse nem liberação de valor pelo aplicativo." };
   }
 
   if (action === "service/request-review") {
@@ -2214,10 +2549,8 @@ async function sha256Hex(value: string): Promise<string> {
 }
 async function adminExecuteWalletPayout(ctx: any, payload: Record<string, any>) {
   if (!(await isAdminUser(ctx.admin, String(ctx.user.id)))) throw Object.assign(new Error("Apenas um administrador autorizado pode executar repasses."), { status: 403 });
-  if (!ASAAS_PIX_PAYOUTS_ENABLED) throw Object.assign(new Error("O envio Pix está desativado. Primeiro valide a integração em Sandbox e habilite FECHOU_ASAAS_PIX_PAYOUTS_ENABLED no Supabase."), { status: 409, code: "PIX_PAYOUTS_DISABLED" });
-  if (ASAAS_ENV === "production" && ASAAS_PIX_PAYOUTS_PRODUCTION_CONFIRMATION !== "I_ACCEPT_REAL_PIX_TRANSFERS") {
-    throw Object.assign(new Error("O envio em Produção está bloqueado. Configure FECHOU_ASAAS_PIX_PAYOUTS_PRODUCTION_CONFIRMATION=I_ACCEPT_REAL_PIX_TRANSFERS somente após homologar o Sandbox e aprovar o uso com o Asaas."), { status: 409, code: "PIX_PAYOUT_PRODUCTION_LOCKED" });
-  }
+  if (!ASAAS_PIX_PAYOUTS_ENABLED) throw Object.assign(new Error("Repasses Pix estão desativados na configuração do FECHOU. Nenhuma transferência foi enviada."), { status: 409, code: "ASAAS_PIX_PAYOUTS_DISABLED" });
+  if (ASAAS_ENV === "production" && ASAAS_PIX_PAYOUTS_PRODUCTION_CONFIRMATION !== "I_ACCEPT_REAL_PIX_TRANSFERS") throw Object.assign(new Error("A confirmação explícita para transferências Pix reais em produção não está configurada. Nenhuma transferência foi enviada."), { status: 409, code: "ASAAS_PIX_PRODUCTION_CONFIRMATION_REQUIRED" });
   assertAsaasEnvironment();
   const requestId = text(payload.request_id, 80);
   const confirmation = text(payload.confirmation, 40);
@@ -2580,16 +2913,19 @@ async function getWalletRefundRequests(ctx: any) {
   const orderIds = orderRows.map((o: any) => String(o.id)).filter(Boolean);
   if (!orderIds.length) return { ok: true, requests: [] };
 
-  const { data: ledger, error: ledgerError } = await ctx.admin.from("fechou_wallet_ledger")
-    .select("order_id,amount,status,description,created_at,updated_at")
-    .eq("user_id", ctx.user.id).eq("entry_type", "refund")
-    .in("order_id", orderIds).order("created_at", { ascending: false }).limit(300);
+  const [ledgerResult, checkoutResult] = await Promise.all([
+    ctx.admin.from("fechou_wallet_ledger")
+      .select("order_id,amount,status,description,created_at,updated_at")
+      .eq("user_id", ctx.user.id).eq("entry_type", "refund")
+      .in("order_id", orderIds).order("created_at", { ascending: false }).limit(300),
+    ctx.admin.from("fechou_asaas_checkouts")
+      .select("order_id,provider_payload,created_at")
+      .eq("user_id", ctx.user.id).in("purpose", ["service", "prepublication"])
+      .in("order_id", orderIds).order("created_at", { ascending: false }).limit(300)
+  ]);
+  const { data: ledger, error: ledgerError } = ledgerResult;
   if (ledgerError) throw Object.assign(new Error("Falha ao consultar os lançamentos de reembolso: " + ledgerError.message), { status: 500 });
-
-  const { data: checkouts, error: checkoutError } = await ctx.admin.from("fechou_asaas_checkouts")
-    .select("order_id,provider_payload,created_at")
-    .eq("user_id", ctx.user.id).in("purpose", ["service", "prepublication"])
-    .in("order_id", orderIds).order("created_at", { ascending: false }).limit(300);
+  const { data: checkouts, error: checkoutError } = checkoutResult;
   if (checkoutError) throw Object.assign(new Error("Falha ao conferir a forma de pagamento: " + checkoutError.message), { status: 500 });
 
   const ledgerByOrder = new Map<string, any[]>();
@@ -2878,51 +3214,15 @@ async function moderateChatAttachments(ctx: any, payload: Record<string, any>) {
 async function chatPartySummary(ctx: any, payload: Record<string, any>) {
   const orderId = text(payload.order_id, 100);
   if (!validUuid(orderId)) throw Object.assign(new Error("Identificador da conversa inválido."), { status: 400 });
-  const { data: order, error } = await ctx.admin.from("orders")
-    .select("id,client_id,professional_id,selected_proposal_id,metadata")
-    .eq("id", orderId).maybeSingle();
-  if (error) throw Object.assign(new Error(`Falha ao consultar participantes da conversa: ${error.message}`), { status: 500 });
-  if (!order) throw Object.assign(new Error("Conversa não encontrada."), { status: 404 });
-  let professionalId = String(order.professional_id || "");
-  if (!professionalId && order.selected_proposal_id) {
-    const { data: proposal, error: proposalError } = await ctx.admin.from("proposals")
-      .select("professional_id").eq("id", order.selected_proposal_id).maybeSingle();
-    if (proposalError) throw Object.assign(new Error(`Falha ao localizar o profissional da conversa: ${proposalError.message}`), { status: 500 });
-    professionalId = String(proposal?.professional_id || "");
-  }
-  const clientId = String(order.client_id || "");
-  if (![clientId, professionalId].includes(String(ctx.user.id)) || !clientId || !professionalId) {
-    throw Object.assign(new Error("Você não participa desta conversa."), { status: 403 });
-  }
-  const otherId = String(ctx.user.id) === clientId ? professionalId : clientId;
-  const ids = [...new Set([String(ctx.user.id), otherId])];
-  const { data: profiles, error: profileError } = await ctx.admin.from("profiles")
-    .select("id,full_name,role,profile_data").in("id", ids);
-  if (profileError) throw Object.assign(new Error(`Falha ao consultar fotos da conversa: ${profileError.message}`), { status: 500 });
-  const makeParty = async (id: string) => {
-    const row = (profiles || []).find((item: any) => String(item.id) === id);
-    if (!row) return { id, name: "", role: "", photo_url: "" };
-    const pd = asObject(row.profile_data);
-    // Aceita URL pública/assinada e foto dataURL legada salva no próprio profile_data.
-    // O limite impede payloads excessivos e só permite formatos de imagem conhecidos.
-    let photo = typeof pd.photo === "string" && /^https:\/\//i.test(pd.photo)
-      ? pd.photo
-      : typeof pd.photo === "string" && pd.photo.length <= 350000 && /^data:image\/(?:jpeg|png|webp);base64,/i.test(pd.photo)
-        ? pd.photo : "";
-    const photoPath = text(pd.photo_path || pd.avatar_path || pd.photo_storage_path, 700);
-    if (photoPath) {
-      const savedBucket = text(pd.photo_bucket, 80);
-      const bucket = ["eworkers-profile-photos", "eworkers-chat"].includes(savedBucket)
-        ? savedBucket
-        : (/profile-current|profile|avatar/i.test(photoPath) ? "eworkers-profile-photos" : "eworkers-chat");
-      try { const { data } = await ctx.admin.storage.from(bucket).createSignedUrl(photoPath, 3600); if (data?.signedUrl) photo = data.signedUrl; } catch (error) {
-        console.warn("FECHOU chat party photo unavailable", JSON.stringify({ bucket, hasPath: !!photoPath, error: text((error as Error)?.message || error, 220) }));
-      }
-    }
-    return { id, name: text(row.full_name, 120), role: text(row.role, 30), photo_url: photo };
+  // This endpoint supplies decorative avatars only. The chat already validates the
+  // order/proposal and loads participant names separately. Do not make the chat wait
+  // on extra orders/profiles/Storage queries just to render photos.
+  return {
+    ok: true,
+    own: { id: String(ctx.user.id), name: "", role: "", photo_url: "" },
+    other: { id: "", name: "", role: "", photo_url: "" },
+    photos_deferred: true,
   };
-  const [own, other] = await Promise.all([makeParty(String(ctx.user.id)), makeParty(otherId)]);
-  return { ok: true, own, other };
 }
 
 async function publicProfile(admin: ReturnType<typeof adminClient>, row: Record<string, any>) {
@@ -3185,14 +3485,18 @@ async function contractsEsignStart(ctx: any, payload: Record<string, any>) {
 async function contractsEsignStatus(ctx: any, payload: Record<string, any>) {
   const orderId = text(payload.order_id, 100);
   if (!orderId) throw Object.assign(new Error("Pedido não informado."), { status: 400 });
-  const { data, error } = await ctx.admin.from("fechou_electronic_signatures").select("order_id,client_id,professional_id,signature_status,client_signed_at,professional_signed_at,environment,updated_at,signed_pdf_storage_path")
+  const { data, error } = await ctx.admin.from("fechou_electronic_signatures").select("order_id,client_id,professional_id,signature_status,client_signed_at,professional_signed_at,environment,updated_at,signed_pdf_storage_path,envelope_id,document_id,contract_hash,client_signer_id,professional_signer_id")
     .eq("order_id", orderId).maybeSingle();
   if (error) throw Object.assign(new Error(`Falha ao consultar assinatura: ${error.message}`), { status: 500 });
-  if (!data) return { ok: true, signature_status: "not_started", current_user_signed: false };
+  if (!data) return { ok: true, signature_status: "not_started", current_user_signed: false, client_signed:false, professional_signed:false, signer_id:null, envelope_id:null, document_id:null, clicksign_document_id:null, widget_endpoint:CLICKSIGN_BASE, environment:CLICKSIGN_ENVIRONMENT };
   if (![String(data.client_id), String(data.professional_id)].includes(String(ctx.user.id))) throw Object.assign(new Error("Você não participa desta contratação."), { status: 403 });
   return {
     ok: true, signature_status: data.signature_status,
     current_user_signed: String(ctx.user.id) === String(data.client_id) ? Boolean(data.client_signed_at) : Boolean(data.professional_signed_at),
+    client_signed: Boolean(data.client_signed_at), professional_signed: Boolean(data.professional_signed_at),
+    signer_id: String(ctx.user.id) === String(data.client_id) ? data.client_signer_id : data.professional_signer_id,
+    envelope_id: data.envelope_id, document_id: data.document_id, clicksign_document_id: data.document_id,
+    document_sha256: data.contract_hash, widget_endpoint: CLICKSIGN_BASE,
     client_signed_at: data.client_signed_at, professional_signed_at: data.professional_signed_at,
     updated_at: data.updated_at, pdf_available: Boolean(data.signed_pdf_storage_path), environment: data.environment,
   };
@@ -3510,15 +3814,17 @@ async function v195Quote(ctx:any,payload:any){
  const base=temporaryTestPrice?6:Math.round(Number(d.amount)*100)/100;
  const unbounded=Number(rawFee.fixed)+base*Number(rawFee.percent)/100;
  const provider=temporaryTestPrice?0:Math.round(Math.max(Number(rawFee.min||0),Math.min(Number(rawFee.max??Number.POSITIVE_INFINITY),unbounded))*100)/100;
- const platform=temporaryTestPrice?0:Math.round(base*2)/100;
- const total=Math.round((base+provider+platform)*100)/100,expires=new Date(Date.now()+900000).toISOString();
+ const professionalPayoutBase=base;
+ const platform=Math.round((professionalPayoutBase*0.02+Number.EPSILON)*100)/100;
+ const professionalNet=Math.round((professionalPayoutBase-platform+Number.EPSILON)*100)/100;
+ const total=Math.round((base+provider+Number.EPSILON)*100)/100,expires=new Date(Date.now()+900000).toISOString();
  const {data:q,error}=await ctx.admin.from("fechou_prepublication_quotes").insert({
   draft_id:d.id,client_id:ctx.user.id,billing_type:type,base_amount:base,provider_fee:provider,platform_fee:platform,total,
-  fee_details:{fixed:Number(rawFee.fixed),percentage:Number(rawFee.percent),platform_percentage:temporaryTestPrice?0:2,rule:"Taxa administrativa consolidada: tarifa de processamento do meio + 2% do serviço",temporary_test:temporaryTestPrice},
+  fee_details:{fixed:Number(rawFee.fixed),percentage:Number(rawFee.percent),platform_percentage:2,professional_payout_base:professionalPayoutBase,professional_net:professionalNet,rule:"Total do cliente = serviço + tarifa Asaas. Comissão FECHOU de 2% descontada da base de repasse profissional.",temporary_price_test:temporaryTestPrice},
   expires_at:expires
  }).select("id,billing_type,base_amount,provider_fee,platform_fee,total,expires_at").single();
  if(error)throw Object.assign(new Error(error.message),{status:500});
- return {methods,quote:q,temporary_test_price:temporaryTestPrice};
+ return {methods,quote:{...q,professional_payout_base:professionalPayoutBase,professional_net:professionalNet},temporary_test_price:false,temporary_price_test:temporaryTestPrice};
 }
 
 
@@ -3575,7 +3881,10 @@ async function v195Pay(req:Request,ctx:any,payload:any){
  const type=text(payload.billing_type,30).toUpperCase(),metadata=asObject(asObject(d.payload).metadata),temporaryTestPrice=metadata.temporary_test_price===true;
  if(temporaryTestPrice&&!canUseTemporaryTestPrice(ctx.user.id))throw Object.assign(new Error("Modo de teste temporário não autorizado para esta conta."),{status:403,code:"TEMP_TEST_PRICE_FORBIDDEN"});
  if(temporaryTestPrice&&Math.abs(Number(d.amount||0)-6)>.005)throw Object.assign(new Error("Esta solicitação de teste foi criada com o valor antigo. Cancele este pagamento pendente e crie uma nova solicitação para usar o valor correto de R$ 6,00. Nenhuma nova cobrança foi criada."),{status:409,code:"TEMP_TEST_LEGACY_DRAFT"});
- const base=temporaryTestPrice?6:Math.round(Number(d.amount)*100)/100,provider=temporaryTestPrice?0:Number(q.provider_fee),platform=temporaryTestPrice?0:Math.round(base*2)/100,total=Math.round((base+provider+platform)*100)/100;
+ const base=temporaryTestPrice?6:Math.round(Number(d.amount)*100)/100,provider=temporaryTestPrice?0:Number(q.provider_fee);
+ const professionalPayoutBase=base,platform=Math.round((professionalPayoutBase*0.02+Number.EPSILON)*100)/100;
+ const professionalNet=Math.round((professionalPayoutBase-platform+Number.EPSILON)*100)/100;
+ const total=Math.round((base+provider+Number.EPSILON)*100)/100;
  if(type!==q.billing_type||Math.abs(Number(q.base_amount)-base)>.011||Math.abs(Number(q.platform_fee)-platform)>.011||Math.abs(Number(q.total)-total)>.011)
   throw Object.assign(new Error("A cotação expirou ou não corresponde mais ao rascunho e à taxa administrativa atual. Gere uma nova cotação antes de pagar."),{status:409,code:"PREPUBLICATION_QUOTE_MISMATCH"});
  if(q.consumed_at||new Date(q.expires_at).getTime()<=Date.now())throw Object.assign(new Error("Cotação expirada ou já utilizada. Solicite uma nova cotação."),{status:409,code:"PREPUBLICATION_QUOTE_EXPIRED"});
@@ -3586,12 +3895,61 @@ async function v195Pay(req:Request,ctx:any,payload:any){
  const ref="fechou-prepay:"+d.id+":"+q.id;
  const {data:prior,error:pr}=await ctx.admin.from("fechou_asaas_checkouts").select("*").eq("external_reference",ref).maybeSingle();
  if(pr)throw Object.assign(new Error(pr.message),{status:500});
- if(prior&&["active","paid","creating","payment_review"].includes(String(prior.status))){
-  if(prior.status==="payment_review"||(type==="CREDIT_CARD"&&prior.provider_payload?.checkout))throw Object.assign(new Error("Já existe uma tentativa anterior de cartão que precisa ser conciliada antes de qualquer nova cobrança. Atualize o status; nenhuma cobrança duplicada foi criada."),{status:409,code:"PAYMENT_RECONCILIATION_REQUIRED"});
-  return {payment_id:prior.checkout_id,amount:Number(prior.amount),billing_type:type,checkout_url:type==="BOLETO"?(prior.provider_payload?.boleto?.bank_slip_url||prior.provider_payload?.payment?.bankSlipUrl||null):null,invoice_url:prior.provider_payload?.payment?.invoiceUrl||null,bank_slip_url:prior.provider_payload?.boleto?.bank_slip_url||prior.provider_payload?.payment?.bankSlipUrl||null,pix:prior.provider_payload?.pix||null,boleto:prior.provider_payload?.boleto||null,payment_status:prior.provider_payload?.payment?.status||"PENDING",reused:true};
+ const reuseCheckout=(row:any)=>{
+  const stored=asObject(row.provider_payload);
+  return {payment_id:row.checkout_id,amount:Number(row.amount),billing_type:type,
+   checkout_url:type==="BOLETO"?(stored.boleto?.bank_slip_url||stored.payment?.bankSlipUrl||row.checkout_url||null):null,
+   invoice_url:stored.payment?.invoiceUrl||null,
+   bank_slip_url:stored.boleto?.bank_slip_url||stored.payment?.bankSlipUrl||row.checkout_url||null,
+   pix:stored.pix||null,boleto:stored.boleto||null,
+   payment_status:stored.payment?.status||"PENDING",reused:true};
+ };
+ if(prior&&prior.status==="paid")
+  throw Object.assign(new Error("Este pedido já tem uma cobrança confirmada. Nenhuma nova cobrança foi criada."),{status:409,code:"PREPUBLICATION_ALREADY_PAID"});
+ if(prior&&["creating","active","payment_review"].includes(String(prior.status))){
+  if(prior.status==="payment_review"||!prior.checkout_id||prior.status==="creating")
+   throw Object.assign(new Error("Já existe uma tentativa de pagamento em processamento ou aguardando conciliação. Atualize o status; não crie outra cobrança."),{status:409,code:"PAYMENT_RECONCILIATION_REQUIRED"});
+  const stored=asObject(prior.provider_payload);
+  const priorType=String(stored.billing_type||"").toUpperCase();
+  if(Number(prior.amount)>0&&Math.abs(Number(prior.amount)-total)>.01)
+   throw Object.assign(new Error("Já existe uma cobrança em aberto com outro valor. Atualize o status antes de qualquer nova tentativa."),{status:409,code:"ACTIVE_CHECKOUT_AMOUNT_MISMATCH"});
+  if(!priorType||priorType!==type)
+   throw Object.assign(new Error("Já existe uma cobrança em aberto para este pedido. A forma de pagamento não pode ser alterada enquanto a cobrança não for conciliada."),{status:409,code:"ACTIVE_CHECKOUT_METHOD_MISMATCH"});
+  return reuseCheckout(prior);
  }
- if(prior&&prior.status==="create_failed")throw Object.assign(new Error("A tentativa anterior falhou no provedor. Atualize o estado da cobrança antes de emitir outra, para evitar duplicidade."),{status:409});
- const rowId=await saveCheckoutLink(ctx.admin,{external_reference:ref,purpose:"prepublication",user_id:ctx.user.id,order_id:d.id,amount:total,status:"creating"});
+ if(prior&&prior.status==="create_failed")
+  throw Object.assign(new Error("A tentativa anterior falhou no provedor. Atualize o estado da cobrança antes de emitir outra, para evitar duplicidade."),{status:409});
+
+ // A chave externa é por cotação. Esta segunda verificação impede que
+ // outra cotação do mesmo rascunho emita uma cobrança simultânea ou nova
+ // cobrança depois de um pagamento já confirmado.
+ const {data:orderAttempts,error:orderAttemptsError}=await ctx.admin.from("fechou_asaas_checkouts")
+  .select("*").eq("purpose","prepublication").eq("order_id",d.id).eq("user_id",ctx.user.id)
+  .in("status",["creating","active","payment_review","paid"])
+  .order("created_at",{ascending:false}).limit(5);
+ if(orderAttemptsError)throw Object.assign(new Error("Não foi possível validar cobranças anteriores deste pedido: "+orderAttemptsError.message),{status:503});
+ const otherAttempt=(orderAttempts||[]).find((row:any)=>String(row.external_reference||"")!==ref);
+ if(otherAttempt){
+  if(otherAttempt.status==="paid")
+   throw Object.assign(new Error("Este pedido já possui pagamento confirmado. Nenhuma nova cobrança será emitida."),{status:409,code:"PREPUBLICATION_ALREADY_PAID"});
+  if(otherAttempt.status==="creating"||otherAttempt.status==="payment_review"||!otherAttempt.checkout_id)
+   throw Object.assign(new Error("Existe uma tentativa de pagamento anterior em processamento ou aguardando conciliação. Atualize o status antes de tentar novamente."),{status:409,code:"PAYMENT_RECONCILIATION_REQUIRED"});
+  const stored=asObject(otherAttempt.provider_payload);
+  const priorType=String(stored.billing_type||"").toUpperCase();
+  if(priorType!==type||Math.abs(Number(otherAttempt.amount)-total)>.01)
+   throw Object.assign(new Error("Já existe uma cobrança em aberto para este pedido com outro valor ou modalidade. Nenhuma nova cobrança foi criada."),{status:409,code:"ACTIVE_CHECKOUT_MISMATCH"});
+  return reuseCheckout(otherAttempt);
+ }
+
+ let rowId:string;
+ try {
+  rowId=await saveCheckoutLink(ctx.admin,{external_reference:ref,purpose:"prepublication",user_id:ctx.user.id,order_id:d.id,amount:total,status:"creating"});
+ } catch(error) {
+  const message=String((error as Error)?.message||error);
+  if(/23505|duplicate key|unique constraint/i.test(message))
+   throw Object.assign(new Error("Já existe uma cobrança em processamento para este pedido. Atualize o status; nenhuma segunda cobrança foi criada."),{status:409,code:"PREPUBLICATION_OPEN_PAYMENT_EXISTS"});
+  throw error;
+ }
  const providerBillingType=type;
  try{
   let cust=text(pd.asaas_customer_id||pd.subscription?.customer_id||pd.subscription_checkout_pending?.customer_id,160);
@@ -3633,7 +3991,7 @@ async function v195Pay(req:Request,ctx:any,payload:any){
    }
    const cardId=text(cardPayment?.id,160);if(!cardId)throw Object.assign(new Error("O Asaas não retornou o identificador da cobrança de cartão. Atualize o status antes de tentar novamente."),{status:502,code:"CARD_PAYMENT_ID_MISSING"});
    const safeCardPayment=v223SafePaymentSnapshot(cardPayment);
-   const {error:checkoutUpdateError}=await ctx.admin.from("fechou_asaas_checkouts").update({checkout_id:cardId,checkout_url:null,asaas_customer_id:cust,status:"active",provider_payload:{billing_type:type,payment:safeCardPayment,quote_id:q.id,provider_fee:provider,platform_fee:platform,base_amount:base,temporary_test_price:temporaryTestPrice,checkout_mode:"transparent"},updated_at:new Date().toISOString()}).eq("id",rowId);
+   const {error:checkoutUpdateError}=await ctx.admin.from("fechou_asaas_checkouts").update({checkout_id:cardId,checkout_url:null,asaas_customer_id:cust,status:"active",provider_payload:{billing_type:type,payment:safeCardPayment,quote_id:q.id,provider_fee:provider,platform_fee:platform,base_amount:base,professional_payout_base:professionalPayoutBase,professional_net:professionalNet,platform_commission_rate:2,temporary_test_price:temporaryTestPrice,checkout_mode:"transparent"},updated_at:new Date().toISOString()}).eq("id",rowId);
    if(checkoutUpdateError)throw Object.assign(new Error("O cartão foi enviado ao provedor, mas o vínculo não foi sincronizado. Não repita o pagamento; atualize o status."),{status:500,code:"CARD_LOCAL_SYNC_FAILED"});
    const {error:draftUpdateError}=await ctx.admin.from("fechou_prepublication_drafts").update({status:"payment_pending",payment_total:total,payment_id:cardId,external_reference:ref,billing_type:providerBillingType,terms_version:"V189-1",terms_accepted_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",d.id);
    if(draftUpdateError)throw Object.assign(new Error("O cartão foi processado, mas o pedido não foi sincronizado. Não repita o pagamento; atualize o status."),{status:500,code:"CARD_DRAFT_SYNC_FAILED"});
@@ -3649,7 +4007,7 @@ async function v195Pay(req:Request,ctx:any,payload:any){
   if(!id)throw new Error("Asaas não retornou ID da cobrança.");
   const {error:se}=await ctx.admin.from("fechou_asaas_checkouts").update({
    checkout_id:id,checkout_url:type==="BOLETO"?(payment?.bankSlipUrl||null):null,asaas_customer_id:cust,status:"active",
-   provider_payload:{billing_type:type,provider_billing_type:providerBillingType,payment,pix,boleto,quote_id:q.id,provider_fee:provider,platform_fee:platform,base_amount:base,temporary_test_price:temporaryTestPrice},
+   provider_payload:{billing_type:type,provider_billing_type:providerBillingType,payment,pix,boleto,quote_id:q.id,provider_fee:provider,platform_fee:platform,base_amount:base,professional_payout_base:professionalPayoutBase,professional_net:professionalNet,platform_commission_rate:2,temporary_test_price:temporaryTestPrice},
    updated_at:new Date().toISOString()
   }).eq("id",rowId);
   if(se)throw new Error(se.message);
@@ -3658,7 +4016,7 @@ async function v195Pay(req:Request,ctx:any,payload:any){
   }).eq("id",d.id);
   if(de)throw new Error(de.message);
   await ctx.admin.from("fechou_prepublication_quotes").update({consumed_at:new Date().toISOString()}).eq("id",q.id).is("consumed_at",null);
-  return {payment_id:id,amount:total,billing_type:type,checkout_url:type==="BOLETO"?(payment?.bankSlipUrl||null):null,bank_slip_url:type==="BOLETO"?(payment?.bankSlipUrl||null):null,invoice_url:payment?.invoiceUrl||null,payment_status:payment?.status||"PENDING",pix,boleto,temporary_test_price:temporaryTestPrice};
+  return {payment_id:id,amount:total,billing_type:type,checkout_url:type==="BOLETO"?(payment?.bankSlipUrl||null):null,bank_slip_url:type==="BOLETO"?(payment?.bankSlipUrl||null):null,invoice_url:payment?.invoiceUrl||null,payment_status:payment?.status||"PENDING",pix,boleto,professional_payout_base:professionalPayoutBase,professional_net:professionalNet,platform_fee:platform,platform_commission_rate:2,temporary_test_price:temporaryTestPrice};
  }catch(e){
   await ctx.admin.from("fechou_asaas_checkouts").update({status:"create_failed",provider_payload:{error:text((e as Error).message,700)}}).eq("id",rowId);
   throw e;
@@ -3713,7 +4071,7 @@ async function respondDirectContract(ctx:any,payload:any){
   .select("id,professional_id,metadata").eq("id",proposalId).eq("order_id",orderId).maybeSingle();
  if(proposalError||!proposal||String(proposal.professional_id)!==professionalId)throw Object.assign(new Error("Não foi possível validar a proposta do profissional."),{status:409});
  const now=new Date().toISOString(),accepted=choice==="accept";
- const nextMeta={...info.meta,direct_contract_request_status:accepted?"accepted":"declined",direct_contract_request_decided_at:now,direct_contract_request_decided_by:ctx.user.id};
+ const nextMeta={...info.meta,direct_contract_request_status:accepted?"accepted":"declined",contract_required:accepted,direct_contract_request_decided_at:now,direct_contract_request_decided_by:ctx.user.id};
  const {error:orderError}=await ctx.admin.from("orders").update({metadata:nextMeta,updated_at:now}).eq("id",orderId).eq("professional_id",professionalId);
  if(orderError)throw Object.assign(new Error("Não foi possível salvar sua resposta à solicitação."),{status:500});
  if(accepted){
@@ -3795,9 +4153,20 @@ async function releaseSelectedProfessional(ctx:any,payload:any){
  return {ok:true,order:updated,chat_closed:true,messages_preserved:true,message:"Profissional retirado. O pedido voltou a receber propostas; a conversa e o histórico foram preservados."};
 }
 async function v195Pending(ctx:any){
- ensureUserRole(getRole(ctx.profile,ctx.user),"client");const {data,error}=await ctx.admin.from("fechou_prepublication_drafts").select("*").eq("client_id",ctx.user.id).is("archived_at",null).in("status",["awaiting_payment","payment_pending","payment_review"]).order("created_at",{ascending:false}).limit(50);
+ ensureUserRole(getRole(ctx.profile,ctx.user),"client");
+ const {data,error}=await ctx.admin.from("fechou_prepublication_drafts")
+  .select("id,client_id,payload,amount,payment_total,payment_id,status,created_at")
+  .eq("client_id",ctx.user.id).is("archived_at",null)
+  .in("status",["awaiting_payment","payment_pending","payment_review"])
+  .order("created_at",{ascending:false}).limit(50);
  if(error)throw Object.assign(new Error(error.message),{status:500});
- return {protocol_version:189,orders:(data||[]).map((d:any)=>({id:d.id,client_id:d.client_id,title:d.payload?.title||d.payload?.service,service:d.payload?.service,description:d.payload?.description,total:Number(d.amount),payment_total:d.payment_total,payment_id:d.payment_id,payment_status:d.status,publication_status:["payment_pending","awaiting_payment"].includes(String(d.status))?"awaiting_payment":d.status,payment_method:"contract_prepaid",payment_flow:"contract_prepaid",client_payment_preference:"contract_prepaid",created_at:d.created_at}))};
+ return {protocol_version:189,orders:(data||[]).map((d:any)=>({
+  id:d.id,client_id:d.client_id,title:d.payload?.title||d.payload?.service,
+  service:d.payload?.service,description:d.payload?.description,total:Number(d.amount),
+  payment_total:d.payment_total,payment_id:d.payment_id,payment_status:d.status,
+  publication_status:["payment_pending","awaiting_payment"].includes(String(d.status))?"awaiting_payment":d.status,
+  payment_method:"contract_prepaid",payment_flow:"contract_prepaid",client_payment_preference:"contract_prepaid",created_at:d.created_at
+ }))};
 }
 async function v195PublicationStatus(ctx:any,payload:any){
  const d=await v195Draft(ctx,text(payload.order_id,100));
@@ -4014,11 +4383,12 @@ async function v195Document(ctx:any,payload:any){
   if(info.paymentMode!=="contract_prepaid"||String(info.order.payment_status).toLowerCase()!=="approved")throw Object.assign(new Error("Pagamento confirmado obrigatório."),{status:409});
   const client=String(ctx.user.id)===String(info.order.client_id),pro=String(ctx.user.id)===String(info.professionalId||"");
   if(!client&&!pro)throw Object.assign(new Error("Participante não autorizado."),{status:403});
+  if(!info.order.selected_proposal_id||!info.professionalId)throw Object.assign(new Error("O contrato só pode ser disponibilizado depois que a proposta for aceita e o profissional responsável estiver confirmado."),{status:409});
   const kind=client?"master":"proposal_annex";
   let master:any=null,baseDisplay:any=null;
   if(pro){
     if(!info.order.selected_proposal_id)throw Object.assign(new Error("O cliente ainda não selecionou um profissional para executar o serviço."),{status:409});
-    const mr=await ctx.admin.from("fechou_prepaid_signature_documents").select("*").eq("order_id",id).eq("kind","master").maybeSingle();
+    const mr=await ctx.admin.from("fechou_prepaid_signature_documents").select("id,document_text,document_sha256,document_version,signature_status,signer_signed_at,envelope_id,signer_id,document_storage_path,signed_pdf_storage_path,signed_pdf_sha256,provider_payload,document_id").eq("order_id",id).eq("kind","master").maybeSingle();
     master=mr.data;
     if(mr.error||!master||!master.document_storage_path||!master.document_sha256)throw Object.assign(new Error("O documento original desta contratação ainda não está disponível."),{status:409});
     baseDisplay={id:master.id,sha256:master.document_sha256,text:master.document_text,version:master.document_version,signature_status:master.signature_status||"draft",signed_at:master.signer_signed_at||null};
@@ -4034,14 +4404,18 @@ async function v195Document(ctx:any,payload:any){
     const hasEdits=Object.values(fields).some((value:any)=>!!String(value||"").trim());
     if(hasEdits){
       if(String(master.signature_status||"")==="signed"||master.signer_signed_at||master.envelope_id||master.signer_id)throw Object.assign(new Error("O contrato já recebeu assinatura ou entrou em assinatura e não pode mais ser alterado. Para mudar as condições, será necessário um aditivo aceito pelas duas partes."),{status:409});
-      const shared=await ctx.admin.from("fechou_electronic_signatures").select("envelope_id").eq("order_id",id).maybeSingle();
+      const [shared,annexRead]=await Promise.all([
+        ctx.admin.from("fechou_electronic_signatures").select("envelope_id").eq("order_id",id).maybeSingle(),
+        ctx.admin.from("fechou_prepaid_signature_documents").select("id,signature_status,signer_signed_at,envelope_id,provider_payload").eq("order_id",id).eq("kind","proposal_annex").eq("document_version",1).maybeSingle()
+      ]);
       if(shared.error)throw Object.assign(new Error("Não foi possível verificar se a assinatura já foi iniciada: "+shared.error.message),{status:500});
       if(shared.data?.envelope_id)throw Object.assign(new Error("A assinatura eletrônica já foi iniciada. As condições não podem ser alteradas enquanto o envelope estiver em andamento."),{status:409});
-      const annexRead=await ctx.admin.from("fechou_prepaid_signature_documents").select("*").eq("order_id",id).eq("kind","proposal_annex").eq("document_version",1).maybeSingle();
       if(annexRead.error)throw Object.assign(new Error("Não foi possível consultar a via do profissional: "+annexRead.error.message),{status:500});
       if(annexRead.data&&(annexRead.data.signature_status==="signed"||annexRead.data.signer_signed_at||annexRead.data.envelope_id))throw Object.assign(new Error("A via do profissional já entrou em assinatura e não pode ser alterada."),{status:409});
-      const clientProfile=await ctx.admin.from("profiles").select("full_name").eq("id",info.order.client_id).maybeSingle();
-      const professionalProfile=info.professionalId?await ctx.admin.from("profiles").select("full_name").eq("id",info.professionalId).maybeSingle():{data:null,error:null};
+      const [clientProfile,professionalProfile]=await Promise.all([
+        ctx.admin.from("profiles").select("full_name").eq("id",info.order.client_id).maybeSingle(),
+        info.professionalId?ctx.admin.from("profiles").select("full_name").eq("id",info.professionalId).maybeSingle():Promise.resolve({data:null,error:null})
+      ]);
       const proposalMeta=asObject(info.proposal?.metadata);
       const hasField=(key:string)=>Object.prototype.hasOwnProperty.call(requestedFields,key);
       const proposalDeadline=hasField("deadline")?fields.deadline:(info.proposal?.deadline||proposalMeta.deadline||info.proposal?.availability||proposalMeta.availability||"");
@@ -4073,9 +4447,15 @@ async function v195Document(ctx:any,payload:any){
       baseDisplay={id:master.id,sha256:master.document_sha256,text:master.document_text,version:master.document_version,signature_status:"draft",signed_at:null};
     }
   }
-  const old=await ctx.admin.from("fechou_prepaid_signature_documents").select("*").eq("order_id",id).eq("kind",kind).eq("document_version",1).maybeSingle();
+  const old=await ctx.admin.from("fechou_prepaid_signature_documents").select("id,kind,document_sha256,document_text,document_version,signature_status,document_storage_path").eq("order_id",id).eq("kind",kind).eq("document_version",1).maybeSingle();
   if(old.error)throw Object.assign(new Error(old.error.message),{status:500});
-  if(old.data)return {document:{id:old.data.id,kind:old.data.kind,sha256:old.data.document_sha256,text:old.data.document_text,version:1,signature_status:old.data.signature_status},...(baseDisplay?{contract_base:baseDisplay}:{})};
+  if(old.data){
+    const storedPath=String(old.data.document_storage_path||"");
+    if(!storedPath)throw Object.assign(new Error("O PDF original desta contratação não possui arquivo arquivado."),{status:409});
+    const {data:pdfLink,error:pdfLinkError}=await ctx.admin.storage.from("fechou-contracts").createSignedUrl(storedPath,600);
+    if(pdfLinkError||!pdfLink?.signedUrl)throw Object.assign(new Error("Não foi possível abrir o PDF original desta contratação: "+(pdfLinkError?.message||"link temporário indisponível")),{status:500});
+    return {document:{id:old.data.id,kind:old.data.kind,sha256:old.data.document_sha256,text:old.data.document_text,version:1,signature_status:old.data.signature_status,pdf_url:pdfLink.signedUrl},...(baseDisplay?{contract_base:baseDisplay}:{})};
+  }
   let body="",hash="",path="";
   if(pro){
     body=String(master.document_text||"");
@@ -4111,9 +4491,45 @@ async function v195Document(ctx:any,payload:any){
     document_storage_path:path,signature_status:"draft",
     provider_payload:pro?{shared_contract:true,first_signed_document_id:master.id,first_signed_pdf_sha256:master.signed_pdf_sha256}:{shared_contract:true}
   }).select("*").single();
-  if(error)throw Object.assign(new Error(error.message),{status:500});
-  return {document:{id:row.id,kind:row.kind,sha256:hash,text:row.document_text,version:1,signature_status:"draft"},...(baseDisplay?{contract_base:baseDisplay}:{})};
+  if(error){
+    if(error.code==="23505"){
+      const {data:existing,error:existingError}=await ctx.admin.from("fechou_prepaid_signature_documents")
+        .select("id,kind,document_sha256,document_text,document_version,signature_status,document_storage_path")
+        .eq("order_id",id).eq("kind",kind).eq("document_version",1).maybeSingle();
+      if(existingError)throw Object.assign(new Error("A minuta já existe, mas não foi possível recuperá-la: "+existingError.message),{status:503});
+      if(existing){
+        const existingPath=String(existing.document_storage_path||"");
+        const {data:existingPdf,error:existingPdfError}=await ctx.admin.storage.from("fechou-contracts").createSignedUrl(existingPath,600);
+        if(existingPdfError||!existingPdf?.signedUrl)throw Object.assign(new Error("O contrato já existe, mas o link seguro do PDF não pôde ser gerado."),{status:503});
+        return {document:{id:existing.id,kind:existing.kind,sha256:existing.document_sha256,text:existing.document_text,version:existing.document_version,signature_status:existing.signature_status,pdf_url:existingPdf.signedUrl},reused:true,...(baseDisplay?{contract_base:baseDisplay}:{})};
+      }
+    }
+    throw Object.assign(new Error(error.message),{status:500});
+  }
+  const {data:pdfLink,error:pdfLinkError}=await ctx.admin.storage.from("fechou-contracts").createSignedUrl(path,600);
+  if(pdfLinkError||!pdfLink?.signedUrl)throw Object.assign(new Error("O PDF oficial foi arquivado, mas não foi possível gerar o link temporário de visualização: "+(pdfLinkError?.message||"link indisponível")),{status:500});
+  return {document:{id:row.id,kind:row.kind,sha256:hash,text:row.document_text,version:1,signature_status:"draft",pdf_url:pdfLink.signedUrl},reused:false,...(baseDisplay?{contract_base:baseDisplay}:{})};
 }
+async function syncSharedClicksignVersion(ctx:any, orderId:string, version:number, signature:any) {
+ const envelopeId=String(signature?.envelope_id||"");
+ const remoteDocumentId=String(signature?.document_id||"");
+ if(!envelopeId||!remoteDocumentId)throw Object.assign(new Error("O envelope compartilhado não possui os identificadores necessários."),{status:503});
+ const patch={
+  envelope_id:envelopeId, external_envelope_id:envelopeId,
+  external_document_id:remoteDocumentId, clicksign_document_key:remoteDocumentId,
+  client_signer_key:signature.client_signer_id||null,
+  professional_signer_key:signature.professional_signer_id||null,
+  document_hash:signature.contract_hash||null, updated_at:new Date().toISOString()
+ };
+ const {data:contract,error:readError}=await ctx.admin.from("contracts")
+  .select("id").eq("order_id",orderId).eq("version",version).maybeSingle();
+ if(readError)throw Object.assign(new Error("Não foi possível consultar o contrato desta versão: "+readError.message),{status:503});
+ if(!contract?.id)throw Object.assign(new Error("O registro contratual desta versão não foi localizado para vincular a Clicksign."),{status:409});
+ const {error:updateError}=await ctx.admin.from("contracts").update(patch).eq("id",contract.id);
+ if(updateError)throw Object.assign(new Error("O envelope Clicksign foi criado, mas não foi possível vincular os IDs do documento e dos signatários à versão do contrato: "+updateError.message),{status:503});
+ return {contract_id:contract.id,version,envelope_id:envelopeId,clicksign_document_id:remoteDocumentId};
+}
+
 async function v195EsignStart(ctx:any,payload:any){
  const orderId=text(payload.order_id,100),docId=text(payload.document_id,100),hash=text(payload.document_sha256,64);
  if(!validUuid(orderId)||!validUuid(docId)||! /^[a-f0-9]{64}$/i.test(hash))throw Object.assign(new Error("Documento ou hash inválido."),{status:400});
@@ -4126,8 +4542,23 @@ async function v195EsignStart(ctx:any,payload:any){
  const client=String(ctx.user.id)===String(info.order.client_id),pro=String(ctx.user.id)===String(info.professionalId||"");
  if((d.kind==="master"&&!client)||(d.kind==="proposal_annex"&&!pro))throw Object.assign(new Error("Você não é o signatário designado."),{status:403});
  if(d.kind==="proposal_annex"&&!info.order.selected_proposal_id)throw Object.assign(new Error("A proposta não foi aceita."),{status:409});
- if(d.signature_status==="signed")return {signer_id:d.signer_id,document_id:d.id,document_sha256:hash,widget_endpoint:CLICKSIGN_BASE,current_user_signed:true};
- const masterRead=await ctx.admin.from("fechou_prepaid_signature_documents").select("*").eq("order_id",orderId).eq("kind","master").maybeSingle();
+ if(d.signature_status==="signed"){
+  let signedSigner=String(d.signer_id||""),signedEnvelope=String(d.envelope_id||""),signedRemoteDoc=String(d.document_id||"");
+  if(!signedSigner){
+   const {data:signedLegacy,error:signedLegacyError}=await ctx.admin.from("fechou_electronic_signatures")
+    .select("envelope_id,document_id,client_signer_id,professional_signer_id,contract_hash,client_signed_at,professional_signed_at")
+    .eq("order_id",orderId).maybeSingle();
+   if(signedLegacyError)throw Object.assign(new Error("Não foi possível recuperar o signatário da assinatura já concluída: "+signedLegacyError.message),{status:503});
+   if(signedLegacy&&String(signedLegacy.contract_hash||"")===hash){
+    signedSigner=String(client?signedLegacy.client_signer_id||"":signedLegacy.professional_signer_id||"");
+    signedEnvelope=String(signedLegacy.envelope_id||"");
+    signedRemoteDoc=String(signedLegacy.document_id||"");
+   }
+  }
+  if(!signedSigner)throw Object.assign(new Error("A assinatura deste signatário consta como concluída, mas o identificador Clicksign não pôde ser recuperado. Atualize o status antes de continuar."),{status:503});
+  return {signer_id:signedSigner,document_id:d.id,clicksign_document_id:signedRemoteDoc||null,envelope_id:signedEnvelope||null,document_sha256:hash,widget_endpoint:CLICKSIGN_BASE,current_user_signed:true,signature_status:"signed",client_signed:client,professional_signed:pro};
+ }
+ const masterRead=await ctx.admin.from("fechou_prepaid_signature_documents").select("*").eq("order_id",orderId).eq("kind","master").order("document_version",{ascending:false}).limit(1).maybeSingle();
  if(masterRead.error)throw Object.assign(new Error(masterRead.error.message),{status:500});
  const master=masterRead.data;
  const sharedMode=!!master&&String(master.signature_status||"")!=="signed"&&String(master.document_sha256||"")===String(d.document_sha256||"")&&String(master.document_storage_path||"")===String(d.document_storage_path||"");
@@ -4138,7 +4569,8 @@ async function v195EsignStart(ctx:any,payload:any){
   if(existing?.envelope_id&&existing.contract_hash===hash){
    const signerId=client?existing.client_signer_id:existing.professional_signer_id;
    if(!signerId)throw Object.assign(new Error("O identificador do signatário não foi registrado. Atualize o contrato antes de tentar novamente."),{status:409});
-   return {signer_id:signerId,document_id:d.id,clicksign_document_id:existing.document_id,envelope_id:existing.envelope_id,document_sha256:hash,widget_endpoint:CLICKSIGN_BASE,current_user_signed:client?!!existing.client_signed_at:!!existing.professional_signed_at};
+   const versionState=await syncSharedClicksignVersion(ctx,orderId,contractVersion,existing);
+   return {signer_id:signerId,document_id:d.id,clicksign_document_id:existing.document_id,envelope_id:existing.envelope_id,document_sha256:hash,widget_endpoint:CLICKSIGN_BASE,current_user_signed:client?!!existing.client_signed_at:!!existing.professional_signed_at,client_signed:!!existing.client_signed_at,professional_signed:!!existing.professional_signed_at,contract_id:versionState.contract_id,contract_version:versionState.version};
   }
   const proposalId=String(info.order.selected_proposal_id||info.proposal?.id||"");
   let professionalId=String(info.professionalId||info.order.professional_id||info.proposal?.professional_id||"");
@@ -4148,10 +4580,11 @@ async function v195EsignStart(ctx:any,payload:any){
    professionalId=String(p?.professional_id||"");
   }
   if(!proposalId||!professionalId)throw Object.assign(new Error("A proposta aceita e o profissional responsável precisam estar confirmados antes da assinatura."),{status:409});
-  const {data:contractRow,error:contractReadError}=await ctx.admin.from("contracts").select("id").eq("order_id",orderId).maybeSingle();
+  const contractVersion=Number(d.document_version||1);
+  const {data:contractRow,error:contractReadError}=await ctx.admin.from("contracts").select("id").eq("order_id",orderId).eq("version",contractVersion).maybeSingle();
   if(contractReadError)throw Object.assign(new Error("Não foi possível consultar o registro contratual: "+contractReadError.message),{status:500});
   if(!contractRow){
-   const {error:contractInsertError}=await ctx.admin.from("contracts").insert({order_id:orderId,client_id:info.order.client_id,professional_id:professionalId,proposal_id:proposalId,status:"pending",document_text:master.document_text,document_hash:hash,document_version:1,metadata:{payment_flow:"contract_prepaid",shared_document_id:master.id,shared_document_sha256:hash}});
+   const {error:contractInsertError}=await ctx.admin.from("contracts").insert({order_id:orderId,client_id:info.order.client_id,professional_id:professionalId,proposal_id:proposalId,status:"pending",document_text:master.document_text,document_hash:hash,document_version:contractVersion,version:contractVersion,metadata:{payment_flow:"contract_prepaid",shared_document_id:master.id,shared_document_sha256:hash}});
    if(contractInsertError&&contractInsertError.code!=="23505")throw Object.assign(new Error("Não foi possível preparar o registro contratual: "+contractInsertError.message),{status:500});
   }
   const {data:file,error:fileError}=await ctx.admin.storage.from("fechou-contracts").download(master.document_storage_path);
@@ -4161,7 +4594,12 @@ async function v195EsignStart(ctx:any,payload:any){
   const started=await contractsEsignStart(ctx,{order_id:orderId,pdf_base64:"data:application/pdf;base64,"+v195Base64(bytes),filename:"Contrato-FECHOU-"+orderId+".pdf",page_count:1});
   const signerId=String(started.signer_id||"");
   if(!signerId)throw Object.assign(new Error("A Clicksign não retornou o signatário desta parte."),{status:502});
-  return {signer_id:signerId,document_id:d.id,clicksign_document_id:started.document_id||null,envelope_id:started.envelope_id||null,document_sha256:hash,widget_endpoint:started.widget_endpoint||CLICKSIGN_BASE,current_user_signed:!!started.current_user_signed,signature_status:started.signature_status||"running",shared_envelope:true};
+  const {data:createdSignature,error:createdSignatureError}=await ctx.admin.from("fechou_electronic_signatures")
+   .select("order_id,envelope_id,document_id,client_signer_id,professional_signer_id,contract_hash,signature_status,client_signed_at,professional_signed_at")
+   .eq("order_id",orderId).maybeSingle();
+  if(createdSignatureError||!createdSignature||createdSignature.contract_hash!==hash)throw Object.assign(new Error("A Clicksign iniciou a assinatura, mas a conferência do envelope recém-criado falhou."),{status:503});
+  const versionState=await syncSharedClicksignVersion(ctx,orderId,contractVersion,createdSignature);
+  return {signer_id:signerId,document_id:d.id,clicksign_document_id:createdSignature.document_id||started.document_id||null,envelope_id:createdSignature.envelope_id||started.envelope_id||null,document_sha256:hash,widget_endpoint:started.widget_endpoint||CLICKSIGN_BASE,current_user_signed:!!started.current_user_signed,signature_status:started.signature_status||"running",shared_envelope:true,client_signed:!!createdSignature.client_signed_at,professional_signed:!!createdSignature.professional_signed_at,contract_id:versionState.contract_id,contract_version:versionState.version};
  }
  if(d.envelope_id&&d.document_id&&d.signer_id&&["running","awaiting_signatures"].includes(d.signature_status))return {signer_id:d.signer_id,document_id:d.id,document_sha256:hash,clicksign_document_id:d.document_id,envelope_id:d.envelope_id,widget_endpoint:CLICKSIGN_BASE,current_user_signed:Boolean(d.signer_signed_at)};
  const person=await getClicksignParticipant(ctx.admin,String(ctx.user.id),ctx.profile),file=await ctx.admin.storage.from("fechou-contracts").download(d.document_storage_path);if(file.error||!file.data)throw Object.assign(new Error("PDF arquivado não está disponível."),{status:500});
@@ -4193,8 +4631,8 @@ async function ensurePrepaidWalletLedger(admin:any,info:any){
  await createLedgerEntry(admin,{user_id:clientId,order_id:orderId,entry_type:"service_payment",amount:Number(gross.toFixed(2)),status:completed?"paid":"held",provider:"asaas",provider_reference:paymentId,description:temporaryTestPrice?(completed?"Pagamento real confirmado pelo Asaas; contratação de valor reduzido concluída e registrada normalmente.":"Pagamento real confirmado pelo Asaas; valor da contratação reduzida reservado até a conclusão."):(completed?"Pagamento do serviço confirmado e conclusão validada.":"Pagamento do serviço confirmado e reservado até a conclusão e validação da contratação."),metadata:{source:"prepaid_wallet_reconciliation",payment_id:paymentId,temporary_test_price:temporaryTestPrice,real_money_paid:true,service_completed:completed,wallet_direction:"debit"}});
  const professionalId=String(info.professionalId||order.professional_id||"");
  if(!professionalId)return {synced:true,client_entry:true,client_entry_status:completed?"paid":"held",professional_entry:false,reason:"professional_not_assigned"};
- let net=Number(order.professional_net||info.meta?.professional_net||info.proposal?.professional_net||0);
- if(!Number.isFinite(net)||net<=0)net=Number((gross/1.02).toFixed(2));
+ const payoutBase=Number(order.metadata?.professional_payout_base||info.meta?.professional_payout_base||gross);
+ const net=Number((payoutBase*0.98).toFixed(2));
  if(!(net>0)||net>gross)throw new Error("Valor líquido do profissional inválido para conciliação da carteira.");
  const refundStatus=String(order.refund_status||"").toLowerCase();
  const refunded=["refunded","partially_refunded"].includes(refundStatus);
@@ -4211,19 +4649,49 @@ async function ensurePrepaidWalletLedger(admin:any,info:any){
   :payoutStatus==="cancelled"?"Repasse cancelado em razão de reembolso registrado."
   :payoutStatus==="refund_pending"?"Repasse bloqueado enquanto o reembolso estiver em processamento."
   :"Valor líquido de pagamento real reservado; aguarda conclusão, confirmação do cliente e eventual análise de disputa.";
- await createLedgerEntry(admin,{user_id:professionalId,order_id:orderId,entry_type:"payout",amount:Number(net.toFixed(2)),status:payoutStatus,provider:"asaas",provider_reference:paymentId,description:payoutDescription,metadata:{source:"prepaid_wallet_reconciliation",payment_id:paymentId,gross_amount:Number(gross.toFixed(2)),platform_commission_rate:2,temporary_test_price:temporaryTestPrice,real_money_paid:true,withdrawable:payoutStatus==="release_ready"}});
+ await createLedgerEntry(admin,{user_id:professionalId,order_id:orderId,entry_type:"payout",amount:Number(net.toFixed(2)),status:payoutStatus,provider:"asaas",provider_reference:paymentId,description:payoutDescription,metadata:{source:"prepaid_wallet_reconciliation",payment_id:paymentId,gross_amount:Number(gross.toFixed(2)),professional_payout_base:Number(payoutBase.toFixed(2)),platform_fee:Number((payoutBase-net).toFixed(2)),platform_commission_rate:2,temporary_test_price:temporaryTestPrice,temporary_test_payout_blocked:false,real_money_paid:true,withdrawable:payoutStatus==="release_ready"}});
  return {synced:true,client_entry:true,client_entry_status:completed?"paid":"held",professional_entry:true,professional_entry_status:payoutStatus,real_money_paid:true,temporary_test_price:temporaryTestPrice};
 }
 async function syncWalletLedger(ctx:any){
- const userId=String(ctx.user.id);
+ const started=performance.now(),userId=String(ctx.user.id);
  const [clientResult,professionalResult]=await Promise.all([
-  ctx.admin.from("orders").select("id,metadata").eq("client_id",userId).eq("payment_status","approved").eq("payment_flow","contract_prepaid").order("updated_at",{ascending:false}).limit(100),
-  ctx.admin.from("orders").select("id,metadata").eq("professional_id",userId).eq("payment_status","approved").eq("payment_flow","contract_prepaid").order("updated_at",{ascending:false}).limit(100)
+  ctx.admin.from("orders").select("id,client_id,professional_id,metadata").eq("client_id",userId).eq("payment_status","approved").eq("payment_flow","contract_prepaid").order("updated_at",{ascending:false}).limit(100),
+  ctx.admin.from("orders").select("id,client_id,professional_id,metadata").eq("professional_id",userId).eq("payment_status","approved").eq("payment_flow","contract_prepaid").order("updated_at",{ascending:false}).limit(100)
  ]);
  if(clientResult.error||professionalResult.error)throw Object.assign(new Error("Não foi possível localizar as contratações pagas para conciliar a carteira."),{status:500});
- const ids=[...new Set([...(clientResult.data||[]),...(professionalResult.data||[])].map((x:any)=>String(x.id)))];let synced=0;
- for(const id of ids){const info=await getOrder(ctx.admin,id);if(info.paymentMode!=="contract_prepaid"||String(info.order.payment_status||"").toLowerCase()!=="approved")continue;await ensurePrepaidWalletLedger(ctx.admin,info);synced++;}
- return {ok:true,checked:ids.length,synchronized:synced,skipped:ids.length-synced,reservation_model:"held_until_customer_completion_confirmation"};
+ const byId=new Map<string,any>();
+ for(const row of [...(clientResult.data||[]),...(professionalResult.data||[])])byId.set(String(row.id),row);
+ const orders=[...byId.values()],ids=orders.map((x:any)=>String(x.id));
+ if(!ids.length)return {ok:true,checked:0,synchronized:0,skipped:0,pending:0,remaining:0,reservation_model:"held_until_customer_completion_confirmation"};
+ // Read existing ledger rows in one indexed batch. Previously every wallet refresh
+ // reloaded contracts/proposals and re-ran ledger upserts for as many as 200 orders.
+ const ledgerResult=await ctx.admin.from("fechou_wallet_ledger").select("order_id,user_id,entry_type").in("order_id",ids);
+ if(ledgerResult.error)throw Object.assign(new Error("Não foi possível verificar os lançamentos existentes da carteira."),{status:500});
+ const present=new Set((ledgerResult.data||[]).map((x:any)=>String(x.order_id)+"|"+String(x.user_id)+"|"+String(x.entry_type)));
+ const missing=orders.filter((o:any)=>{
+  const clientEntry=present.has(String(o.id)+"|"+String(o.client_id)+"|service_payment");
+  const professionalEntry=!o.professional_id||present.has(String(o.id)+"|"+String(o.professional_id)+"|payout");
+  return !clientEntry||!professionalEntry;
+ });
+ // Bound foreground work: at most five genuinely incomplete orders, three at once.
+ // The payment webhook remains the primary immediate ledger writer.
+ const batch=missing.slice(0,5);let synchronized=0,failed=0,cursor=0;
+ await Promise.all(Array.from({length:Math.min(3,batch.length)},async()=>{
+  while(true){
+   const index=cursor++;
+   const order=batch[index];if(!order)break;
+   try{
+    const info=await getOrder(ctx.admin,String(order.id));
+    if(info.paymentMode!=="contract_prepaid"||String(info.order.payment_status||"").toLowerCase()!=="approved")continue;
+    await ensurePrepaidWalletLedger(ctx.admin,info);synchronized++;
+   }catch(error){
+    failed++;console.warn("FECHOU wallet reconciliation deferred",JSON.stringify({order_id:String(order.id),message:text((error as Error)?.message||error,180)}));
+   }
+  }
+ }));
+ const remaining=Math.max(0,missing.length-batch.length)+failed;
+ console.info("FECHOU wallet sync",JSON.stringify({checked:ids.length,pending:missing.length,processed:batch.length,synchronized,failed,elapsed_ms:Math.round(performance.now()-started)}));
+ return {ok:true,checked:ids.length,synchronized,skipped:ids.length-missing.length,pending:missing.length,remaining,reservation_model:"held_until_customer_completion_confirmation"};
 }
 async function prepaidTeamViewer(admin:any,orderId:string,userId:string){
  const {data:team,error:teamError}=await admin.from("fechou_teams").select("id,leader_id").eq("order_id",orderId).maybeSingle();
@@ -4239,27 +4707,28 @@ async function v195EsignStatus(ctx:any,payload:any){
  if(!validUuid(id))throw Object.assign(new Error("Pedido inválido."),{status:400});
  const info=await getOrder(ctx.admin,id),client=String(ctx.user.id)===String(info.order.client_id),pro=String(ctx.user.id)===String(info.professionalId||"");
  if(info.paymentMode!=="contract_prepaid")return await contractsEsignStatus(ctx,payload);
- const teamViewer=!client&&!pro?await prepaidTeamViewer(ctx.admin,id,String(ctx.user.id)):false;
- if(!client&&!pro&&!teamViewer)throw Object.assign(new Error("Acesso negado."),{status:403});
- const kind=client?"master":"proposal_annex";
- const r=await ctx.admin.from("fechou_prepaid_signature_documents").select("*").eq("order_id",id).eq("kind",kind).order("document_version",{ascending:false}).limit(1);
- if(r.error)throw Object.assign(new Error(r.error.message),{status:500});
- const d=r.data?.[0]||null;
- const legacyRead=await ctx.admin.from("fechou_electronic_signatures").select("envelope_id,document_id,contract_hash,signature_status,client_signed_at,professional_signed_at,signed_pdf_storage_path").eq("order_id",id).maybeSingle();
+ const [teamViewer,documentsResult,legacyRead]=await Promise.all([
+  !client&&!pro?prepaidTeamViewer(ctx.admin,id,String(ctx.user.id)):Promise.resolve(false),
+  ctx.admin.from("fechou_prepaid_signature_documents").select("id,kind,document_sha256,signature_status,signer_signed_at,signed_pdf_storage_path,document_version").eq("order_id",id).order("document_version",{ascending:false}),
+  ctx.admin.from("fechou_electronic_signatures").select("envelope_id,document_id,client_signer_id,professional_signer_id,contract_hash,signature_status,client_signed_at,professional_signed_at,signed_pdf_storage_path,environment").eq("order_id",id).maybeSingle()
+ ]);
+ if(documentsResult.error)throw Object.assign(new Error(documentsResult.error.message),{status:500});
  if(legacyRead.error)throw Object.assign(new Error("Não foi possível consultar o status da assinatura compartilhada: "+legacyRead.error.message),{status:500});
+ if(!client&&!pro&&!teamViewer)throw Object.assign(new Error("Acesso negado."),{status:403});
+ const documents=documentsResult.data||[];
+ const kind=client?"master":"proposal_annex";
+ const d=documents.find((row:any)=>row.kind===kind)||null;
  const legacy=legacyRead.data;
  if(legacy?.envelope_id&&d&&String(legacy.contract_hash||"")===String(d.document_sha256||"")){
   const clientSigned=!!legacy.client_signed_at,professionalSigned=!!legacy.professional_signed_at,complete=String(legacy.signature_status||"")==="signed"&&!!legacy.signed_pdf_storage_path;
   if(complete&&String(info.order.payment_status||"").toLowerCase()==="approved")await ensurePrepaidWalletLedger(ctx.admin,info);
-  return {signature_status:legacy.signature_status||"running",current_user_signed:teamViewer?false:(client?clientSigned:professionalSigned),viewer_only:teamViewer,pdf_available:complete,document_id:d.id,document_sha256:d.document_sha256,master_signed:clientSigned,proposal_annex_signed:professionalSigned,shared_envelope:true};
+  return {signature_status:legacy.signature_status||"running",current_user_signed:teamViewer?false:(client?clientSigned:professionalSigned),signer_id:teamViewer?null:(client?legacy.client_signer_id:legacy.professional_signer_id),viewer_only:teamViewer,pdf_available:complete,document_id:d.id,document_sha256:d.document_sha256,envelope_id:legacy.envelope_id||null,clicksign_document_id:legacy.document_id||null,widget_endpoint:CLICKSIGN_BASE,environment:CLICKSIGN_ENVIRONMENT,master_signed:clientSigned,proposal_annex_signed:professionalSigned,client_signed:clientSigned,professional_signed:professionalSigned,shared_envelope:true};
  }
- const all=await ctx.admin.from("fechou_prepaid_signature_documents").select("kind,signature_status,signer_signed_at,signed_pdf_storage_path").eq("order_id",id);
- if(all.error)throw Object.assign(new Error(all.error.message),{status:500});
- const master=(all.data||[]).some((x:any)=>x.kind==="master"&&x.signature_status==="signed"&&x.signer_signed_at&&x.signed_pdf_storage_path);
- const annex=(all.data||[]).some((x:any)=>x.kind==="proposal_annex"&&x.signature_status==="signed"&&x.signer_signed_at&&x.signed_pdf_storage_path);
+ const master=documents.some((x:any)=>x.kind==="master"&&x.signature_status==="signed"&&x.signer_signed_at&&x.signed_pdf_storage_path);
+ const annex=documents.some((x:any)=>x.kind==="proposal_annex"&&x.signature_status==="signed"&&x.signer_signed_at&&x.signed_pdf_storage_path);
  const complete=master&&annex;
  if(complete&&String(info.order.payment_status||"").toLowerCase()==="approved")await ensurePrepaidWalletLedger(ctx.admin,info);
- return {signature_status:complete?"signed":d?.signature_status||"not_started",current_user_signed:teamViewer?false:Boolean(d?.signer_signed_at),viewer_only:teamViewer,pdf_available:complete,document_id:d?.id||null,document_sha256:d?.document_sha256||null,master_signed:master,proposal_annex_signed:annex};
+ return {signature_status:complete?"signed":d?.signature_status||"not_started",current_user_signed:teamViewer?false:Boolean(d?.signer_signed_at),signer_id:teamViewer?null:(d?.signer_id||null),viewer_only:teamViewer,pdf_available:complete,document_id:d?.id||null,document_sha256:d?.document_sha256||null,envelope_id:d?.envelope_id||null,clicksign_document_id:d?.document_id||null,widget_endpoint:CLICKSIGN_BASE,environment:CLICKSIGN_ENVIRONMENT,master_signed:master,proposal_annex_signed:annex,client_signed:master,professional_signed:annex};
 }
 async function v195EsignDownload(ctx:any,payload:any){
  const orderId=text(payload.order_id,100);
@@ -4309,7 +4778,12 @@ async function teamRespond(ctx:any,p:any){const id=text(p.invite_id,80),decision
 async function teamReview(ctx:any,p:any){const id=text(p.participant_id,80),decision=text(p.decision,20);if(!validUuid(id)||!["approve","reject"].includes(decision))throw Object.assign(new Error("Decisão inválida."),{status:400});const {data:part}=await ctx.admin.from("fechou_team_participants").select("*").eq("id",id).maybeSingle();if(!part)throw Object.assign(new Error("Colaborador não encontrado."),{status:404});const {data:team}=await ctx.admin.from("fechou_teams").select("*").eq("id",part.team_id).maybeSingle();if(!team)throw Object.assign(new Error("Equipe não encontrada."),{status:404});const {order}=await getOrder(ctx.admin,String(team.order_id));if(String(order.client_id)!==String(ctx.user.id))throw Object.assign(new Error("Somente o cliente aprova os colaboradores."),{status:403});if(part.status!=="pending_client_approval")throw Object.assign(new Error("Este colaborador já foi analisado."),{status:409});const ok=decision==="approve",now=new Date().toISOString();const {data:saved,error}=await ctx.admin.from("fechou_team_participants").update({status:ok?"approved":"rejected",client_approved_at:ok?now:null,joined_at:ok?now:null,updated_at:now}).eq("id",id).eq("status","pending_client_approval").select("*").maybeSingle();if(error||!saved)throw Object.assign(new Error("Não foi possível salvar sua decisão."),{status:409});if(!ok)await ctx.admin.from("fechou_team_invites").update({status:"declined_by_client",updated_at:now}).eq("id",part.invite_id);const {count:stillApproved,error:countError}=await ctx.admin.from("fechou_team_participants").select("id",{count:"exact",head:true}).eq("team_id",team.id).eq("status","approved");if(countError)throw Object.assign(new Error("Não foi possível confirmar o estado dos participantes da equipe."),{status:500});await ctx.admin.from("fechou_teams").update({status:(ok||(stillApproved||0)>0)?"active":"awaiting_client_review",updated_at:now}).eq("id",team.id);await teamNotify(ctx.admin,String(part.user_id),String(order.id),ok?"team_client_approved":"team_client_rejected",ok?"Cliente aprovou sua participação":"Cliente não aprovou sua participação",ok?"Você foi incluído na equipe e pode acessar o chat.":"O cliente não aprovou sua participação.",{team_id:team.id});return {participant:saved};}
 async function teamAdvance(admin:any,teamId:string,orderId:string){const {data:rows}=await admin.from("fechou_team_turns").select("*").eq("team_id",teamId).eq("status","granted").order("granted_at",{ascending:true}).limit(1);const active=rows?.[0];if(active&&active.expires_at&&Date.parse(active.expires_at)<=Date.now()){await admin.from("fechou_team_turns").update({status:"timed_out",ended_at:new Date().toISOString()}).eq("id",active.id).eq("status","granted");await teamNotify(admin,String(active.user_id),orderId,"team_turn_timeout","Sua vez de falar terminou","Sem atividade por 30 segundos, a vez foi passada à próxima pessoa.",{team_id:teamId});const {data:pending}=await admin.from("fechou_team_turns").select("*").eq("team_id",teamId).eq("status","pending").order("requested_at",{ascending:true}).limit(1);if(pending?.[0]){const now=new Date();const {data:granted}=await admin.from("fechou_team_turns").update({status:"granted",granted_at:now.toISOString(),heartbeat_at:now.toISOString(),expires_at:new Date(now.getTime()+30000).toISOString()}).eq("id",pending[0].id).eq("status","pending").select("*").maybeSingle();if(granted)await teamNotify(admin,String(granted.user_id),orderId,"team_turn_granted","Sua vez de falar","A fila avançou e você recebeu a vez de fala.",{team_id:teamId});}}}
 async function teamList(ctx:any,p:any){
- const id=text(p.order_id,80),orderInfo=await teamOrder(ctx,id),order=orderInfo.order,uid=String(ctx.user.id),{data:team,error:teamError}=await ctx.admin.from("fechou_teams").select("*").eq("order_id",id).maybeSingle();
+ const id=text(p.order_id,80),uid=String(ctx.user.id);
+ const [orderInfoResult,teamResult]=await Promise.all([
+  teamOrder(ctx,id),
+  ctx.admin.from("fechou_teams").select("*").eq("order_id",id).maybeSingle()
+ ]);
+ const orderInfo=orderInfoResult,order=orderInfo.order,team=teamResult.data,teamError=teamResult.error;
  if(teamError)throw Object.assign(new Error("Não foi possível consultar a equipe."),{status:500});
  const client=String(order.client_id)===uid;
  const assigned=String(orderInfo.professionalId||"")===uid;
@@ -4318,11 +4792,13 @@ async function teamList(ctx:any,p:any){
  if(!client&&!leader&&!assigned&&!candidate)throw Object.assign(new Error("Somente o cliente, o profissional responsável ou o encarregado em planejamento pode acessar esta equipe."),{status:403});
  if(!team)return {team:null,leader:null,invites:[],participants:[],messages:[],turns:[],viewer:{client:false,leader:candidate,member:false,invitee:false,candidate},order:{id:order.id,service:order.service,description:order.description,region_approx:order.region_approx||order.region||""},financial_notice:"Equipe em planejamento; ainda não há contratação nem remuneração reservada."};
  const d=await teamGet(ctx,id),{order:verifiedOrder,client:verifiedClient,leader:verifiedLeader}=d;
- const {data:leaderRow,error:leaderError}=await ctx.admin.from("profiles").select("id,full_name,role,category,services,profile_data").eq("id",team.leader_id).maybeSingle();
+ const [leaderResult,ownPartResult]=await Promise.all([
+  ctx.admin.from("profiles").select("id,full_name,role,category,services,profile_data").eq("id",team.leader_id).maybeSingle(),
+  ctx.admin.from("fechou_team_participants").select("id,status").eq("team_id",team.id).eq("user_id",uid).maybeSingle()
+ ]);
+ const leaderRow=leaderResult.data,leaderError=leaderResult.error,ownPart=ownPartResult.data;
  if(leaderError)throw Object.assign(new Error("Falha ao carregar o encarregado da equipe."),{status:500});
  const leaderProfile=leaderRow?await publicProfile(ctx.admin,leaderRow):{id:team.leader_id,full_name:"Encarregado da equipe"};
- const {data:ownInv}=await ctx.admin.from("fechou_team_invites").select("id").eq("team_id",team.id).eq("invited_user_id",uid).limit(1);
- const {data:ownPart}=await ctx.admin.from("fechou_team_participants").select("id,status").eq("team_id",team.id).eq("user_id",uid).maybeSingle();
  const member=ownPart?.status==="approved",invitee=!verifiedClient&&!verifiedLeader&&!member;
  let iq=ctx.admin.from("fechou_team_invites").select("*").eq("team_id",team.id).order("created_at");
  if(invitee||member)iq=iq.eq("invited_user_id",uid);else if(verifiedClient)iq=iq.in("status",["accepted","declined_by_client"]);
@@ -4333,19 +4809,39 @@ async function teamList(ctx:any,p:any){
  const shaped=inv.map((x:any)=>({...x,...((verifiedLeader||invitee||member)&&cm.has(x.id)?{compensation:cm.get(x.id)}:{})}));
  const {data:parts,error:pe}=await ctx.admin.from("fechou_team_participants").select("*").eq("team_id",team.id).in("status",verifiedClient||verifiedLeader?["pending_client_approval","approved","rejected"]:["approved"]).order("created_at");
  if(pe)throw Object.assign(new Error("Falha ao consultar participantes."),{status:500});
- const shapedParts=[];
- for(const part of parts||[]){const {data:profile}=await ctx.admin.from("profiles").select("id,full_name,role,category,services,profile_data").eq("id",part.user_id).maybeSingle();if(profile)shapedParts.push({...part,profile:await publicProfile(ctx.admin,profile)});}
+ const shapedParts=(await Promise.all((parts||[]).map(async(part:any)=>{
+  const {data:profile,error}=await ctx.admin.from("profiles").select("id,full_name,role,category,services,profile_data").eq("id",part.user_id).maybeSingle();
+  if(error||!profile)return null;
+  return {...part,profile:await publicProfile(ctx.admin,profile)};
+ }))).filter(Boolean);
  let messages:any[]=[],turns:any[]=[];const groupActive=member||(parts||[]).some((x:any)=>x.status==="approved");
  if((verifiedClient||verifiedLeader||member)&&groupActive){
   await teamAdvance(ctx.admin,String(team.id),String(verifiedOrder.id));
-  const {data:msgs,error:me}=await ctx.admin.from("fechou_team_messages").select("*").eq("team_id",team.id).order("created_at",{ascending:false}).limit(100);
-  if(me)throw Object.assign(new Error("Falha ao carregar mensagens."),{status:500});
-  messages=(msgs||[]).reverse();
-  messages=await Promise.all(messages.map(async(message:any)=>{const media=Array.isArray(message.attachments)?message.attachments:[],signed:any[]=[];for(const item of media){const path=text(item.path,700);if(!path.startsWith("team/"+String(team.id)+"/"))continue;const {data,error}=await ctx.admin.storage.from("eworkers-chat").createSignedUrl(path,300);if(!error&&data?.signedUrl)signed.push({...item,url:data.signedUrl});}return {...message,attachments:signed};}));
-  const {data:t,error:te}=await ctx.admin.from("fechou_team_turns").select("*").eq("team_id",team.id).in("status",["pending","granted"]).order("requested_at");
-  if(te)throw Object.assign(new Error("Falha ao carregar fila de fala."),{status:500});turns=t||[];
+  const [messagesResult,turnsResult]=await Promise.all([
+   ctx.admin.from("fechou_team_messages").select("*").eq("team_id",team.id).order("created_at",{ascending:false}).limit(100),
+   ctx.admin.from("fechou_team_turns").select("*").eq("team_id",team.id).in("status",["pending","granted"]).order("requested_at")
+  ]);
+  if(messagesResult.error)throw Object.assign(new Error("Falha ao carregar mensagens."),{status:500});
+  if(turnsResult.error)throw Object.assign(new Error("Falha ao carregar fila de fala."),{status:500});
+  messages=(messagesResult.data||[]).reverse();turns=turnsResult.data||[];
+  const teamPrefix="team/"+String(team.id)+"/";
+  const mediaEntries:any[]=[];
+  for(const message of messages)for(const item of (Array.isArray(message.attachments)?message.attachments:[])){
+   const path=text(item.path,700);if(path.startsWith(teamPrefix))mediaEntries.push({messageId:String(message.id),item,path});
+  }
+  const mediaPaths=[...new Set(mediaEntries.map(x=>x.path))],mediaUrls=new Map<string,string>();
+  if(mediaPaths.length){
+   const {data:signedRows,error:signError}=await ctx.admin.storage.from("eworkers-chat").createSignedUrls(mediaPaths,300);
+   if(signError)throw Object.assign(new Error("Falha ao preparar anexos da equipe."),{status:500});
+   (signedRows||[]).forEach((entry:any,index:number)=>{const path=text(entry?.path||mediaPaths[index],700),url=text(entry?.signedUrl||entry?.signedURL,2000);if(path&&url)mediaUrls.set(path,url)});
+  }
+  messages=messages.map((message:any)=>({...message,attachments:mediaEntries.filter(x=>x.messageId===String(message.id)).map(x=>({...x.item,url:mediaUrls.get(x.path)||""})).filter((x:any)=>!!x.url)}));
   const actorIds=[...new Set([...messages.map((x:any)=>String(x.sender_id)),...turns.map((x:any)=>String(x.user_id))])],actorNames=new Map<string,string>();
-  for(const actorId of actorIds){const {data:actor}=await ctx.admin.from("profiles").select("id,full_name").eq("id",actorId).maybeSingle();if(actor)actorNames.set(actorId,text(actor.full_name,120)||"Participante");}
+  if(actorIds.length){
+   const {data:actors,error:actorsError}=await ctx.admin.from("profiles").select("id,full_name").in("id",actorIds);
+   if(actorsError)throw Object.assign(new Error("Falha ao identificar participantes da conversa."),{status:500});
+   for(const actor of actors||[])actorNames.set(String(actor.id),text(actor.full_name,120)||"Participante");
+  }
   messages=messages.map((x:any)=>({...x,sender_name:actorNames.get(String(x.sender_id))||"Participante"}));turns=turns.map((x:any)=>({...x,user_name:actorNames.get(String(x.user_id))||"Participante"}));
  }
  return {team,leader:leaderProfile,invites:shaped,participants:shapedParts,messages,turns,viewer:{client:verifiedClient,leader:verifiedLeader,member,invitee},order:{id:verifiedOrder.id,service:verifiedOrder.service,description:verifiedOrder.description,region_approx:verifiedOrder.region_approx||verifiedOrder.region||"",...(verifiedClient||verifiedLeader||member?{service_location:verifiedOrder.location||""}:{}),...(verifiedClient||verifiedLeader?{contract_total_brl:Number(verifiedOrder.total||verifiedOrder.reference_price||0)}:{})},financial_notice:"Remuneração negociada não é saldo reservado nem crédito em carteira. O repasse individual depende de habilitação e homologação do split no provedor."};
@@ -4413,11 +4909,18 @@ async function teamHeartbeat(ctx:any,p:any){const teamId=text(p.team_id,80);if(!
 Deno.serve(async (req: Request) => {
   const incomingId = text(req.headers.get("x-fechou-request-id"), 80);
   requestIds.set(req, validUuid(incomingId) ? incomingId : crypto.randomUUID());
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeadersFor(req) });
+  if (req.method === "OPTIONS") {
+    const origin = req.headers.get("origin") || "";
+    if (!origin || !eworkersOriginAllowed(origin)) return new Response("Origem não autorizada.", { status: 403, headers: { "Cache-Control": "no-store" } });
+    return new Response(null, { status: 204, headers: corsHeadersFor(req) });
+  }
+  if (!eworkersOriginAllowed(req.headers.get("origin") || "")) return fail(req, "Origem não autorizada.", 403, "ORIGIN_NOT_ALLOWED");
   if (req.method !== "POST") return fail(req, "Método não permitido.", 405);
   let payload: Record<string, any>;
   try { payload = asObject(await req.json()); } catch { return fail(req, "Corpo JSON inválido.", 400); }
   const action = text(payload.action, 80);
+  const requestStartedAt = performance.now();
+  let authElapsedMs = 0;
   if (!action) return fail(req, "Ação não informada.", 400);
   if (action === "health") {
     return reply(req, 200, {
@@ -4437,7 +4940,9 @@ Deno.serve(async (req: Request) => {
   }
   try {
     const admin = adminClient();
+    const authStartedAt = performance.now();
     const ctx = await authenticate(req, admin);
+    authElapsedMs = Math.round(performance.now() - authStartedAt);
     let result: Record<string, any>;
     switch (action) {
       case "ai/analyze":
@@ -4508,6 +5013,12 @@ Deno.serve(async (req: Request) => {
       case "contracts/esign-download":
         result = await v195EsignDownload(ctx, payload);
         break;
+      case "service/contest-reply":
+        result = await serviceContestReply(ctx, payload);
+        break;
+      case "service/contest-completion":
+        result = await serviceAction(ctx, action, payload);
+        break;
       case "service/start":
       case "service/submit-completion":
       case "service/approve-completion":
@@ -4568,8 +5079,18 @@ Deno.serve(async (req: Request) => {
       default:
         return fail(req, `Ação não implementada nesta restauração: ${action}`, 404, "ACTION_NOT_FOUND");
     }
+    console.info("FECHOU_API_TIMING", JSON.stringify({
+      action, auth_ms: authElapsedMs,
+      handler_ms: Math.max(0, Math.round(performance.now() - requestStartedAt - authElapsedMs)),
+      total_ms: Math.round(performance.now() - requestStartedAt), status: 200,
+    }));
     return reply(req, 200, { ...result, ok: true });
   } catch (error) {
+    console.warn("FECHOU_API_TIMING", JSON.stringify({
+      action, auth_ms: authElapsedMs, total_ms: Math.round(performance.now() - requestStartedAt),
+      status: Number((error as any)?.status) || 500,
+      stage: text((error as any)?.diagnostic?.stage || "request_handler", 80),
+    }));
     const status = Number((error as any)?.status) || 500;
     const message = text((error as Error)?.message || "Erro interno na Edge Function.", 1600);
     const diagnostic = {
