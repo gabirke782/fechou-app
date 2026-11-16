@@ -2,9 +2,18 @@
 
 16/11/2026. Base: R15, derivado do R13 mais recente enviado. **O trabalho ainda não está totalmente homologado.** Este pacote permite revisar e retomar a partir do código completo, sem perder as correções. O HTML R16 não foi publicado no Cloudflare nesta execução.
 
+## Atualização após a autorização de 16/11/2026
+
+- A autorização específica foi recebida e as duas correções de descrição foram implantadas: eworkers-api v332 e fechou-ops-api v26. As fontes foram lidas novamente após cada implantação e são idênticas às propostas enviadas. A rejeição automática anterior foi superada após a autorização; não há mais bloqueio dessas duas implantações.
+- O acesso Cloudflare funcionou no TinyFish: startup5 é Direct Upload. O navegador do TinyFish não conseguiu receber o ZIP desta conversa (o download exigiu autenticação do ChatGPT). Nenhuma prévia ou produção R16 foi criada.
+- Um navegador com suporte a upload local chegou à entrada segura do Cloudflare. A opção Google foi selecionada, mas a revisão automática bloqueou a observação de accounts.google.com por exigir autorização específica para esse domínio. Nenhuma senha foi lida ou copiada e a publicação ficou pendente.
+- O acesso Asaas também funcionou. O webhook “Projeto FECHOU startup”, com a URL correta do Supabase, está com a fila interrompida. A consulta de logs não mostrou entregas com os filtros usados; a causa da pausa ainda não foi estabelecida. A fila não foi reativada sem esse diagnóstico.
+- Há uma autorização de reembolso Pix de R$6 aguardando código no Asaas. O vínculo exato dessa autorização com pay_bxibqxu35phxsdwt ainda não foi comprovado; não houve confirmação nem nova solicitação de estorno. Uma cobrança candidata foi descartada ao conferir referência externa: pertencia ao pedido CC6A5D80, de cartão, e não ao pedido de Pix cancelado.
+- O pedido 04CA72A6 continua com refund_status pending. A tabela de webhooks continua com último evento em 07/11/2026. Não houve nova transferência ou repasse nesta continuação.
+
 ## Já aplicado no ambiente real
 
-- `eworkers-api` **v331**: planejamento de equipe antes da seleção do cliente para profissional com proposta própria válida; estados de espera compatíveis; bloqueio de desistência após encerramento. Papel profissional, proprietário, proposta e estado são verificados no servidor. Fonte ativa lida novamente e comparada com a revisão implantada.
+- `eworkers-api` **v332**: planejamento de equipe antes da seleção do cliente para profissional com proposta própria válida; estados de espera compatíveis; bloqueio de desistência após encerramento. Papel profissional, proprietário, proposta e estado são verificados no servidor. Fonte ativa lida novamente e comparada com a revisão implantada.
 - Bucket privado `eworkers-chat`: acrescentado `audio/x-m4a`. Limite de 20 MiB, privacidade e demais tipos foram conservados. Corrige a recusa por MIME identificada; publicação real de um novo áudio M4A ainda precisa ser testada.
 - As correções R15 de RPC/propostas e elegibilidade de repasse continuam presentes.
 
@@ -28,7 +37,7 @@
 |---|---|---|
 | Admin | Sessão de suporte acessou dados e decisões reais | Não equivale a auditoria de todas as telas |
 | Cancelamento do pedido de teste #04CA72A6, Iluminação, R$ 6 | Pedido e execução ficaram cancelled | Não significa devolução concluída |
-| Primeiro estorno automático | Asaas recusou descrição acima de 140 caracteres | Causa concreta identificada; correção preparada, implantação bloqueada |
+| Primeiro estorno automático | Asaas recusou descrição acima de 140 caracteres | Causa concreta identificada; correção implantada nas versões 332/26 |
 | Aprovar análise no painel | Decisão approve/resolved registrada | Essa ação sozinha não devolve dinheiro |
 | Efetuar reembolso no painel | Uma solicitação de R$ 6 enviada pelo admin-api v30; ledger refund_pending com chave única | Ordem permanece refund_status pending; sem comprovante final de devolução |
 | Pedido #CC6A5D80, Torneira e descarga, R$ 6 | Pagamento approved, aguardando escolha; sem profissional/proposta selecionados | Preservado para teste completo após publicação |
@@ -43,11 +52,11 @@ Na tabela `fechou_asaas_webhook_events`, o evento mais recente consultado é de 
 
 A equipe de outro pedido existente foi consultada no teste do profissional; o registro já existia desde 10/11. Não foi cadastrado novo colaborador nem uma nova equipe nessa consulta.
 
-## Correção financeira preparada, ainda NÃO implantada
+## Correção financeira implantada e conferida
 
-As três descrições enviadas ao Asaas passam a respeitar o máximo de 140 caracteres. Motivo completo continua no histórico, e as regras de dinheiro e permissões são preservadas. Arquivos em `servidor_pendente_aprovacao/`; leia `APROVACAO_IMPLANTACAO.md` e os diffs antes de implantar.
+As três descrições enviadas ao Asaas respeitam agora o máximo de 140 caracteres. O motivo completo continua no histórico. O código de valores, permissões e elegibilidade não mudou. eworkers-api v332 e fechou-ops-api v26 estão ativas, com leitura posterior confirmando exatamente o código enviado. admin-api v30 e asaas-webhook v79 não foram alteradas.
 
-**A revisão automática rejeitou as duas implantações por considerar amplo o impacto potencial da substituição completa de funções financeiras em produção.** O servidor continua eworkers-api v331, fechou-ops-api v25, admin-api v30 e asaas-webhook v79. Não houve tentativa de contornar o bloqueio por outro caminho.
+As fontes atuais estão em servidor_ativo/eworkers-api-v332.ts e servidor_ativo/fechou-ops-api-v26.ts. As versões v331/v25 ficam como referências anteriores. Os arquivos PENDENTE_*.diff registram as diferenças que já foram aplicadas; o nome desses arquivos foi conservado apenas para rastreabilidade.
 
 ## Testes e evidência
 
@@ -67,8 +76,8 @@ Não existem prints reais do R16 nesta entrega. O Chromium local não iniciou po
 ## Pendências concretas
 
 1. Publicar `index.html` R16 no projeto Cloudflare correto e verificar o marcador R16 no conteúdo servido. Só então repetir os testes de interface e gerar os prints individuais no chat. Não substituir o painel administrativo 1.0.2 pelo arquivo 1.0.5 do GitHub sem comparação.
-2. Aprovação específica das duas implantações mínimas de descrição de estorno. Os arquivos e diffs estão prontos para revisão.
-3. Acesso à conta Asaas correta para verificar webhook, fila, retornos, estorno pendente e a transferência histórica. Não há sessão Asaas confirmada nos perfis disponíveis; acesso Supabase/admin não autentica automaticamente o site Asaas.
+2. As duas implantações mínimas de descrição de estorno foram concluídas e verificadas. Ainda falta testar um novo cancelamento com motivo longo no fluxo real, após a publicação do HTML.
+3. O acesso Asaas foi confirmado. Falta estabelecer a causa da fila interrompida, validar uma entrega real e restaurar a sincronização; confirmar a cobrança exata associada à autorização pendente e concluir a conciliação financeira.
 4. Teste completo do pedido restante: proposta, equipe antes do aceite, contrato, assinaturas reais de teste, fotos antes/durante/depois, mensagem, início, conclusão, aprovação e repasse. Isso ainda não foi concluído nesta revisão.
 5. Criar/confirmar os fluxos de assinatura gratuita e paga por Pix/boleto/cartão, boleto liquidado e evento duplicado. Evidência de pagamento antigo não comprova todos esses caminhos.
 6. M4A real, análise com foto/material, política no checkout e grupos de resultados no celular após publicação. Os testes isolados não substituem esses fluxos.
@@ -76,7 +85,7 @@ Não existem prints reais do R16 nesta entrega. O Chromium local não iniciou po
 
 ## Publicação e integridade
 
-`FECHOU_R16_publicar.zip` contém SOMENTE index.html para o Cloudflare. `FECHOU_R16_validacao.zip` contém código, relatório, testes, fontes ativas e propostas; não publicar esse pacote técnico como site público.
+`FECHOU_R16_publicar.zip` contém SOMENTE index.html para o Cloudflare. `FECHOU_R16_validacao.zip` contém código, relatório, testes, fontes ativas e referências anteriores; não publicar esse pacote técnico como site público.
 
 - HTML: `6bde2b68a7af5e61c125d77518a7e19d6ff813c93fe8c3036eef8cc029040deb` (SHA-256).
 - Arquivo: 2,513,101 bytes.
