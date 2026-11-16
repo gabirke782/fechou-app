@@ -6657,7 +6657,11 @@ ${
         window.fechouCurrentPartySigned = fechouCurrentPartySigned;
         window.fechouEnsureContract = fechouEnsureContract;
 
+        function ewOrderViewSignature() {
+          return JSON.stringify(state.orders || [], (key,value) => /^(url|signedUrl|signed_url|expires_at)$/.test(key) ? undefined : value);
+        }
         async function ewSyncOrders() {
+          const previousView = ewOrderViewSignature();
           try {
             await ewLoadOrders();
             await ewLoadOrderDetails();
@@ -6699,7 +6703,7 @@ ${
               }
             }
             if (typeof window.fechouNormalizePaymentData === "function") window.fechouNormalizePaymentData();
-            render();
+            if (previousView !== ewOrderViewSignature()) render();
           } catch (e) {
             console.error("ewSyncOrders", e);
           }
@@ -13698,8 +13702,8 @@ ${
             result = q("#v58-price-result", box),
             final = q("#v58-final-actions", box);
           if (state.priceAnalysisDone) {
-            b.textContent = "Preço da região analisado";
-            b.disabled = true;
+            b.textContent = "Trocar e analisar preço";
+            b.disabled = false;
             final.style.display = "flex";
             ensureFinalButtons(final);
             const dc = q("#v58-discount-control", box);
@@ -13979,9 +13983,9 @@ ${
             workflowBusy = false;
             const x = q("#v58-price-analysis");
             if (x) {
-              x.disabled = !!state.priceAnalysisDone;
+              x.disabled = false;
               x.textContent = state.priceAnalysisDone
-                ? "Preço da região analisado"
+                ? "Trocar e analisar preço"
                 : "Analisar o preço da região";
             }
           }
@@ -15934,19 +15938,8 @@ ${
               occurred_at: new Date().toISOString()
             };
             try { state.__exylonAILastError = diagnostic; } catch (_) {}
-            result.innerHTML = '<div class="v56-estimate fechou-ai-error"><b>Não foi possível concluir a análise.</b><p>Não foi possível formar a resposta desta tentativa. Tente novamente em instantes.</p><label for="fechouAiDiagnosticText">Diagnóstico técnico (copie e envie)</label><textarea id="fechouAiDiagnosticText" readonly rows="8" spellcheck="false"></textarea><div class="actions"><button type="button" class="btn secondary" id="fechouAiCopyDiagnostic">Copiar diagnóstico</button><button type="button" class="btn" id="v56-retry">Tentar novamente</button></div></div>';
-            const diagnosticBox = $("#fechouAiDiagnosticText");
-            if (diagnosticBox) diagnosticBox.value = JSON.stringify(diagnostic, null, 2);
-            const copyDiagnostic = $("#fechouAiCopyDiagnostic");
-            if (copyDiagnostic) copyDiagnostic.addEventListener("click", async () => {
-              try {
-                await navigator.clipboard.writeText(JSON.stringify(diagnostic, null, 2));
-                v56Toast("Diagnóstico copiado. Cole aqui na conversa.");
-              } catch (_) {
-                diagnosticBox?.focus(); diagnosticBox?.select();
-                v56Toast("Selecione o texto do diagnóstico e copie.");
-              }
-            });
+            console.error('FECHOU: análise regional não concluída', diagnostic);
+            result.innerHTML = '<div class="v56-estimate fechou-ai-error" role="status"><b>A análise ainda não foi concluída.</b><p>Suas informações foram mantidas. Confira a conexão e tente novamente.</p><button type="button" class="btn" id="v56-retry">Tentar novamente</button></div>';
             const retry = $("#v56-retry");
             if (retry) retry.addEventListener("click", runAnalysis);
             throw e;
@@ -16555,7 +16548,18 @@ ${
         };
         function guess(text) {
           const n = norm(text);
-          if (n.trim().length < 12) return null;
+          if (n.trim().length < 5) return null;
+          const precise = [
+            [/\bchuveir(?:o|os)\b/, 'Elétrica', 'Chuveiro elétrico'],
+            [/\b(?:tomadas?|interruptores?)\b/, 'Elétrica', 'Tomadas e interruptores'],
+            [/\bdisjuntores?\b/, 'Elétrica', 'Disjuntores'],
+            [/\b(?:lampadas?|luminarias?|lustres?|plafons?)\b/, 'Elétrica', 'Iluminação'],
+            [/\b(?:torneiras?|descargas?|caixa acoplada)\b/, 'Hidráulica', 'Torneira e descarga'],
+            [/\b(?:ar[ -]?condicionado|split)\b/, 'Climatização', /instal/.test(n) ? 'Instalação de ar-condicionado' : /limp/.test(n) ? 'Limpeza' : 'Manutenção de ar-condicionado'],
+          ];
+          for (const [pattern,category,service] of precise) {
+            if (pattern.test(n) && CATS[category]?.includes(service)) return {category,service,confidence:'high'};
+          }
           for (const r of rules) {
             if (r.keys.some((re) => re.test(n))) {
               const list =
@@ -16633,6 +16637,10 @@ ${
           }
           state.category = g.category;
           state.service = g.service;
+          state.priceAnalysisDone = false; state.priceAnalysisAt = '';
+          state.calculated = null; state.budgetEstimate = null;
+          const analyzeButton = document.getElementById('v58-price-analysis');
+          if(analyzeButton){analyzeButton.disabled=false;analyzeButton.textContent='Analisar preço da região';}
           const cs = document.querySelector(
             '#app select[data-change="category"]'
           );
@@ -16660,7 +16668,7 @@ ${
             if (e.target?.matches('#app [data-input="description"]')) {
               state.description = e.target.value;
               clearTimeout(timer);
-              timer = setTimeout(classifyNow, 900);
+              classifyNow();
             }
           },
           true
@@ -16673,7 +16681,7 @@ ${
                 '#app select[data-change="category"], #app select[data-change="service"]'
               )
             )
-              setTimeout(refreshExample, 0);
+              setTimeout(classifyNow, 0);
           },
           true
         );
@@ -18227,7 +18235,7 @@ ${
             : isPendingCheckout
               ? "O plano foi selecionado. O acesso profissional será liberado após a confirmação do pagamento pelo provedor."
               : "O status será atualizado conforme a confirmação do provedor de pagamento.";
-          return `<section class="fechou-v85-subscription" aria-live="polite"><div class="v85-sub-row"><div><p class="eyebrow">MINHA ASSINATURA</p><h2>${escV(planLabel(plan))}</h2><p>${escV(planAmount(plan))}</p></div><span class="pill ${ok ?"amberpill" : ""}">${escV(statusLabel(status))}</span></div><p class="muted">${escV(message)}</p><p class="muted">${hasProviderSubscription ? "Última atualização: " : "Situação: "}${escV(when)}</p><div class="actions"><button class="btn secondary" data-act="v85-refresh-subscription" type="button">Atualizar status</button><button class="btn secondary" data-act="page:pricing" type="button">Ver planos</button>${ok ? '<button class="btn secondary" data-act="subscriptioncancel" type="button">Cancelar assinatura</button>' : ""}</div></section>`;
+          return `<section class="fechou-v85-subscription" aria-live="polite"><div class="v85-sub-row"><div><p class="eyebrow">MINHA ASSINATURA</p><h2>${escV(planLabel(plan))}</h2><p>${escV(planAmount(plan))}</p></div><span class="pill ${ok ?"amberpill" : ""}">${escV(sub?.renewal_cancelled ? "Renovação cancelada" : statusLabel(status))}</span></div><p class="muted">${escV(message)}</p><p class="muted">${hasProviderSubscription ? "Última atualização: " : "Situação: "}${escV(when)}</p><div class="actions"><button class="btn secondary" data-act="v85-refresh-subscription" type="button">Atualizar status</button><button class="btn secondary" data-act="page:pricing" type="button">Ver planos</button>${ok ? '<button class="btn secondary" data-act="subscriptioncancel" type="button">Cancelar assinatura</button>' : ""}</div></section>`;
         }
                 function insertSubscriptionPanel() {
           if (state.currentRole !== "Profissional" || !state.supabaseUser)
@@ -21348,9 +21356,7 @@ ${
                 "Não encontrei o identificador da assinatura nesta conta. Toque em Atualizar status e tente novamente."
               );
             if (
-              !confirm(
-                "Confirma o cancelamento da assinatura? O cancelamento será solicitado ao provedor de pagamentos."
-              )
+              !(await window.FechouR16.confirmSubscription())
             )
               return;
             window.__v113CancelBusy = true;
@@ -21420,11 +21426,11 @@ ${
               }
               render();
               toast(
-                ["cancelled", "canceled", "inactive"].includes(
-                  String(state.subscription.status || "").toLowerCase()
-                )
-                  ? "Assinatura cancelada conforme confirmação do servidor."
-                  : "Solicitação de cancelamento enviada ao servidor; o status final depende da confirmação do provedor."
+                state.subscription.renewal_cancelled
+                  ? (result.message || "Renovação cancelada. Seu acesso permanece até o fim do período já pago.")
+                  : ["cancelled", "canceled", "inactive"].includes(String(state.subscription.status || "").toLowerCase())
+                    ? "Assinatura cancelada conforme confirmação do servidor."
+                    : "O cancelamento ainda não foi confirmado. Atualize o status antes de tentar novamente."
               );
             } catch (err) {
               console.error("V113 cancelamento de assinatura", err);
@@ -34231,7 +34237,9 @@ function publicationDialog(o){
  $('[data-v189=now]',d.box).onclick=()=>{d.close();checkout(o).catch(e=>note(errorText(e)))};
 }
 function policies(){
+ const payment=document.querySelector('.v189-overlay');
  const d=dialog('Políticas de pagamentos',`<div class="v214-policy"><h3>1. Formas de pagamento</h3><p>O aplicativo oferece Pix, boleto bancário e cartão de crédito. Os dados do cartão são digitados em uma tela própria do FECHOU e enviados diretamente ao Asaas para processamento por conexão HTTPS. O aplicativo não armazena o número completo nem o código de segurança. Outros meios não estão disponíveis neste momento.</p><h3>2. Valor do serviço, processamento e comissão</h3><p>No pagamento pelo aplicativo, o total do cliente é o valor do serviço mais a tarifa de processamento do meio de pagamento, conforme cotação prévia do Asaas. A comissão FECHOU de 2% é calculada sobre a base de repasse do profissional e descontada do repasse profissional; não é somada ao total cobrado do cliente. O checkout deve exibir essa regra antes do aceite. No pagamento direto entre as partes, o FECHOU não recebe, processa nem registra o valor como saldo de carteira e não desconta comissão sobre uma movimentação que não processa.</p><h3>3. Cotação, cobrança e confirmação</h3><p>A cotação tem prazo de validade informado na tela. Alterar o meio de pagamento exige cancelar e conciliar com segurança uma cobrança anterior. Gerar Pix, boleto ou fatura não significa que o pagamento foi aprovado. A publicação do pedido ocorre somente após a confirmação autenticada do provedor.</p><h3>4. Cartão de crédito, Pix e boleto</h3><p>Os dados do cartão de crédito são informados na tela própria do FECHOU e enviados ao Asaas por HTTPS para processamento imediato. O FECHOU não armazena o número completo nem o CVV. Pix e boleto são emitidos pelo servidor e confirmados por notificação autenticada do provedor. A geração de uma cobrança não significa que o pagamento foi aprovado.</p><h3>5. Contrato, orçamento e início</h3><p>Após o pagamento confirmado, o cliente poderá ler e assinar o contrato. Depois da aceitação do orçamento, o profissional deverá ler e assinar o mesmo documento. Alterações de valor ou escopo exigem revisão e novo aceite, quando aplicável. O início do serviço depende do registro da etapa correspondente no aplicativo.</p><h3>6. Cancelamento e reembolso</h3><p>Uma cobrança pendente poderá ser cancelada após verificação no provedor. Se houver pagamento recebido ou em trânsito, a solicitação será encaminhada para conciliação antes de qualquer nova cobrança ou eventual reembolso. Nenhuma devolução é considerada concluída apenas pela solicitação.</p><h3>7. Modo temporário de teste</h3><p>Quando liberado pelo servidor, o modo de teste altera somente o valor do pedido atual para R$ 6,00. Ele é destinado a validações controladas. Uma cobrança realizada em produção continua sendo uma cobrança real; o valor não deve ser usado em pedidos comerciais.</p></div>`,btn('Fechar','close'));
+ d.box.closest('.v189-overlay')?.style.setProperty('z-index','2147483500');
  $('[data-v189=close]',d.box).onclick=d.close;
 }
 let checkoutBusy=new Set();
@@ -34722,7 +34730,7 @@ document.documentElement.lang='pt-BR';/* marcador intermediário removido; V309 
  async function api(action,payload={}){if(typeof API()!=='function')throw new Error('A conexão autenticada do aplicativo não está disponível.');const r=await API()(action,payload);if(r?.ok===false||r?.error)throw new Error(r.error||'A operação não foi concluída.');return r||{}}
  function note(text){const el=$('#fechou-v212-team-status');if(el){el.textContent=text;el.hidden=!text;}else{const t=$('#toast');if(t){t.textContent=text;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),3500)}}}
  function overlay(){let root=$('#fechou-v212-team-overlay');if(root)return root;root=document.createElement('div');root.id='fechou-v212-team-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','Equipe da contratação');root.innerHTML='<section class="v212-modal"><header class="v212-head"><div class="v212-head-main"><h2>Equipe da contratação</h2><p id="fechou-v212-team-subtitle">Convites, participantes e comunicação</p></div><button class="v212-close" type="button" data-v212-action="close" aria-label="Fechar">×</button></header><div class="v212-body" id="fechou-v212-team-body"><p class="v212-muted">Carregando equipe…</p></div></section>';document.body.append(root);root.addEventListener('pointerdown',()=>state.lastActivity=Date.now(),true);root.addEventListener('keydown',()=>state.lastActivity=Date.now(),true);return root}
- function setOpen(on){const root=overlay();root.classList.toggle('open',!!on);document.body.style.overflow=on?'hidden':'';if(!on){if(state.timer)clearInterval(state.timer);state.timer=null;}}
+ function setOpen(on){state.visible=!!on;const root=overlay();root.classList.toggle('open',!!on);document.body.style.overflow=on?'hidden':'';if(!on){if(state.timer)clearInterval(state.timer);state.timer=null;root.remove();}}
  function showError(err){state.error=String(err?.message||err||'Não foi possível concluir a operação.');state.success='';render();}
  function statusLabel(s){return ({pending:'Convite enviado',accepted:'Aceito pelo profissional',pending_client_approval:'Aguardando aprovação do cliente',approved:'Aprovado pelo cliente',rejected:'Não aprovado',declined:'Recusado pelo profissional',declined_by_client:'Recusado pelo cliente',active:'Equipe ativa',awaiting_client_review:'Aguardando cliente',pending:'Na fila',granted:'Com a vez de fala',timed_out:'Tempo encerrado'})[s]||String(s||'Em andamento').replaceAll('_',' ')}
  function currentOrder(){return (st().orders||[]).find(o=>String(o.id)===String(state.orderId))||null}
@@ -34743,12 +34751,12 @@ document.documentElement.lang='pt-BR';/* marcador intermediário removido; V309 
  }
  function decorate(){const app=$('#app');if(!app)return;const cards=$$('.order[data-v212-order-id],.order[data-v148-order-id],article[data-v148-order-id]',app);for(const c of cards){const id=c.dataset.v212OrderId||c.dataset.v148OrderId;if(id)addButton(c,id)}
  }
- async function openTeam(orderId){state.orderId=String(orderId);state.tab='team';state.error='';state.success='';state.selected=null;state.files=[];setOpen(true);renderLoading();try{let data=await api('team/list',{order_id:state.orderId});if(!data.team&&role()==='Profissional'){const made=await api('team/ensure',{order_id:state.orderId});if(made.team)data=await api('team/list',{order_id:state.orderId})}state.data=data;state.team=data.team||null;render();startRefresh();}catch(e){showError(e)}}
+ async function openTeam(orderId){const requestedOrderId=String(orderId);state.orderId=requestedOrderId;state.tab='team';state.error='';state.success='';state.selected=null;state.files=[];setOpen(true);renderLoading();try{let data=await api('team/list',{order_id:requestedOrderId});if(!state.visible||state.orderId!==requestedOrderId)return;if(!data.team&&role()==='Profissional'){const made=await api('team/ensure',{order_id:requestedOrderId});if(made.team)data=await api('team/list',{order_id:requestedOrderId})}if(!state.visible||state.orderId!==requestedOrderId)return;state.data=data;state.team=data.team||null;if(state.visible){render();startRefresh();}}catch(e){if(state.visible)showError(e)}}
  function renderLoading(){const b=$('#fechou-v212-team-body');if(b)b.innerHTML='<div class="v212-card"><h3>Carregando</h3><p class="v212-muted">Consultando a equipe com a sessão autenticada…</p></div>'}
  async function openInbox(){state.orderId=null;state.data=null;state.team=null;state.tab='inbox';state.error='';state.success='';setOpen(true);renderLoading();try{const r=await api('team/inbox',{});state.inbox=r.invites||[];render();}catch(e){showError(e)}}
  window.__fechouOpenTeamInbox=openInbox;
  window.__fechouOpenTeamForOrder=openTeam;
- function render(){const root=overlay(),body=$('#fechou-v212-team-body',root),sub=$('#fechou-v212-team-subtitle',root);if(!body)return;const d=state.data||{},team=state.team,viewer=d.viewer||{},participants=d.participants||[],invites=d.invites||[],pending=participants.filter(p=>p.status==='pending_client_approval'),approved=participants.filter(p=>p.status==='approved');const client=role()==='Cliente'||!!viewer.client,leader=!!viewer.leader&&!client,member=!!viewer.member,invitee=!!viewer.invitee;sub.textContent=state.orderId?`${d.order?.service||currentOrder()?.service||'Serviço'} · ${team?'Equipe vinculada':'Equipe ainda não iniciada'}`:'Convites recebidos para colaborar';
+ function render(){if(!state.visible)return;const root=overlay(),body=$('#fechou-v212-team-body',root),sub=$('#fechou-v212-team-subtitle',root);if(!body)return;const d=state.data||{},team=state.team,viewer=d.viewer||{},participants=d.participants||[],invites=d.invites||[],pending=participants.filter(p=>p.status==='pending_client_approval'),approved=participants.filter(p=>p.status==='approved');const client=role()==='Cliente'||!!viewer.client,leader=!!viewer.leader&&!client,member=!!viewer.member,invitee=!!viewer.invitee;sub.textContent=state.orderId?`${d.order?.service||currentOrder()?.service||'Serviço'} · ${team?'Equipe vinculada':'Equipe ainda não iniciada'}`:'Convites recebidos para colaborar';
   if(state.tab==='inbox'){
    body.innerHTML=`<div class="v212-tabs"><button class="v212-tab active" data-v212-action="inbox" type="button">Convites recebidos</button></div>${state.error?`<div class="v212-error">${esc(state.error)}</div>`:''}${state.success?`<div class="v212-success">${esc(state.success)}</div>`:''}${state.inbox.length?state.inbox.map(x=>{const i=x.invite||{},c=x.compensation||{};return `<article class="v212-card"><h3>${esc(x.order?.service||'Contratação')}</h3><p class="v212-muted">Líder: ${esc(x.leader?.full_name||'Profissional responsável')} · ${esc(x.order?.region_approx||'Região aproximada')}</p><div class="v212-person"><div class="v212-avatar">${esc((x.leader?.full_name||'P').slice(0,1).toUpperCase())}</div><div class="v212-person-main"><b>${esc(i.role_label||'Colaborador')}</b><div class="v212-muted">${esc(i.specialty||'Especialidade não informada')} · ${esc(statusLabel(i.status))}</div><div class="v212-muted">${esc(i.responsibilities||'')}</div><div class="v212-status">${money(c.amount)} · ${c.pay_basis==='daily'?'por dia':'valor fixo'} · ${esc(c.financial_state==='not_reserved'?'negociação registrada, não reservada':'situação financeira pendente')}</div></div></div>${i.schedule?.start_date?`<p class="v212-muted">Período: ${esc(i.schedule.start_date)} a ${esc(i.schedule.end_date||'não informado')} · ${esc(i.schedule.hours||'')}</p>`:''}${i.conditions?.notes?`<p class="v212-muted">Condições: ${esc(i.conditions.notes)}</p>`:''}<div class="v212-actions">${i.status==='pending'?`<button class="v212-btn" data-v212-action="accept-invite" data-invite-id="${esc(i.id)}" type="button">Aceitar convite</button><button class="v212-btn danger" data-v212-action="decline-invite" data-invite-id="${esc(i.id)}" type="button">Recusar</button>`:''}${i.status==='accepted'?`<button class="v212-btn secondary" data-v212-action="open-invite-team" data-order-id="${esc(x.order?.id||'')}" data-team-id="${esc(i.team_id||'')}" type="button">Abrir equipe</button>`:''}</div><p class="v212-muted">${esc(statusLabel(x.participant_status||i.status))}. A participação só é liberada após aprovação do cliente.</p></article>`}).join(''):'<div class="v212-card"><h3>Nenhum convite pendente</h3><p class="v212-muted">Quando um líder convidar você, a proposta e as condições aparecem nesta área.</p></div>'}`;
    return;
@@ -34775,9 +34783,8 @@ document.documentElement.lang='pt-BR';/* marcador intermediário removido; V309 
   }
   body.innerHTML=html;
  }
- function startRefresh(){if(state.timer)clearInterval(state.timer);state.timer=setInterval(async()=>{if(!$('#fechou-v212-team-overlay.open')||!state.orderId||document.hidden)return;try{const d=await api('team/list',{order_id:state.orderId});state.data=d;state.team=d.team||null;const root=$('#fechou-v212-team-overlay'),focused=!!root?.contains(document.activeElement),list=$('.v212-chat-list',root),oldScroll=list?.scrollTop||0,wasBottom=list?list.scrollHeight-list.clientHeight-oldScroll<36:false;if(!focused&&(state.tab==='chat'||state.tab==='team')){render();const newer=$('.v212-chat-list',root);if(newer)newer.scrollTop=wasBottom?newer.scrollHeight:oldScroll}const active=(d.turns||[]).find(t=>t.status==='granted'&&String(t.user_id)===uid());if(active&&Date.now()-state.lastActivity<20000)await api('team/turn-heartbeat',{team_id:String(state.team?.id||'')});}catch(e){console.warn('FECHOU equipe: atualização automática',e)}},12000)}
- async function act(action,el){if(state.busy)return;state.busy=true;try{
-  if(action==='close'){setOpen(false);return}
+ function startRefresh(){if(state.timer)clearInterval(state.timer);state.timer=setInterval(async()=>{if(!$('#fechou-v212-team-overlay.open')||!state.orderId||document.hidden)return;try{const d=await api('team/list',{order_id:state.orderId});if(JSON.stringify(d)===JSON.stringify(state.data))return;state.data=d;state.team=d.team||null;const root=$('#fechou-v212-team-overlay'),focused=!!root?.contains(document.activeElement),list=$('.v212-chat-list',root),oldScroll=list?.scrollTop||0,wasBottom=list?list.scrollHeight-list.clientHeight-oldScroll<36:false;if(!focused&&(state.tab==='chat'||state.tab==='team')){render();const newer=$('.v212-chat-list',root);if(newer)newer.scrollTop=wasBottom?newer.scrollHeight:oldScroll}const active=(d.turns||[]).find(t=>t.status==='granted'&&String(t.user_id)===uid());if(active&&Date.now()-state.lastActivity<20000)await api('team/turn-heartbeat',{team_id:String(state.team?.id||'')});}catch(e){console.warn('FECHOU equipe: atualização automática',e)}},12000)}
+ async function act(action,el){if(action==='close'){setOpen(false);return}if(state.busy)return;state.busy=true;try{
   if(action==='tab-team'){state.tab='team';render();return}if(action==='tab-find'){state.tab='find';render();return}if(action==='tab-chat'){state.tab='chat';render();return}if(action==='refresh'){if(state.orderId){const d=await api('team/list',{order_id:state.orderId});state.data=d;state.team=d.team||null;}else{const r=await api('team/inbox',{});state.inbox=r.invites||[]}state.error='';render();return}
   if(action==='accept-invite'||action==='decline-invite'){await api('team/respond-invite',{invite_id:el.dataset.inviteId,decision:action==='accept-invite'?'accept':'decline'});const r=await api('team/inbox',{});state.inbox=r.invites||[];state.success=action==='accept-invite'?'Convite aceito. Agora o cliente precisa aprovar sua participação.':'Convite recusado.';render();return}
   if(action==='open-invite-team'){const o=el.dataset.orderId;if(o){await openTeam(o);return}}
@@ -37144,7 +37151,8 @@ body{min-width:0!important}
     const t = e.target?.closest?.('#v189-policies, [data-open-policies], [data-act="menuitem:policies"]');
     if (!t) return;
     // If the global action handler already processes data-act, only handle #v189-policies here
-    if (t.id === 'v189-policies' || t.hasAttribute('data-open-policies')) {
+    if (t.id === 'v189-policies') return; // The checkout opens an overlay and preserves the form.
+    if (t.hasAttribute('data-open-policies')) {
       e.preventDefault();
       e.stopPropagation();
       try {
@@ -39261,7 +39269,62 @@ body.fechou-guest-public-only .wrap > footer.footer {
 
 
 
-</body>
+<style id="fechou-r16-ui">html body #app #v134-payment-choice-area .v139-payment-heading-actions button:not(#x):not(#y){
+ background:#f39a3d26!important;border-color:#f39a3d!important;color:#ffb35c!important;
+}
+html body #v121ChatOverlay .fc-chat-tools{padding:4px 10px!important;min-height:0!important;max-height:42dvh!important;overflow-y:auto!important;flex:0 1 auto!important}
+html body #v121ChatOverlay .fc-chat-tools-grid{padding-top:0!important;margin-top:0!important;gap:6px!important;min-height:0!important;max-height:calc(42dvh - 30px)!important;overflow-y:auto!important;align-content:start!important}
+html body #v121ChatOverlay .fc-chat-tools-grid button{min-height:44px!important;padding:8px!important;font-size:14px!important}
+html body #v121ChatOverlay .fc-chat-tools-toggle{height:24px!important;min-height:24px!important;margin:0!important;padding:0!important;color:#ffb35c!important}
+html body #v121ChatOverlay .fc-chat-tools-toggle .v335-tools-chevron{color:#ffb35c!important;font-size:22px!important}
+html body #v121ChatOverlay .fc-chat-compose{flex:0 0 auto!important;margin-top:0!important}
+.fechou-r16-overlay{position:fixed;inset:0;z-index:2147483501;background:#02060bd9;display:grid;place-items:center;padding:16px}
+.fechou-r16-overlay>section{width:min(100%,420px);max-height:90dvh;overflow:auto;background:#121d2a;color:#edf4fb;border:1px solid #34465d;border-radius:18px;padding:20px;box-shadow:0 20px 60px #0009}
+.fechou-r16-overlay h2{font-size:19px;margin:0 0 12px}.fechou-r16-overlay p{font-size:14px;line-height:1.5}.fechou-r16-overlay .actions{display:flex;flex-wrap:wrap;gap:10px}
+#v56-request-tools [data-r16-analysis-actions]{margin-top:12px!important}
+</style><script id="fechou-r16-ui-js">(()=>{
+ 'use strict';
+ const state=()=>window.__fechouV178GetState?.()||window.__fechouAppState||{};
+ const done=o=>['completed','complete','concluído','concluido','serviço concluído'].includes(String(o?.service_state||o?.metadata?.service_state||o?.status||'').toLowerCase());
+ function confirmSubscription(){return new Promise(resolve=>{
+  const restore=document.activeElement,root=document.createElement('div');root.className='fechou-r16-overlay';
+  root.innerHTML='<section role="dialog" aria-modal="true" aria-labelledby="r16-cancel-title"><h2 id="r16-cancel-title">Cancelar renovação da assinatura?</h2><p>A renovação será encerrada agora. Você mantém o acesso até o fim do período já pago. O cancelamento não solicita reembolso desse período.</p><div class="actions"><button type="button" class="btn secondary" data-r16-no>Voltar</button><button type="button" class="btn danger" data-r16-yes>Cancelar renovação</button></div></section>';
+  const finish=value=>{root.remove();restore?.focus?.();resolve(value)};
+  root.querySelector('[data-r16-no]').onclick=()=>finish(false);root.querySelector('[data-r16-yes]').onclick=()=>finish(true);
+  root.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();finish(false)}if(e.key==='Tab'){const buttons=root.querySelectorAll('button'),first=buttons[0],last=buttons[1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
+  document.body.append(root);root.querySelector('[data-r16-no]').focus();
+ });}
+ function normalize(){
+  const s=state();
+  document.querySelectorAll('[data-v274-withdraw-proposal]').forEach(b=>{const o=(s.orders||[]).find(o=>String(o.id)===String(b.dataset.orderId));if(done(o))b.remove()});
+  if(s.page!=='request')return;
+  const reanalyze=document.getElementById('v58-price-analysis');
+  if(s.priceAnalysisDone&&reanalyze&&!/Analisando/.test(reanalyze.textContent)){if(reanalyze.disabled)reanalyze.disabled=false;if(reanalyze.textContent!=='Trocar e analisar preço')reanalyze.textContent='Trocar e analisar preço';}
+  const tools=document.getElementById('v56-request-tools'),option=document.getElementById('v56-materials-option'),button=document.getElementById('v58-price-analysis');
+  const actions=button?.closest('.actions');
+  if(tools&&option&&option.parentNode===tools){
+   if(actions&&actions!==tools&&actions.children.length===1){actions.dataset.r16AnalysisActions='1';if(actions.parentNode!==tools)tools.append(actions)}
+   if(option.nextElementSibling!==actions&&actions?.parentNode===tools)tools.insertBefore(option,actions);
+  }
+ }
+ // Retain the successful result and its listeners when unrelated data refreshes the form.
+ const signature=()=>{const s=state();return JSON.stringify([s.category,s.service,s.description,s.location,s.quantity,s.hours,s.urgency,s.date,s.includeMaterialsEstimate])};
+ const original=window.render;
+ if(typeof original==='function')window.render=function(){
+  const before=signature(),s=state();
+  const snapshots=s.page==='request'?['v56-ai-result','v58-price-result'].map(id=>{const old=document.getElementById(id);return {id,old,nodes:old?[...old.childNodes]:[]}}):[];
+  const result=original.apply(this,arguments);
+  for(const {id,old,nodes} of snapshots){const next=document.getElementById(id);
+   if(state().page==='request'&&before===signature()&&next&&next!==old&&!next.textContent.trim()&&nodes.length&&!nodes.some(n=>n.nodeType===1&&n.classList.contains('fechou-ai-error')))next.replaceChildren(...nodes);}
+  normalize();return result;
+ };
+ document.addEventListener('click',e=>{const b=e.target.closest?.('[data-v274-withdraw-proposal]');if(!b)return;const o=(state().orders||[]).find(o=>String(o.id)===String(b.dataset.orderId));if(done(o)){e.preventDefault();e.stopImmediatePropagation();b.remove()}},true);
+ let queued=false;const schedule=()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;normalize()})};
+ const boot=()=>{new MutationObserver(schedule).observe(document.getElementById('app')||document.body,{childList:true,subtree:true});normalize()};
+ window.FechouR16=Object.freeze({confirmSubscription,done,normalize});
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+})();
+</script></body>
 
 <style id="fechou-v325-request-disclosure-style">
 #app .v325-request-disclosure{display:block!important;margin:10px 0!important;padding:0!important;overflow:hidden!important;border:1px solid #344b63!important;border-radius:14px!important;background:linear-gradient(145deg,#142235,#0f1926)!important;color:#edf4fc!important;box-shadow:0 8px 22px #0003!important}
@@ -40121,7 +40184,8 @@ button, .btn, [role="button"], a.btn, summary{
       const wrapped = function () {
         const args = arguments, ctx = this;
         return new Promise((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error(label + ' está demorando mais que o normal. Verifique a conexão e toque para tentar novamente.')), ms);
+          const budget = args[0] === 'ai/analyze' ? 70000 : ms;
+          const timer = setTimeout(() => reject(Object.assign(new Error('A operação não foi concluída no tempo esperado. Seus dados foram preservados.'), {apiCode:'CLIENT_OPERATION_TIMEOUT',httpStatus:504})), budget);
           Promise.resolve(fn.apply(ctx, args)).then((v) => { clearTimeout(timer); resolve(v); }, (err) => {
             clearTimeout(timer);
             const msg = String(err?.message || err || '');
