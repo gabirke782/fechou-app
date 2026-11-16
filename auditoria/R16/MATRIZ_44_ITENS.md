@@ -10,7 +10,7 @@ Itens preservados não foram reconstruídos. Conferência no código/DOM não eq
 | 2.1 | Conferido no DOM | 21 notificações simuladas: sino/lista indicam 21; marcar uma como lida resulta em 20 e grava atualização com escopo da conta. A janela de consulta foi ampliada de 20 para 200; caixas acima de 200 ainda exigem paginação ou contador no servidor. |
 | 2.2 | Preservado do R13 | Filtro existente retira lembretes de execução do cliente. Ainda requer conferir os destinatários gerados no backend. |
 | 2.3 | Corrigido R15; testes conservados | Eventos antigos/novos e troca de conta passaram em 7 testes; persistência em múltiplos dispositivos ainda não homologada. |
-| 3.1 | Conciliação pendente | Tabela de webhooks consultada sem novos eventos desde 07/11; exige conferir Asaas e boleto liquidado real. |
+| 3.1 | Conciliação pendente | Asaas acessível: webhook correto está com fila interrompida. Logs consultados não esclareceram a causa; sincronização e boleto liquidado ainda pendentes. |
 | 4.1 | Preservado do R13 | Ajudas contextuais mantidas; inspeção visual por screenshot pendente. |
 | 4.2 | Preservado do R13 | Orientações de categoria e serviço permanecem nas ajudas contextuais. |
 | 4.3 | Corrigido e testado no DOM | Hoje converte Normal em Hoje. Escolher Normal depois move a data para amanhã e a escolha não é desfeita pelos observers. Urgente permanece Urgente. Datas passadas são corrigidas. |
@@ -43,7 +43,7 @@ Itens preservados não foram reconstruídos. Conferência no código/DOM não eq
 | 12.1 | Complementado e testado no DOM | Histórico compacto recebido foi mantido; reconversão do mesmo registro agora é idempotente e não perde motivos/informações/comprovantes. |
 | 12.2 | Corrigido na classificação; visual pendente | Pendente/em análise/enviado ficam como atenção; confirmado como sucesso; falhou/cancelado como erro. Números permanecem brancos pela orientação atual do print. |
 | 12.3 | Preservado do R13 | Seta expansível padrão conservada. |
-| 13.1 | Servidor ativo; fluxo completo pendente | v331 conserva revalidação de identidade, aceite, pagamento, conclusão e reembolso antes da solicitação de repasse. |
+| 13.1 | Servidor ativo; fluxo completo pendente | v332 conserva revalidação de identidade, aceite, pagamento, conclusão e reembolso antes da solicitação de repasse. |
 | 13.2 | Parcial | Bloqueios testados; saque histórico com referência paga em outra movimentação segue sem nova transferência. Fluxo concorrente e webhook completo ainda pendentes. |
 | 14.1 | Ajustes R16 preparados | Chat compacto e rolável; preservado restante do template. Revisão visual móvel não concluída. |
 | 14.2 | Parcial | Cores preservadas e ações de chat ajustadas; todos os conjuntos de botões ainda precisam revisão visual. |
