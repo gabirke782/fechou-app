@@ -3022,7 +3022,7 @@ async function assertPayoutReviewEligibility(ctx: any, orderId: string) {
   if (!info.accepted || info.paymentMode !== "contract_prepaid" || String(info.order.payment_status || "").toLowerCase() !== "approved" || serviceState !== "completed")
     throw Object.assign(new Error("O repasse só pode ser solicitado após a confirmação do pagamento e da conclusão do serviço."), { status: 409, code: "PAYOUT_NOT_ELIGIBLE" });
   const refundStatus = String(info.order.refund_status || info.meta.refund_status || "").toLowerCase();
-  if (["refund_pending", "pending", "requested", "processing", "refunded", "partially_refunded"].includes(refundStatus))
+  if (["refund_pending", "pending", "requested", "processing", "review_required", "submitted", "in_progress", "bank_slip_action_required", "refunded", "partially_refunded"].includes(refundStatus))
     throw Object.assign(new Error("Esta contratação possui reembolso em análise ou confirmado. O repasse está bloqueado."), { status: 409, code: "PAYOUT_REFUND_PENDING" });
   const { data: cases, error } = await ctx.admin.from("fechou_service_cases").select("id").eq("order_id", orderId).in("status", ["open", "in_review"]).limit(1);
   if (error) throw Object.assign(new Error("Não foi possível conferir as contestações. Tente novamente em instantes."), { status: 503, code: "PAYOUT_CASE_CHECK_UNAVAILABLE" });
