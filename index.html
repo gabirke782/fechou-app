@@ -40834,7 +40834,7 @@ window.fechouNativeBtnClassV335 = function (name) {
   function saveSeen(set) { try { localStorage.setItem(seenKey(), JSON.stringify([...set].slice(-400))); } catch (_) {} }
   let seen = new Set();
   let seenFor = '';
-  let seedUntil = 0;
+  // Historical events are filtered by account and timestamp, not by a timed blackout.
   let remoteTimer = null;
   function ensureSeen() {
     const key = seenKey();
@@ -40845,7 +40845,7 @@ window.fechouNativeBtnClassV335 = function (name) {
       const meta = appState()?.supabaseUser?.user_metadata?.fechou_seen_events;
       if (Array.isArray(meta)) meta.forEach((x) => seen.add(String(x)));
     } catch (_) {}
-    if (uid() && seen.size === 0) seedUntil = Date.now() + 7000;
+    // New events can be presented immediately after authentication.
   }
   function syncSeenRemote() {
     clearTimeout(remoteTimer);
@@ -40861,7 +40861,7 @@ window.fechouNativeBtnClassV335 = function (name) {
     ensureSeen();
     if (!id || seen.has(id)) return false;
     seen.add(id); saveSeen(seen); syncSeenRemote();
-    if (Date.now() < seedUntil) return false;
+    // No timed suppression: a genuinely new event is not lost during login.
     return true;
   }
 
