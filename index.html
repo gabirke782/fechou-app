@@ -2077,7 +2077,7 @@ document.addEventListener('DOMContentLoaded',run);setInterval(run,1500);
 </script>
 <style id="fechou-r17-service-layout">
 /* Detalhes e registro: escopo restrito; o rodapé do aplicativo é preservado. */
-html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-record{display:block!important;gap:0!important;background:#10171d!important;border:1px solid #2d3c4d!important;border-radius:24px!important;padding:16px!important;max-width:900px;margin:0 auto 22px;overflow:visible!important}
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-record{display:block!important;gap:0!important;background:#10171d!important;border:1px solid #2d3c4d!important;border-radius:24px!important;padding:16px!important;max-width:900px;margin:0 auto calc(110px + env(safe-area-inset-bottom,0px))!important;overflow:visible!important}
 html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-header{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#171f29;border-radius:18px;padding:18px;margin-bottom:18px;min-width:0}
 html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-header>div{min-width:0;flex:1}
 html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-header h2{font-size:clamp(22px,4.8vw,30px)!important;line-height:1.18!important;margin:0 0 8px!important;overflow-wrap:anywhere}
@@ -2122,6 +2122,8 @@ html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-photo img{width:
 html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-photo figcaption{font-size:11px;overflow-wrap:anywhere}
 @media(max-width:359px){html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-record{padding:10px!important}html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-header{padding:12px!important;align-items:flex-start;flex-wrap:wrap}html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-service-status{max-width:100%}html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-proposals-grid{grid-template-columns:1fr!important}}
 @media(prefers-reduced-motion:reduce){html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold>summary>span{transition:none}}
+
+html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold>summary::after{content:none!important;display:none!important}
 
 </style>
 </head>
@@ -4053,7 +4055,7 @@ ${
 <li><b>Atender uso de IA para análise e estimativas:</b> execução do recurso solicitado pelo usuário e legítimo interesse na melhoria/segurança do serviço, quando cabível. O usuário deve revisar as sugestões e decidir se as utiliza.</li>
 </ul>
 <h3>4. Inteligência artificial e estimativas</h3>
-<p>Quando você usa a análise de serviço, o FECHOU utiliza inteligência artificial para entender a descrição (e o áudio, se você enviar), organizar um checklist e sugerir uma estimativa de preço da sua região. Para isso, usamos as informações do pedido: descrição, categoria, tipo de serviço, localização informada, quantidade, horas e áudio.</p>
+<p>Quando você usa a análise de serviço, o FECHOU utiliza inteligência artificial para entender a descrição e os anexos de foto, vídeo e áudio que você enviar, organizar um checklist e sugerir uma estimativa de preço da sua região. Para isso, usamos as informações do pedido: descrição, categoria, tipo de serviço, localização informada, quantidade, horas e anexos.</p>
 <p>As respostas da IA são estimativas e sugestões auxiliares, não orçamento garantido, avaliação profissional, laudo técnico ou decisão final. Podem conter erros, imprecisões ou dados desatualizados. Cliente e profissional devem conferir escopo, condições, valores e informações antes de publicar, propor ou contratar. Não utilize o recurso para inserir dados pessoais sensíveis ou informações de terceiros que não sejam necessárias.</p>
 <h3>5. Fornecedores e compartilhamento</h3>
 <p>Para o FECHOU funcionar, algumas informações são compartilhadas, somente na medida necessária, com empresas parceiras:</p>
@@ -4146,7 +4148,7 @@ ${
 <li><b>Atender uso de IA para análise e estimativas:</b> execução do recurso solicitado pelo usuário e legítimo interesse na melhoria/segurança do serviço, quando cabível. O usuário deve revisar as sugestões e decidir se as utiliza.</li>
 </ul>
 <h3>4. Inteligência artificial e estimativas</h3>
-<p>Quando você usa a análise de serviço, o FECHOU utiliza inteligência artificial para entender a descrição (e o áudio, se você enviar), organizar um checklist e sugerir uma estimativa de preço da sua região. Para isso, usamos as informações do pedido: descrição, categoria, tipo de serviço, localização informada, quantidade, horas e áudio.</p>
+<p>Quando você usa a análise de serviço, o FECHOU utiliza inteligência artificial para entender a descrição e os anexos de foto, vídeo e áudio que você enviar, organizar um checklist e sugerir uma estimativa de preço da sua região. Para isso, usamos as informações do pedido: descrição, categoria, tipo de serviço, localização informada, quantidade, horas e anexos.</p>
 <p>As respostas da IA são estimativas e sugestões auxiliares, não orçamento garantido, avaliação profissional, laudo técnico ou decisão final. Podem conter erros, imprecisões ou dados desatualizados. Cliente e profissional devem conferir escopo, condições, valores e informações antes de publicar, propor ou contratar. Não utilize o recurso para inserir dados pessoais sensíveis ou informações de terceiros que não sejam necessárias.</p>
 <h3>5. Fornecedores e compartilhamento</h3>
 <p>Para o FECHOU funcionar, algumas informações são compartilhadas, somente na medida necessária, com empresas parceiras:</p>
@@ -4347,7 +4349,7 @@ function renderServiceRecord(o, archive = false) {
   const selectedId = String(o.selectedProposalId || o.selected_proposal_id || o.selectedProposal?.id || '');
   const finished = !!window.fechouIsServiceCompleted?.(o);
   const cancelled = /cancelad|cancelled|canceled/i.test(String(o.status || o.service_state || ''));
-  const status = (window.fechouFriendlyStatusLabel?.(o.status) || o.status || 'Recebendo propostas');
+  const status = ['open','novo','nova solicitação','recebendo propostas'].includes(String(o.status || '').toLowerCase()) ? 'Recebendo propostas' : (window.fechouFriendlyStatusLabel?.(o.status) || o.status || 'Recebendo propostas');
   const value = window.fechouDisplayOrderPrice?.(o) ?? window.fechouRequestedLaborTotal?.(o) ?? o.laborReferencePrice ?? o.requestedPrice ?? o.total ?? o.referencePrice ?? 0;
   const title = o.service || o.title || 'Serviço';
   const shortId = String(o.id || '').slice(0, 8);
