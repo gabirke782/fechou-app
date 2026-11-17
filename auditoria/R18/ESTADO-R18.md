@@ -1,3 +1,5 @@
+> Atualização: a revisão mais recente agora é R19. Consulte ../R19/ESTADO-R19.md e ../R19/RELATORIO_R19_2026-11-16.md. O texto abaixo registra o histórico da etapa R18.
+
 # FECHOU R18 — estado atual em 17/11/2026
 
 Backend eworkers-api v333 ATIVO, fonte conferida integralmente ao candidato R18. O index.html da raiz e auditoria/R18/candidato/index.html são a revisão R18-2026-11-16-chat-panels, SHA256 406e221cb41f917d4ec2ea2771af18f72c4cd903429718ce6b157b6e903ac6b3, 2.530.419 bytes. Fonte central sincronizada e rollback/eworkers-api-v332.ts preservado.
