@@ -25666,7 +25666,7 @@ body #app .fechou-profile-progress>div:first-child b {
         document.addEventListener("click", async function (ev) {
           const target = ev.target instanceof Element ? ev.target : null;
           if (!target) return;
-          if (target.closest('[data-fc-tool]') && window.__FECHOU_V335_CHATUX__) return;
+          if (target.closest('[data-fc-tool]') && window.__FECHOU_V335_CHATUX__ && !window.__FECHOU_V335_ALLOW_NATIVE) return;
           const chatRootForHint = target.closest("#v121ChatOverlay");
           if (chatRootForHint) {
             const hint = chatRootForHint.querySelector(".fc-chat-attachment-hint");
