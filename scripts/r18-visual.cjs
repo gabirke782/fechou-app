@@ -9,6 +9,7 @@ const results=[],errors=[];let browser;
 await new Promise(r=>server.listen(8765,'127.0.0.1',r));
 browser=await chromium.launch({headless:true,executablePath:process.env.R18_CHROMIUM_PATH||undefined});
 const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
+page.setDefaultTimeout(7000);
 page.on('pageerror',e=>errors.push(String(e)));
 await page.route('**/*',route=>route.request().url().startsWith('http://127.0.0.1:8765/')?route.continue():route.fulfill({status:200,contentType:route.request().resourceType()==='script'?'application/javascript':'text/plain',body:''}));
 await page.addInitScript(()=>{
@@ -22,6 +23,7 @@ window.__r18Requests.push({action});
 const s=window.__fechouAppState||{},order=s.orders?.[0]||{};
 if(action==='ai/analyze')return {ok:true,analysis:{category:'Elétrica',service:'Tomadas e interruptores',summary:'Substituição de duas tomadas na sala.',estimated_min:120,estimated_average:150,estimated_max:180,currency:'BRL',materials_estimate:{low:20,average:30,high:40},materials_breakdown:[{name:'Tomada 10 A',quantity:2,unit_price:15,subtotal:30}],checklist:['Desligar e conferir o circuito','Verificar as conexões'],questions:['O circuito possui aterramento?'],factors:['Estimativa de teste para Florianópolis.'],regional_sources:[{name:'Referência simulada',url:'https://example.test/'}]}};
 if(action==='wallet/refund-requests')return {ok:true,requests:[{id:'refund-fixture',order_id:order.id,service:'Iluminação',title:'Iluminação',amount:42,status:'in_progress',reason:'Solicitação do cliente para análise',created_at:'2026-11-16T10:00:00Z',provider_summary:{pending_value:42}}]};
+if(action==='contracts/esign-status')return {ok:true,signature_status:'signed',pdf_available:true,client_signed:true,professional_signed:true,current_user_signed:true,document_id:'contract-fixture'};
 if(action.startsWith('team/'))return {ok:true,team:{id:'team-fixture',leader_id:s.supabaseUser?.id},order:{id:order.id,service:'Iluminação'},viewer:{leader:s.currentRole==='Profissional',client:s.currentRole==='Cliente'},participants:[],invites:[],messages:[],turns:[]};
 return {ok:true,orders:s.orders||[],entries:[],requests:[],messages:[],photos:[],subscription:s.subscription,team:null,fees:{},balance:{available:0}};
 };
@@ -29,6 +31,7 @@ window.fetch=async url=>{const u=String(url);if(u.includes('viacep.com.br'))retu
 });
 await page.goto('http://127.0.0.1:8765/',{waitUntil:'domcontentloaded'});
 await page.waitForFunction(()=>window.__fechouAppState&&typeof window.render==='function');
+await page.waitForTimeout(400);
 await page.evaluate(()=>{
 window.ewApi=window.__r18Api;
 const client='11111111-1111-4111-8111-111111111111',pro='22222222-2222-4222-8222-222222222222',id='44444444-4444-4444-8444-444444444444',pid='33333333-3333-4333-8333-333333333333';
@@ -39,7 +42,7 @@ window.__r18Scene=(pageName,role='Cliente')=>{const s=window.__fechouAppState;s.
 async function test(name,run){try{await run();results.push({name,passed:true})}catch(e){results.push({name,passed:false,error:e.message});}}
 async function shot(name,selector){await page.waitForTimeout(180);const target=selector?page.locator(selector):page;const options={path:path.join(out,name+'.png'),animations:'disabled'};if(!selector)options.fullPage=true;await target.screenshot(options);}
 await test('CEP: consulta real dos controles com base simulada',async()=>{await page.evaluate(()=>{window.__r18Scene('request');const s=window.__fechouAppState;s.description='Trocar duas tomadas na sala';s.category='Elétrica';s.service='Tomadas e interruptores';s.location='Centro, Florianópolis';s.includeMaterialsEstimate=true;window.render()});await page.locator('#ewCep').fill('88010-000');await page.locator('[data-act="lookupCep"]').click();await page.waitForFunction(()=>window.__fechouAppState.location.includes('Rua de teste'));await shot('01-cep');});
-await test('Materiais: valores em reais e grupos da análise',async()=>{await page.evaluate(async()=>{await window.ExylonHubV56.runAnalysis()});await page.locator('#v56-ai-result').waitFor();await page.evaluate(()=>document.querySelectorAll('#v56-ai-result details').forEach(d=>d.open=true));await shot('02-materiais','#v56-ai-result');});
+await test('Materiais: valores em reais e grupos da análise',async()=>{await page.evaluate(async()=>{await window.ExylonHubV56.runAnalysis()});const close=page.locator('.v189-overlay .v189-close');if(await close.count()&&await close.last().isVisible())await close.last().click();await page.locator('#v56-ai-result').waitFor();await page.evaluate(()=>document.querySelectorAll('#v56-ai-result details').forEach(d=>d.open=true));await shot('02-materiais','#v56-ai-result');});
 await test('Detalhes: status, totais e proposta no celular',async()=>{await page.evaluate(()=>window.__r18Scene('proposals'));await shot('03-detalhes');});
 await test('Registro: mídias de foto, vídeo e áudio',async()=>{await page.evaluate(()=>{window.__r18Order.photos=[{url:'http://127.0.0.1:8765/fixture-photo.svg',mime:'image/png',name:'Foto de teste'},{url:'http://127.0.0.1:8765/fixture-video.mp4',mime:'video/mp4',name:'Vídeo de teste'},{url:'http://127.0.0.1:8765/fixture-audio.m4a',mime:'audio/mp4',name:'Áudio de teste'}];window.__r18Scene('archive')});await page.locator('.r17-record-fold summary').first().click();await shot('04-registro');});
 await test('Galeria: abrir e fechar sem trocar o pedido',async()=>{await page.locator('[data-request-media-open="0"]').click();await page.locator('#fechou-request-gallery').waitFor();await shot('05-galeria');await page.locator('[data-media-close]').click();});
@@ -49,8 +52,12 @@ for(const [kind,label] of [['contract','contrato'],['attach','anexar'],['attachm
 await test('Chat: abrir ferramenta '+label,async()=>{
 await page.evaluate(async()=>{window.__r18Order.photos=[];window.__r18Scene('myquotes','Profissional');await window.__fechouOpenChatByOrder(window.__r18Order.id)});
 await page.locator('#v121ChatOverlay').waitFor();
+await page.waitForTimeout(250);
 const toggle=page.locator('#v121ChatOverlay [data-fc-tools-toggle]');
 if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
+await page.waitForTimeout(700);
+const toolsState=await page.locator('#v121ChatOverlay').evaluate(ov=>{const t=ov.querySelector('[data-fc-tools-toggle]'),g=ov.querySelector('.fc-chat-tools-grid'),b=g.getBoundingClientRect(),style=getComputedStyle(g);return {expanded:t.getAttribute('aria-expanded'),dataset:ov.dataset.toolsExpanded,classes:g.className,height:b.height,opacity:style.opacity,display:style.display}});console.log('CHAT_TOOLS_STATE '+kind+' '+JSON.stringify(toolsState));
+assert.equal(toolsState.expanded,'true','As ferramentas devem permanecer expandidas depois de 700 ms');
 if(kind==='contract')await shot('10-chat-ferramentas');
 await page.locator('#v121ChatOverlay [data-fc-tool="'+kind+'"]').click();
 await shot('11-chat-'+label);
