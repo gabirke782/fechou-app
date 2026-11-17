@@ -3,7 +3,7 @@ const root=process.cwd(),dir=path.join(root,'.r18-ci'),out=path.join(root,'retom
 fs.mkdirSync(dir,{recursive:true});fs.mkdirSync(out,{recursive:true});
 const checkpoint=JSON.parse(fs.readFileSync('auditoria/R18/checkpoint-sources.json','utf8'));
 for(const name of ['media-upload-server.ts','team-search.ts','backend-tests.cjs','pending-tests.cjs','acceptance-extra.cjs','auto-refund.ts'])fs.writeFileSync(path.join(dir,name),checkpoint[name]);
-const candidate=fs.readFileSync('auditoria/R18/candidato/eworkers-api.ts','utf8'),baseline=fs.readFileSync('supabase/functions/eworkers-api/index.ts','utf8');
+const candidate=fs.readFileSync('auditoria/R18/candidato/eworkers-api.ts','utf8'),baseline=fs.readFileSync('rollback/eworkers-api-v332.ts','utf8');
 const html=fs.readFileSync('auditoria/R18/candidato/index.html','utf8');
 fs.writeFileSync(path.join(dir,'eworkers-api.ts'),candidate);fs.writeFileSync(path.join(dir,'eworkers-v332.ts'),baseline);fs.writeFileSync(path.join(out,'index.html'),html);
 function fn(source,name){const ast=ts.createSourceFile('api.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);const node=ast.statements.find(x=>ts.isFunctionDeclaration(x)&&x.name?.text===name);assert.ok(node,name);return {text:node.getText(ast),start:node.getStart(ast),end:node.getEnd()};}

@@ -3583,12 +3583,13 @@ async function notifyProposalDiscount(ctx: any, payload: Record<string, any>) {
 }
 
 
-async function v195Draft(ctx:any,id:string){
+async function v195Draft(ctx:any,id:string,forPayment=false){
  if(!validUuid(id))throw Object.assign(new Error("Solicitação inválida."),{status:400});
  const {data,error}=await ctx.admin.from("fechou_prepublication_drafts").select("*").eq("id",id).maybeSingle();
  if(error)throw Object.assign(new Error(error.message),{status:500});
  if(!data||data.archived_at)throw Object.assign(new Error("Solicitação pendente não encontrada ou arquivada."),{status:404});
  if(String(data.client_id)!==String(ctx.user.id))throw Object.assign(new Error("Acesso negado."),{status:403});
+ if(forPayment&&data.payload?.metadata?.request_media_upload_complete===false)throw Object.assign(new Error("Os anexos ainda estão sendo vinculados. O pagamento permanece bloqueado até o término do envio."),{status:409,code:"REQUEST_MEDIA_UPLOAD_PENDING"});
  return data;
 }
 function v195Name(v:any){return text(v,150).replace(/[^a-zA-Z0-9._-]+/g,"_").replace(/^_+|_+$/g,"")||"arquivo"}
@@ -3598,12 +3599,50 @@ function v195Bytes(dataUrl:string,mime:string){
  const raw=atob(m[2].replace(/\s/g,""));if(!raw.length||raw.length>20*1024*1024)throw Object.assign(new Error("Anexo excede 20 MB."),{status:413});
  const b=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)b[i]=raw.charCodeAt(i);return b;
 }
+const REQUEST_MEDIA_MAX_FILES = 150;
+const REQUEST_MEDIA_MAX_BYTES = 300 * 1024 * 1024;
+const REQUEST_MEDIA_FILE_MAX_BYTES = 50 * 1024 * 1024;
+function requestMediaMime(value: any) {
+ const mime=String(value||'').split(';')[0].trim().toLowerCase();
+ return ({'audio/x-m4a':'audio/mp4','audio/m4a':'audio/mp4','audio/x-wav':'audio/wav'} as Record<string,string>)[mime]||mime;
+}
+function validateRequestMedia(items: any) {
+ if(!Array.isArray(items)||items.length>REQUEST_MEDIA_MAX_FILES)throw Object.assign(new Error('Envie até 150 arquivos por solicitação.'),{status:413});
+ let total=0;const allowed=['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/quicktime','video/webm','audio/mpeg','audio/wav','audio/mp4','audio/ogg','audio/webm'];
+ for(const item of items){const size=Number(item?.size);if(!Number.isSafeInteger(size)||size<=0||size>REQUEST_MEDIA_FILE_MAX_BYTES)throw Object.assign(new Error('Cada arquivo deve ter até 50 MB.'),{status:413});if(!allowed.includes(requestMediaMime(item?.mime)))throw Object.assign(new Error('Formato de mídia não permitido.'),{status:415});total+=size;}
+ if(total>REQUEST_MEDIA_MAX_BYTES)throw Object.assign(new Error('Os anexos somados devem ter até 300 MB.'),{status:413});
+ return items;
+}
+async function requestMediaUploadUrls(ctx:any,payload:any){
+ ensureUserRole(getRole(ctx.profile,ctx.user),'client');
+ const items=validateRequestMedia(payload.media),session=text(payload.upload_session,80);
+ if(!validUuid(session))throw Object.assign(new Error('Sessão de envio inválida.'),{status:400});
+ const uploads=[];
+ for(let i=0;i<items.length;i++){
+  const item=items[i],mime=requestMediaMime(item.mime),name=v195Name(item.name);
+  const path=String(ctx.user.id)+'/request/'+session+'/'+crypto.randomUUID()+'-'+name;
+  const {data,error}=await ctx.admin.storage.from('eworkers-chat').createSignedUploadUrl(path);
+  if(error||!data?.token)throw Object.assign(new Error('Não foi possível preparar o envio dos anexos. Tente novamente.'),{status:503});
+  uploads.push({path,token:data.token,name:text(item.name,150),mime,size:Number(item.size)});
+ }
+ return {uploads,max_files:REQUEST_MEDIA_MAX_FILES,max_total_bytes:REQUEST_MEDIA_MAX_BYTES,max_file_bytes:REQUEST_MEDIA_FILE_MAX_BYTES};
+}
+async function requestMediaStored(ctx:any,item:any){
+ const path=text(item.path,500),parts=path.split('/');
+ if(parts.length!==4||parts[0]!==String(ctx.user.id)||parts[1]!=='request'||!validUuid(parts[2])||!parts[3]||parts.some((p:string)=>p==='.'||p==='..'))throw Object.assign(new Error('Este anexo não pertence à solicitação desta conta.'),{status:403});
+ const {data,error}=await ctx.admin.storage.from('eworkers-chat').list(parts.slice(0,3).join('/'),{search:parts[3],limit:100});
+ const found=Array.isArray(data)?data.find((x:any)=>x.name===parts[3]):null;
+ if(error||!found?.id||Number(found.metadata?.size)!==Number(item.size)||requestMediaMime(found.metadata?.mimetype)!==requestMediaMime(item.mime))throw Object.assign(new Error('O envio de um anexo não foi concluído ou os dados não conferem. O formulário foi mantido.'),{status:409});
+ return path;
+}
+
 async function v195PrepublicationCreate(ctx:any,payload:any){
  ensureUserRole(getRole(ctx.profile,ctx.user),"client");
  if(Number(payload.protocol_version)!==189)throw Object.assign(new Error("Protocolo incompatível."),{status:409});
  const key=text(payload.idempotency_key,100);if(!/^[a-zA-Z0-9:_-]{12,100}$/.test(key))throw Object.assign(new Error("Chave idempotente inválida."),{status:400});
  const {data:prior,error:pe}=await ctx.admin.from("fechou_prepublication_drafts").select("*").eq("client_id",ctx.user.id).eq("idempotency_key",key).maybeSingle();
  if(pe)throw Object.assign(new Error(pe.message),{status:500});
+ if(prior?.payload?.metadata?.request_media_upload_complete===false)throw Object.assign(new Error("Os anexos ainda estão sendo vinculados. Aguarde o envio terminar antes de pagar."),{status:409});
  if(prior)return {protocol_version:189,order:{id:prior.id,client_id:prior.client_id,service:prior.payload?.service,title:prior.payload?.title,description:prior.payload?.description,total:Number(prior.amount),payment_method:"contract_prepaid",payment_flow:"contract_prepaid",client_payment_preference:"contract_prepaid",publication_status:["cancelled","expired","payment_review"].includes(String(prior.status))?prior.status:"awaiting_payment",payment_status:prior.status}};
  const o=asObject(payload.order),orderMeta=asObject(o.metadata),temporaryTestPrice=orderMeta.temporary_test_price===true;
  if(temporaryTestPrice&&!canUseTemporaryTestPrice(ctx.user.id))throw Object.assign(new Error("Modo de teste temporário não autorizado para esta conta."),{status:403,code:"TEMP_TEST_PRICE_FORBIDDEN"});
@@ -3617,21 +3656,21 @@ async function v195PrepublicationCreate(ctx:any,payload:any){
  const draftId=crypto.randomUUID(),clean={...o};for(const k of ["photos","videos","audio","_requestPhotoFiles"])delete clean[k];
  clean.payment_method="contract_prepaid";clean.payment_flow="contract_prepaid";clean.client_payment_preference="contract_prepaid";
  clean.total=temporaryTestPrice?6:clean.total;clean.referencePrice=temporaryTestPrice?6:clean.referencePrice;clean.clientDiscount=temporaryTestPrice?0:clean.clientDiscount;
- clean.metadata={...asObject(clean.metadata),publication_flow_version:189,publication_status:"awaiting_payment",...(temporaryTestPrice?{temporary_test_price:true,temporary_test_payment_only:true,temporary_test_price_brl:6}: {})};
+ clean.metadata={...asObject(clean.metadata),request_media_upload_complete:false,publication_flow_version:189,publication_status:"awaiting_payment",...(temporaryTestPrice?{temporary_test_price:true,temporary_test_payment_only:true,temporary_test_price_brl:6}: {})};
  const {data:d,error}=await ctx.admin.from("fechou_prepublication_drafts").insert({id:draftId,client_id:ctx.user.id,idempotency_key:key,payload:clean,media:[],amount:Number(amount.toFixed(2)),status:"awaiting_payment"}).select("*").single();
  if(error)throw Object.assign(new Error("Falha ao salvar rascunho privado: "+error.message),{status:500});
- const list=Array.isArray(payload.media)?payload.media.slice(0,10):[],paths=[],sum=list.reduce((n,x)=>n+Number(x?.size||0),0);
- if(list.length>10||sum>20*1024*1024){await ctx.admin.from("fechou_prepublication_drafts").delete().eq("id",draftId);throw Object.assign(new Error("Limite de anexos excedido."),{status:413})}
+ const list=Array.isArray(payload.media)?payload.media:[],paths:any[]=[];
+ try{validateRequestMedia(list)}catch(error){await ctx.admin.from("fechou_prepublication_drafts").delete().eq("id",draftId);throw error;}
  try{
   for(let i=0;i<list.length;i++){
-   const m=asObject(list[i]),mime=text(m.mime,100).toLowerCase(),allowed=["image/jpeg","image/png","image/webp","image/gif","video/mp4","video/quicktime","video/webm","audio/mpeg","audio/wav","audio/mp4","audio/x-m4a","audio/ogg"];
+   const m=asObject(list[i]),mime=text(m.mime,100).toLowerCase(),allowed=["image/jpeg","image/png","image/webp","image/gif","image/heic","image/heif","video/mp4","video/quicktime","video/webm","audio/mpeg","audio/wav","audio/mp4","audio/x-m4a","audio/ogg","audio/webm"];
    if(!allowed.includes(mime))throw Object.assign(new Error("Formato de mídia não habilitado: "+mime),{status:415});
-   const bytes=v195Bytes(text(m.data_url,30000000),mime);if(Number(m.size)!==bytes.length)throw new Error("Tamanho de mídia inconsistente.");
-   const path=String(ctx.user.id)+"/"+draftId+"/"+String(i+1).padStart(2,"0")+"-"+v195Name(m.name);
-   const {error:up}=await ctx.admin.storage.from("eworkers-chat").upload(path,bytes,{contentType:mime,upsert:false});if(up)throw new Error(up.message);
-   paths.push({name:text(m.name,150),mime,size:bytes.length,path});
+   const path=String(ctx.user.id)+"/"+draftId+"/"+String(i+1).padStart(3,"0")+"-"+v195Name(m.name);
+   if(m.path){const stagedPath=await requestMediaStored(ctx,m);const {error:moveError}=await ctx.admin.storage.from("eworkers-chat").move(stagedPath,path);if(moveError)throw new Error("Não foi possível vincular um anexo ao pedido.");}
+   else{const bytes=v195Bytes(text(m.data_url,30000000),mime);if(Number(m.size)!==bytes.length)throw new Error("Tamanho de mídia inconsistente.");const {error:up}=await ctx.admin.storage.from("eworkers-chat").upload(path,bytes,{contentType:requestMediaMime(mime),upsert:false});if(up)throw new Error(up.message);}
+   paths.push({name:text(m.name,150),mime:requestMediaMime(mime),size:Number(m.size),path});
   }
-  const {error:me}=await ctx.admin.from("fechou_prepublication_drafts").update({media:paths,updated_at:new Date().toISOString()}).eq("id",draftId);if(me)throw new Error(me.message);
+  const {error:me}=await ctx.admin.from("fechou_prepublication_drafts").update({media:paths,payload:{...clean,metadata:{...clean.metadata,request_media_upload_complete:true}},updated_at:new Date().toISOString()}).eq("id",draftId);if(me)throw new Error(me.message);
  }catch(e){if(paths.length)await ctx.admin.storage.from("eworkers-chat").remove(paths.map(x=>x.path));await ctx.admin.from("fechou_prepublication_drafts").delete().eq("id",draftId);throw e}
  return {protocol_version:189,order:{id:draftId,client_id:ctx.user.id,service:o.service,title:o.title||o.service,description:o.description,total:Number(amount.toFixed(2)),payment_method:"contract_prepaid",payment_flow:"contract_prepaid",client_payment_preference:"contract_prepaid",publication_status:"awaiting_payment"}};
 }
@@ -3775,7 +3814,7 @@ async function reconcileAndClosePrepublicationCharge(admin:any,draft:any,link:an
 
 async function v195Quote(ctx:any,payload:any){
  ensureUserRole(getRole(ctx.profile,ctx.user),"client");
- let d=await v195Draft(ctx,text(payload.order_id,100));
+ let d=await v195Draft(ctx,text(payload.order_id,100),true);
  if(!["awaiting_payment","payment_pending"].includes(String(d.status||"")))throw Object.assign(new Error("Esta solicitação não está aguardando pagamento. Atualize a lista de pagamentos pendentes."),{status:409,code:"PREPUBLICATION_DRAFT_NOT_PAYABLE"});
  let testMetadata=asObject(asObject(d.payload).metadata),temporaryTestPrice=testMetadata.temporary_test_price===true;
  if(temporaryTestPrice&&!canUseTemporaryTestPrice(ctx.user.id))throw Object.assign(new Error("Modo de teste temporário não autorizado para esta conta."),{status:403,code:"TEMP_TEST_PRICE_FORBIDDEN"});
@@ -3875,7 +3914,7 @@ function v223SafePaymentSnapshot(p:any){const x=asObject(p),out:any={};for(const
 
 async function v195Pay(req:Request,ctx:any,payload:any){
  ensureUserRole(getRole(ctx.profile,ctx.user),"client");
- const d=await v195Draft(ctx,text(payload.order_id,100));
+ const d=await v195Draft(ctx,text(payload.order_id,100),true);
  if(!["awaiting_payment","payment_pending"].includes(d.status))throw Object.assign(new Error("Rascunho não pode receber cobrança."),{status:409});
  if(payload.terms_accepted!==true||text(payload.terms_version,40)!=="V189-1")throw Object.assign(new Error("Aceite as políticas de pagamento."),{status:400});
  const {data:q,error:qe}=await ctx.admin.from("fechou_prepublication_quotes").select("*").eq("id",text(payload.quote_id,100)).eq("draft_id",d.id).eq("client_id",ctx.user.id).maybeSingle();
@@ -4156,6 +4195,10 @@ async function releaseSelectedProfessional(ctx:any,payload:any){
 }
 async function v195Pending(ctx:any){
  ensureUserRole(getRole(ctx.profile,ctx.user),"client");
+ const cutoff=new Date(Date.now()-30000).toISOString();
+ const {data:checks,error:checkError}=await ctx.admin.from("fechou_prepublication_drafts").select("id,status,payment_id,updated_at").eq("client_id",ctx.user.id).is("archived_at",null).in("status",["awaiting_payment","payment_pending","payment_review"]).not("payment_id","is",null).lt("updated_at",cutoff).order("updated_at",{ascending:true}).limit(3);
+ if(!checkError)for(const pending of checks||[]){try{await v195PublicationStatus(ctx,{order_id:pending.id});}catch(error){console.warn("FECHOU pending payment reconciliation deferred",text((error as Error)?.message,180));}finally{await ctx.admin.from("fechou_prepublication_drafts").update({updated_at:new Date().toISOString()}).eq("id",pending.id).eq("status",pending.status);}}
+
  const {data,error}=await ctx.admin.from("fechou_prepublication_drafts")
   .select("id,client_id,payload,amount,payment_total,payment_id,status,created_at")
   .eq("client_id",ctx.user.id).is("archived_at",null)
@@ -4782,7 +4825,37 @@ async function teamEnsure(ctx:any,p:any){
  if(error){const {data:old}=await ctx.admin.from("fechou_teams").select("*").eq("order_id",id).maybeSingle();if(old&&String(old.leader_id)===String(ctx.user.id))return {team:old,pre_hire:!currentProfessional};throw Object.assign(new Error("Não foi possível iniciar a equipe."),{status:500});}
  return {team:data,pre_hire:!currentProfessional,notice:!currentProfessional?"Equipe em planejamento. O pedido ainda precisa ser aceito pelo cliente para formalizar a contratação.":null};
 }
-async function teamSearch(ctx:any,p:any){ensureUserRole(getRole(ctx.profile,ctx.user),"professional");const id=text(p.order_id,80),radius=teamRadius(p.radius_km??10),d=await teamOrder(ctx,id);const {data:teamAccess}=await ctx.admin.from("fechou_teams").select("leader_id").eq("order_id",id).maybeSingle();if(String(teamAccess?.leader_id||d.professionalId||"")!==String(ctx.user.id))throw Object.assign(new Error("Somente o encarregado da equipe pode pesquisar colaboradores."),{status:403});const needle=text(p.query||p.specialty||"",180).toLowerCase(),center=teamCoords(d.order),city=text(d.order.region_approx||d.order.region||asObject(d.order.metadata).city,160).toLowerCase();const {data,error}=await ctx.admin.from("profiles").select("id,full_name,role,category,services,profile_data").eq("role","professional").neq("id",ctx.user.id).limit(250);if(error)throw Object.assign(new Error("Falha ao pesquisar profissionais."),{status:500});const out=[];for(const row of data||[]){const pd=asObject(row.profile_data),hay=[row.category,...(row.services||[]),...(pd.categories||[]),...(pd.services||[]),pd.description,pd.experience,pd.courses].join(" ").toLowerCase();if(needle&&!hay.includes(needle))continue;const point=teamCoords(pd),distance=center&&point?teamDistance(center,point):null,proCity=text(pd.city,160).toLowerCase();if(distance!==null&&distance>radius)continue;if(!center&&city&&proCity&&city!==proCity&&!hay.includes(city))continue;out.push({...await publicProfile(ctx.admin,row),distance_km:distance===null?null:Math.round(distance*10)/10,location_verified:distance!==null});}out.sort((a,b)=>(a.distance_km??99999)-(b.distance_km??99999)||Number(b.rating||0)-Number(a.rating||0));return {order_id:id,radius_km:radius,location_match_mode:center?"gps_coordinates":"city_or_service_fallback",distance_notice:center?"Distâncias calculadas por coordenadas cadastradas.":"Sem coordenadas verificáveis; a busca usa especialidade e região aproximada, sem afirmar distância.",professionals:out.slice(0,80)};}
+function teamSearchText(value:any){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+function teamSearchTerms(value:any){return teamSearchText(value).replace(/eletricista/g,'eletric').replace(/encanador/g,'hidraul').split(/\s+/).filter(Boolean);}
+function teamRegionMatches(orderRegion:any,profileRegion:any){
+ const a=teamSearchText(orderRegion),b=teamSearchText(profileRegion);if(!a||!b)return false;
+ const meaningful=(value:string)=>value.split(/\s+/).filter(x=>x.length>2&&!['rua','bairro','centro','avenida','brasil','santa','santo','estado'].includes(x));
+ const aa=meaningful(a),bb=meaningful(b);
+ return aa.length>0&&bb.length>0&&(a.includes(b)||b.includes(a)||bb.filter(x=>aa.includes(x)).length>=Math.min(2,bb.length));
+}
+async function teamSearch(ctx:any,p:any){
+ ensureUserRole(getRole(ctx.profile,ctx.user),'professional');
+ const id=text(p.order_id,80),radius=teamRadius(p.radius_km??10),d=await teamOrder(ctx,id);
+ const {data:teamAccess}=await ctx.admin.from('fechou_teams').select('leader_id').eq('order_id',id).maybeSingle();
+ if(String(teamAccess?.leader_id||d.professionalId||'')!==String(ctx.user.id))throw Object.assign(new Error('Somente o encarregado da equipe pode pesquisar colaboradores.'),{status:403});
+ const terms=teamSearchTerms(p.query||p.specialty),center=teamCoords(d.order),metadata=asObject(d.order.metadata);
+ const region=text(metadata.city||d.order.region_approx||d.order.region||d.order.location,300);
+ if(!center&&!region)throw Object.assign(new Error('Complete a localização do pedido para pesquisar profissionais da região.'),{status:422});
+ const {data,error}=await ctx.admin.from('profiles').select('id,full_name,role,category,services,profile_data').ilike('role','prof%').neq('id',ctx.user.id).limit(1000);
+ if(error)throw Object.assign(new Error('Falha ao pesquisar profissionais.'),{status:500});
+ const out=[];
+ for(const row of data||[]){
+  const pd=asObject(row.profile_data),hay=teamSearchText([row.category,...(Array.isArray(row.services)?row.services:[]),...(Array.isArray(pd.categories)?pd.categories:[]),...(Array.isArray(pd.services)?pd.services:[]),pd.description,pd.experience,pd.courses].join(' '));
+  if(terms.length&&!terms.every(term=>hay.includes(term)))continue;
+  const point=teamCoords(pd),distance=center&&point?teamDistance(center,point):null;
+  if(distance!==null&&distance>radius)continue;
+  if(distance===null&&!teamRegionMatches(region,pd.city||pd.region||pd.location))continue;
+  out.push({...await publicProfile(ctx.admin,row),distance_km:distance===null?null:Math.round(distance*10)/10,location_verified:distance!==null});
+ }
+ out.sort((a,b)=>(a.distance_km??99999)-(b.distance_km??99999)||Number(b.rating||0)-Number(a.rating||0));
+ return {order_id:id,radius_km:radius,location_match_mode:center?'gps_or_registered_region':'registered_region',distance_notice:'O raio é aplicado quando existem coordenadas dos dois lados. Sem elas, o resultado usa a região cadastrada e não afirma distância.',professionals:out.slice(0,80),matched:out.length};
+}
+
 async function teamInvite(ctx:any,p:any){const teamId=text(p.team_id,80),proId=text(p.professional_id,80);if(!validUuid(teamId)||!validUuid(proId))throw Object.assign(new Error("Equipe ou profissional inválido."),{status:400});const {data:team}=await ctx.admin.from("fechou_teams").select("*").eq("id",teamId).maybeSingle();if(!team)throw Object.assign(new Error("Equipe não encontrada."),{status:404});if(String(team.leader_id)!==String(ctx.user.id))throw Object.assign(new Error("Somente o líder pode convidar profissionais."),{status:403});if(proId===String(ctx.user.id))throw Object.assign(new Error("Não é possível convidar a própria conta."),{status:400});const {data:pro}=await ctx.admin.from("profiles").select("id,role").eq("id",proId).maybeSingle();if(!pro||pro.role!=="professional")throw Object.assign(new Error("Profissional não encontrado."),{status:404});const role=text(p.role_label,120),specialty=text(p.specialty,180),responsibilities=text(p.responsibilities,2500),amount=Number(p.amount),basis=text(p.pay_basis,20);if(role.length<2||!responsibilities||!Number.isFinite(amount)||amount<=0||amount>10000000||!["fixed","daily"].includes(basis))throw Object.assign(new Error("Informe função, responsabilidades e remuneração válida."),{status:400});const sc=asObject(p.schedule),co=asObject(p.conditions),schedule={start_date:text(sc.start_date,20),end_date:text(sc.end_date,20),hours:text(sc.hours,220),breaks:text(sc.breaks,180),shift:text(sc.shift,120)},conditions={meals:text(co.meals,400),transport:text(co.transport,400),benefits:text(co.benefits,600),notes:text(co.notes,900)};if(schedule.start_date&&!/^\d{4}-\d{2}-\d{2}$/.test(schedule.start_date)||schedule.end_date&&!/^\d{4}-\d{2}-\d{2}$/.test(schedule.end_date)||schedule.start_date&&schedule.end_date&&schedule.end_date<schedule.start_date)throw Object.assign(new Error("Datas da convocação inválidas."),{status:400});const {data:old}=await ctx.admin.from("fechou_team_invites").select("id,status").eq("team_id",teamId).eq("invited_user_id",proId).maybeSingle();if(old&&["pending","accepted"].includes(old.status))throw Object.assign(new Error("Este profissional já recebeu um convite ativo."),{status:409});let invite:any;let inviteError:any;const invitePayload={team_id:teamId,invited_user_id:proId,invited_by:ctx.user.id,role_label:role,specialty,responsibilities,schedule,conditions,status:"pending",responded_at:null,updated_at:new Date().toISOString()};if(old){const {data:priorComp}=await ctx.admin.from("fechou_team_compensation").select("financial_state").eq("invite_id",old.id).maybeSingle();if(priorComp&&priorComp.financial_state!=="not_reserved")throw Object.assign(new Error("Este convite anterior possui estado financeiro e não pode ser reaberto automaticamente."),{status:409});const {data,error}=await ctx.admin.from("fechou_team_invites").update(invitePayload).eq("id",old.id).select("*").single();invite=data;inviteError=error;if(!error){const {error:ce}=await ctx.admin.from("fechou_team_compensation").upsert({invite_id:old.id,leader_id:ctx.user.id,collaborator_id:proId,amount:Math.round(amount*100)/100,pay_basis:basis,financial_state:"not_reserved",accepted_at:null,updated_at:new Date().toISOString()},{onConflict:"invite_id"});if(ce)throw Object.assign(new Error("Não foi possível atualizar a remuneração privada."),{status:500});}}else{const {data,error}=await ctx.admin.from("fechou_team_invites").insert(invitePayload).select("*").single();invite=data;inviteError=error;if(!error){const {error:ce}=await ctx.admin.from("fechou_team_compensation").insert({invite_id:invite.id,leader_id:ctx.user.id,collaborator_id:proId,amount:Math.round(amount*100)/100,pay_basis:basis,financial_state:"not_reserved"});if(ce){await ctx.admin.from("fechou_team_invites").delete().eq("id",invite.id);throw Object.assign(new Error("Não foi possível gravar a remuneração privada."),{status:500});}}}if(inviteError||!invite)throw Object.assign(new Error("Não foi possível criar o convite."),{status:500});await teamNotify(ctx.admin,proId,String(team.order_id),"team_invitation","Convite para equipe","Você foi convidado para uma contratação. Consulte suas condições e responda ao convite.",{team_id:teamId,invite_id:invite.id});return {invite:{...invite,compensation:{amount:Math.round(amount*100)/100,pay_basis:basis,financial_state:"not_reserved"}}};}
 async function teamRespond(ctx:any,p:any){const id=text(p.invite_id,80),decision=text(p.decision,20);if(!validUuid(id)||!["accept","decline"].includes(decision))throw Object.assign(new Error("Resposta inválida."),{status:400});const {data:invite}=await ctx.admin.from("fechou_team_invites").select("*").eq("id",id).maybeSingle();if(!invite)throw Object.assign(new Error("Convite não encontrado."),{status:404});if(String(invite.invited_user_id)!==String(ctx.user.id))throw Object.assign(new Error("Este convite pertence a outro profissional."),{status:403});if(invite.status!=="pending")throw Object.assign(new Error("Este convite já foi respondido."),{status:409});const now=new Date().toISOString(),next=decision==="accept"?"accepted":"declined";const {data:saved,error}=await ctx.admin.from("fechou_team_invites").update({status:next,responded_at:now,updated_at:now}).eq("id",id).eq("status","pending").select("*").maybeSingle();if(error||!saved)throw Object.assign(new Error("Não foi possível registrar a resposta."),{status:409});const {data:team}=await ctx.admin.from("fechou_teams").select("order_id,leader_id").eq("id",invite.team_id).single();const {order}=await getOrder(ctx.admin,String(team.order_id));if(decision==="accept"){const {error:pe}=await ctx.admin.from("fechou_team_participants").upsert({team_id:invite.team_id,invite_id:id,user_id:ctx.user.id,role_label:invite.role_label,specialty:invite.specialty,status:"pending_client_approval"},{onConflict:"team_id,user_id"});if(pe)throw Object.assign(new Error("Convite aceito, mas falta registrar a revisão do cliente."),{status:500});await ctx.admin.from("fechou_team_compensation").update({accepted_at:now,updated_at:now}).eq("invite_id",id);await teamNotify(ctx.admin,String(order.client_id),String(order.id),"team_client_review","Novo colaborador para aprovar","Um profissional aceitou o convite. Revise o perfil antes de liberar a participação.",{team_id:invite.team_id,invite_id:id});}await teamNotify(ctx.admin,String(team.leader_id),String(order.id),"team_invite_response",decision==="accept"?"Convite aceito":"Convite recusado",decision==="accept"?"O profissional aceitou e aguarda sua aprovação.":"O profissional recusou o convite.",{team_id:invite.team_id,invite_id:id});return {invite:saved,status:next};}
 async function teamReview(ctx:any,p:any){const id=text(p.participant_id,80),decision=text(p.decision,20);if(!validUuid(id)||!["approve","reject"].includes(decision))throw Object.assign(new Error("Decisão inválida."),{status:400});const {data:part}=await ctx.admin.from("fechou_team_participants").select("*").eq("id",id).maybeSingle();if(!part)throw Object.assign(new Error("Colaborador não encontrado."),{status:404});const {data:team}=await ctx.admin.from("fechou_teams").select("*").eq("id",part.team_id).maybeSingle();if(!team)throw Object.assign(new Error("Equipe não encontrada."),{status:404});const {order}=await getOrder(ctx.admin,String(team.order_id));if(String(order.client_id)!==String(ctx.user.id))throw Object.assign(new Error("Somente o cliente aprova os colaboradores."),{status:403});if(part.status!=="pending_client_approval")throw Object.assign(new Error("Este colaborador já foi analisado."),{status:409});const ok=decision==="approve",now=new Date().toISOString();const {data:saved,error}=await ctx.admin.from("fechou_team_participants").update({status:ok?"approved":"rejected",client_approved_at:ok?now:null,joined_at:ok?now:null,updated_at:now}).eq("id",id).eq("status","pending_client_approval").select("*").maybeSingle();if(error||!saved)throw Object.assign(new Error("Não foi possível salvar sua decisão."),{status:409});if(!ok)await ctx.admin.from("fechou_team_invites").update({status:"declined_by_client",updated_at:now}).eq("id",part.invite_id);const {count:stillApproved,error:countError}=await ctx.admin.from("fechou_team_participants").select("id",{count:"exact",head:true}).eq("team_id",team.id).eq("status","approved");if(countError)throw Object.assign(new Error("Não foi possível confirmar o estado dos participantes da equipe."),{status:500});await ctx.admin.from("fechou_teams").update({status:(ok||(stillApproved||0)>0)?"active":"awaiting_client_review",updated_at:now}).eq("id",team.id);await teamNotify(ctx.admin,String(part.user_id),String(order.id),ok?"team_client_approved":"team_client_rejected",ok?"Cliente aprovou sua participação":"Cliente não aprovou sua participação",ok?"Você foi incluído na equipe e pode acessar o chat.":"O cliente não aprovou sua participação.",{team_id:team.id});return {participant:saved};}
@@ -4987,6 +5060,7 @@ Deno.serve(async (req: Request) => {
         break;
       case "orders/test-price-eligibility": result = { eligible: canUseTemporaryTestPrice(ctx.user.id), amount: 6, currency: "BRL", scope: "current_order_only" }; break;
       case "orders/prepublish": result = await v195PrepublicationCreate(ctx,payload); break;
+      case "orders/media-upload-urls": result = await requestMediaUploadUrls(ctx,payload); break;
       case "orders/pending-publication": result = await v195Pending(ctx); break;
       case "orders/publication-status": result = await v195PublicationStatus(ctx,payload); break;
       case "orders/cancel-publication": result = await v195Cancel(ctx,payload); break;
@@ -5117,3 +5191,4 @@ Deno.serve(async (req: Request) => {
     return fail(req, publicMessage, status, diagnostic.code, diagnostic);
   }
 });
+
