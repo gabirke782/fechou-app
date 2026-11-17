@@ -1,0 +1,53 @@
+name: Validar candidato FECHOU R20.1
+on:
+  pull_request:
+    branches: [fechou-r15-validacao-2026-11-16]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [fechou-r16-correcao-2026-11-16]
+    paths:
+      - '.github/workflows/fechou-r20-1-pr-validation.yml'
+      - 'auditoria/R18/candidato/index.html'
+      - 'scripts/r18-visual.cjs'
+      - 'scripts/r20-stability.cjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Dependencias fixadas e sem scripts de instalacao
+        run: npm install --no-save --ignore-scripts --package-lock=false typescript@5.9.3 jsdom@26.1.0 playwright@1.56.1
+      - name: Validar fontes sincronizadas e revisao
+        run: |
+          node <<'JS'
+          const fs = require('fs'), crypto = require('crypto'), assert=require('node:assert/strict');
+          const a=fs.readFileSync('index.html'), b=fs.readFileSync('auditoria/R18/candidato/index.html');
+          assert.equal(crypto.createHash('sha256').update(a).digest('hex'),crypto.createHash('sha256').update(b).digest('hex'));
+          assert.match(a.toString('utf8').slice(0,250),/R20\.1-2026-11-17-chat-compacto/);
+          console.log('Fontes sincronizadas:',a.length,'bytes');
+          JS
+      - name: Testes de codigo e smoke sem escrita
+        run: node scripts/r18-ci.cjs
+      - name: Chromium para validacao e capturas
+        run: npx playwright install --with-deps chromium
+      - name: Validacao visual atualizada
+        run: node scripts/r18-visual.cjs
+      - name: Estabilidade real de 35 segundos
+        run: node scripts/r20-stability.cjs
+      - name: Capturas e relatorios
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fechou-r20-1-validacao
+          path: retomada-r18/
+          retention-days: 30
+          if-no-files-found: warn
