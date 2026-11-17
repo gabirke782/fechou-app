@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-revision="R18-2026-11-16-autosave-guard" data-fechou-build="R18" data-fechou-version="1.0.4" lang="pt-BR">
+<html data-fechou-revision="R18-2026-11-16-autosave-chat-state" data-fechou-build="R18" data-fechou-version="1.0.4" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-v215-core">
@@ -23011,7 +23011,6 @@ function renderServiceRecord(o, archive = false) {
           chatBusy = false,
           chatUnread = 0,
           chatInboxOpen = false,
-          chatToolsExpanded = true,
           contractDrawerOpen = false,
           inboxFilter = "all",
           inboxMenuOrderId = null;
@@ -23881,7 +23880,7 @@ function renderServiceRecord(o, archive = false) {
           const focusedEnd = typeof focused?.selectionEnd === "number" ? focused.selectionEnd : null;
           const minimized = sameConversation && old.classList.contains("fc-chat-minimized");
           const inboxOpen = !!chatInboxOpen;
-          const expanded = chatToolsExpanded;
+          const expanded = sameConversation && old.dataset.toolsExpanded === "true";
 
           const messages = Array.isArray(state.v121ChatMessages) ? state.v121ChatMessages : [];
           const visibleMessages = messages.filter((message) => {
@@ -25725,7 +25724,12 @@ body #app .fechou-profile-progress>div:first-child b {
             return;
           }
           const toolsToggle = target.closest("[data-fc-tools-toggle]");
-          if (toolsToggle) { chatToolsExpanded = !chatToolsExpanded; renderChatOverlay(); return; }
+          if (toolsToggle) {
+            const root = toolsToggle.closest("#v121ChatOverlay");
+            if (root) root.dataset.toolsExpanded = String(toolsToggle.getAttribute("aria-expanded") !== "true");
+            renderChatOverlay();
+            return;
+          }
           const contractClose = target.closest("[data-fc-contract-close]");
           if (contractClose) { contractDrawerOpen = false; renderChatOverlay(); return; }
           const tool = target.closest("[data-fc-tool]");
@@ -41981,10 +41985,18 @@ window.fechouNativeBtnClassV335 = function (name) {
   const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
   const messageCache = new Map();
-  const toolsOpenByOrder = new Map();
   let activeAction = null;
+  let currentChatRoot = null;
   let chatLoading = false;
   const parked = { evidence: null, drawer: null };
+
+  function syncChatRoot(ov) {
+    if (currentChatRoot === ov) return;
+    activeAction = null;
+    parked.evidence = null;
+    parked.drawer = null;
+    currentChatRoot = ov;
+  }
 
   function overlay() { return document.getElementById('v121ChatOverlay'); }
 
@@ -41995,8 +42007,7 @@ window.fechouNativeBtnClassV335 = function (name) {
     const tog = ov.querySelector('[data-fc-tools-toggle], .fc-chat-tools-toggle');
     if (grid) grid.classList.add('collapsed');
     if (tog) tog.setAttribute('aria-expanded', 'false');
-    const id = orderIdOf(ov);
-    if (id) toolsOpenByOrder.set(id, false);
+    ov.dataset.toolsExpanded = 'false';
   }
 
   function enhanceToolsToggle(ov) {
@@ -42010,7 +42021,7 @@ window.fechouNativeBtnClassV335 = function (name) {
     tog.removeAttribute('title');
     const grid = ov.querySelector('.fc-chat-tools-grid');
     const id = orderIdOf(ov);
-    const shouldOpen = activeAction ? false : (id && toolsOpenByOrder.has(id) ? toolsOpenByOrder.get(id) : false);
+    const shouldOpen = !activeAction && ov.dataset.toolsExpanded === 'true';
     if (shouldOpen) {
       grid?.classList.remove('collapsed');
       tog.setAttribute('aria-expanded', 'true');
@@ -42090,8 +42101,7 @@ window.fechouNativeBtnClassV335 = function (name) {
       if (body) body.innerHTML = '';
     }
     activeAction = null;
-    const id = orderIdOf(ov);
-    if (id) toolsOpenByOrder.set(id, false);
+    ov.dataset.toolsExpanded = 'false';
     enhanceToolsToggle(ov);
   }
 
@@ -42243,8 +42253,7 @@ window.fechouNativeBtnClassV335 = function (name) {
       else grid?.classList.add('collapsed');
       tog.setAttribute('aria-expanded', open ? 'true' : 'false');
       tog.setAttribute('aria-label', open ? 'Recolher ações da conversa' : 'Mostrar ações da conversa');
-      const id = orderIdOf(ov);
-      if (id) toolsOpenByOrder.set(id, !!open);
+      if (ov) ov.dataset.toolsExpanded = String(!!open);
       return;
     }
   }, true);
@@ -42347,6 +42356,7 @@ window.fechouNativeBtnClassV335 = function (name) {
 
   function afterChatRender() {
     const ov = overlay();
+    syncChatRoot(ov);
     if (!ov) return;
     enhanceToolsToggle(ov);
     ensureContestTools(ov);
@@ -42619,6 +42629,7 @@ window.fechouNativeBtnClassV335 = function (name) {
       restoreSnap();
       enhanceOrderCards();
       const ov = overlay();
+      syncChatRoot(ov);
       if (ov) {
         enhanceToolsToggle(ov);
         ensureContestTools(ov);

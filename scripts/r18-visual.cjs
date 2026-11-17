@@ -58,12 +58,14 @@ if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
 await page.waitForTimeout(700);
 const toolsState=await page.locator('#v121ChatOverlay').evaluate(ov=>{const t=ov.querySelector('[data-fc-tools-toggle]'),g=ov.querySelector('.fc-chat-tools-grid'),b=g.getBoundingClientRect(),style=getComputedStyle(g);return {expanded:t.getAttribute('aria-expanded'),dataset:ov.dataset.toolsExpanded,classes:g.className,height:b.height,opacity:style.opacity,display:style.display}});console.log('CHAT_TOOLS_STATE '+kind+' '+JSON.stringify(toolsState));
 assert.equal(toolsState.expanded,'true','As ferramentas devem permanecer expandidas depois de 700 ms');
+await page.evaluate(()=>window.renderV121ChatOverlay());await page.waitForTimeout(250);assert.equal(await toggle.getAttribute('aria-expanded'),'true','Atualizar a conversa deve preservar a expansão');
 if(kind==='contract')await shot('10-chat-ferramentas');
 await page.locator('#v121ChatOverlay [data-fc-tool="'+kind+'"]').click();
 await shot('11-chat-'+label);
 await page.evaluate(()=>{document.getElementById('fechou-v212-team-overlay')?.remove();document.getElementById('fechouChatAttachmentsOverlay')?.remove();window.__fechouCloseChatWithoutReopen(window.__r18Order.id)});
 });
 }
+await test('Chat: reabrir conversa começa compacto e sem painel anterior',async()=>{await page.evaluate(async()=>{await window.__fechouOpenChatByOrder(window.__r18Order.id)});await page.waitForTimeout(250);assert.equal(await page.locator('#v121ChatOverlay [data-fc-tools-toggle]').getAttribute('aria-expanded'),'false');assert.equal(await page.locator('#v121ChatOverlay').evaluate(ov=>ov.classList.contains('is-v335-action')),false);await shot('12-chat-reaberto');await page.evaluate(()=>window.__fechouCloseChatWithoutReopen(window.__r18Order.id));});
 await test('Larguras móveis sem rolagem horizontal nos detalhes',async()=>{for(const width of [320,360,390,430]){await page.setViewportSize({width,height:844});await page.evaluate(()=>window.__r18Scene('proposals'));const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,'largura '+width)}});
 fs.writeFileSync(path.join(out,'visual-results.json'),JSON.stringify({kind:'Chromium real; DOM/CSS e controladores do R18; dados e rede simulados. Não comprova publicação nem transações reais.',results,pageErrors:errors},null,2));
 console.log(JSON.stringify({passed:results.filter(x=>x.passed).length,total:results.length,failed:results.filter(x=>!x.passed),pageErrors:errors},null,2));
