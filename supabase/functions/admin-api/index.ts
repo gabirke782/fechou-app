@@ -352,7 +352,7 @@ async function dashboard(db: any, period: string) {
   const ordersByStage = { waiting_quote: 0, quoted: 0, accepted: 0, in_progress: 0, completed: 0, cancelled: 0 };
   for (const o of operationalOrders) ordersByStage[orderStage(o, byOrder.get(String(o.id)) || 0) as keyof typeof ordersByStage]++;
   const pendingCases = caseRows.filter((x: any) => isPending(x));
-  const cancellationsPending = operationalOrders.filter((o: any) => o.cancellation_requested_at && !["cancelled","completed"].includes(orderStage(o, byOrder.get(String(o.id)) || 0))).length;
+  const cancellationsPending = operationalOrders.filter((o: any) => o.cancellation_requested_at && norm(o.refund_status)!=="refunded" && !["cancelled","completed"].includes(orderStage(o, byOrder.get(String(o.id)) || 0))).length;
   const disputesPending = pendingCases.filter((x: any) => classifyCaseType(x.case_type) === "dispute").length;
   const refundsPending = pendingCases.filter((x: any) => classifyCaseType(x.case_type) === "refund").length +
     operationalOrders.filter((x: any) => ["pending","requested","processing","refund_pending"].includes(norm(x.refund_status))).length;
@@ -604,13 +604,13 @@ async function paymentsList(db:any,params:any) {
       item.fechou_status=item.status;
       item.provider_status=clean(provider.status||item.provider_status,60);
       item.provider_refunds_count=Array.isArray(provider.refunds)?provider.refunds.length:0;
-      item.provider_refunded=String(provider.status||"").toUpperCase()==="REFUNDED"||item.provider_refunds_count>0;
+      item.provider_refunded=String(provider.status||"").toUpperCase()==="REFUNDED";
       item.provider_confirmed=["RECEIVED","CONFIRMED","RECEIVED_IN_CASH"].includes(String(provider.status||"").toUpperCase());
       item.status=item.provider_refunded?"REFUNDED":item.provider_status;
       item.notes="FECHOU: "+String(item.fechou_status||"—")+" | Asaas: "+String(item.provider_status||"—")+" | Estornos: "+String(item.provider_refunds_count);
       if(item.purpose&&item.id){
         const {error:reconcileError}=await db.from("fechou_asaas_checkouts").update({
-          provider_payload:{...asObj(item.provider_payload),provider_reconciliation:{
+          provider_payload:{...asObj(arr(checkouts.data).find((x:any)=>x.id===item.id)?.provider_payload),provider_reconciliation:{
             status:item.provider_status,refunds_count:item.provider_refunds_count,refunded:item.provider_refunded,
             confirmed:item.provider_confirmed,checked_at:new Date().toISOString()
           }},
