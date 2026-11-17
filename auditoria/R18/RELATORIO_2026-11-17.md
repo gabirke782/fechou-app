@@ -43,7 +43,7 @@ Smoke real do backend: preflight 204 para a origem publicada; upload sem sessão
 
 ## Publicação e bloqueios concretos
 
-A conta Cloudflare estava autenticada no perfil externo e o projeto correto, startup5, foi acessado. A ferramenta não conseguiu baixar e fornecer o ZIP ao formulário Direct Upload. Nenhuma implantação nova foi criada. O navegador alternativo está na tela de login do Cloudflare, sem sessão compartilhada com aquele perfil.
+A conta Cloudflare estava autenticada no perfil externo e o projeto correto, startup5, foi acessado. A ferramenta não conseguiu baixar e fornecer o ZIP ao formulário Direct Upload. Nenhuma implantação nova foi criada. O navegador alternativo está na tela de login do Cloudflare, sem sessão compartilhada com aquele perfil. O formulário seguro de autenticação retornou declined; não houve nova tentativa automática.
 
 A comparação pública de 17/11/2026 às 02:14 UTC encontrou HTTP 200, revisão R17-2026-11-16, build V336 e SHA256 977abf6f815a4a4ecabedf1056c1fba22535587775e1cdf4e2cdff162ef76e8c. O painel administrativo respondeu HTTP 200 com título FECHOU · Painel Administrativo 1.0.2. Disponibilidade HTTP não equivale a homologação administrativa autenticada.
 
