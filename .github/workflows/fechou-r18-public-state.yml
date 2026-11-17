@@ -1,4 +1,4 @@
-name: Conferir publicação FECHOU R18
+name: Conferir publicação FECHOU R19
 on:
   push:
     branches: [fechou-r16-correcao-2026-11-16]
