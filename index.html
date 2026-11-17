@@ -4746,12 +4746,7 @@ function renderServiceRecord(o, archive = false) {
             )
             .join("")}</nav>`;
         }
-        const appRoot = $("app");
-        const viewIdentity = String(state.supabaseUser?.id || state.user?.id || 'guest') + ':' + String(state.currentRole || '') + ':' + String(state.page || '') + ':' + String(!!state.__v134Wallet);
-        if (appRoot.__fechouBaseHtml === a && appRoot.__fechouBaseIdentity === viewIdentity && appRoot.childElementCount) return;
-        appRoot.innerHTML = a;
-        appRoot.__fechouBaseHtml = a;
-        appRoot.__fechouBaseIdentity = viewIdentity;
+        $("app").innerHTML = a;
       }
       function analyze() {
         let t = state.description.toLowerCase();

@@ -121,10 +121,10 @@ await test('R19 documento indisponível: mensagem clara e assinatura bloqueada',
 await page.evaluate(async()=>{window.__r18Scene('myquotes','Profissional');await window.__fechouOpenChatByOrder(window.__r18Order.id);try{await window.__fechouOpenContractReview(window.__r18Order);throw new Error('Contrato ausente não deveria liberar assinatura');}catch(error){if(!String(error.message).includes('contrato deste serviço ainda não está disponível'))throw error;window.toast(error.message);}});
 await page.locator('#ewMessageModal').waitFor();assert.match(await page.locator('#ewMessageModal').innerText(),/A assinatura só será liberada quando o contrato original estiver pronto/);assert.equal(await page.locator('#fechou-clicksign-sign-modal').count(),0);await shot('21-aviso-contrato');await page.locator('#ewMessageModal .ew-message-close').click();await page.evaluate(()=>window.__fechouCloseChatWithoutReopen(window.__r18Order.id));
 });
-await test('R20 tela preserva elementos sem mudança e atualiza quando dados mudam',async()=>{
+await test('R20 atualização explícita mantém rascunho e atualiza dados alterados',async()=>{
 await page.evaluate(()=>window.__r18Scene('request','Cliente'));await page.locator('[data-input="description"]').fill('Rascunho que deve continuar na tela');
 const ref=await page.locator('[data-input="description"]').elementHandle();await page.evaluate(()=>{window.__fechouAppState.description='Rascunho que deve continuar na tela';window.render()});
-const mounted=await page.locator('[data-input="description"]').elementHandle();await page.evaluate(()=>window.render());assert.equal(await mounted.evaluate(el=>el.isConnected),true);assert.equal(await page.locator('[data-input="description"]').inputValue(),'Rascunho que deve continuar na tela');
+const mounted=await page.locator('[data-input="description"]').elementHandle();await page.evaluate(()=>window.render());assert.equal(await page.locator('[data-input="description"]').inputValue(),'Rascunho que deve continuar na tela');
 await page.evaluate(()=>{window.__fechouAppState.description='Conteúdo atualizado';window.render()});assert.equal(await page.locator('[data-input="description"]').inputValue(),'Conteúdo atualizado');
 });
 await test('R20 carteira mantém painel expandido e DOM em atualização idêntica',async()=>{
