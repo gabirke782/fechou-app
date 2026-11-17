@@ -10,11 +10,13 @@ function fn(source,name){const ast=ts.createSourceFile('api.ts',source,ts.Script
 const before=fn(baseline,'v195Pending'),after=fn(candidate,'v195Pending');
 fs.writeFileSync(path.join(dir,'eworkers-stage1.ts'),baseline.slice(0,before.start)+after.text+baseline.slice(before.end));
 const suite=[];
+const auto=cp.spawnSync(process.execPath,['scripts/r18-autosave-tests.cjs'],{cwd:root,encoding:'utf8',timeout:15000});process.stdout.write(auto.stdout||'');process.stderr.write(auto.stderr||'');suite.push({name:'r18-autosave-tests.cjs',status:auto.status,error:auto.error?.message});
 for(const name of ['backend-tests.cjs','pending-tests.cjs','acceptance-extra.cjs']){
  const result=cp.spawnSync(process.execPath,[path.join(dir,name)],{cwd:root,encoding:'utf8',timeout:120000});
  process.stdout.write(result.stdout||'');process.stderr.write(result.stderr||'');
  suite.push({name,status:result.status,error:result.error?.message});
 }
+const accepted=path.join(out,'acceptance-results.json');if(fs.existsSync(accepted)){const report=JSON.parse(fs.readFileSync(accepted,'utf8'));suite.push({name:'DOM sem erros de script ao fim do ensaio',status:report.scriptErrors?.length?1:0,errors:report.scriptErrors||[]});}
 for(const name of ['backend-results.json','pending-results.json']){const from=path.join(dir,name);if(fs.existsSync(from))fs.copyFileSync(from,path.join(out,name));}
 const endpoint='https://ziubcqxmxialhmwevtiy.supabase.co/functions/v1/eworkers-api';
 (async()=>{

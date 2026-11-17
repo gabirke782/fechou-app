@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-revision="R18-2026-11-16" data-fechou-build="R18" data-fechou-version="1.0.4" lang="pt-BR">
+<html data-fechou-revision="R18-2026-11-16-autosave-guard" data-fechou-build="R18" data-fechou-version="1.0.4" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-v215-core">
@@ -21575,10 +21575,11 @@ function renderServiceRecord(o, archive = false) {
           }
           if (typeof value !== "object") return undefined;
           if (
-            value instanceof File ||
-            value instanceof Blob ||
-            value instanceof MediaStream ||
-            value instanceof AudioContext
+            (typeof File === "function" && value instanceof File) ||
+            (typeof Blob === "function" && value instanceof Blob) ||
+            (typeof MediaStream === "function" && value instanceof MediaStream) ||
+            (typeof AudioContext === "function" && value instanceof AudioContext) ||
+            (typeof webkitAudioContext === "function" && value instanceof webkitAudioContext)
           )
             return undefined;
           if (Array.isArray(value))

@@ -4,7 +4,7 @@ on:
     branches: [fechou-r16-correcao-2026-11-16]
     paths:
       - '.github/workflows/fechou-r18.yml'
-      - 'scripts/r18-ci.cjs'
+      - 'scripts/r18-*.cjs'
       - 'auditoria/R18/candidato/**'
       - 'auditoria/R18/checkpoint-sources.json'
   workflow_dispatch:
@@ -22,9 +22,13 @@ jobs:
         with:
           node-version: '22'
       - name: Preparar dependências de validação
-        run: npm install --no-save --ignore-scripts --package-lock=false typescript@5.9.3 jsdom@26.1.0
+        run: npm install --no-save --ignore-scripts --package-lock=false typescript@5.9.3 jsdom@26.1.0 playwright@1.56.1
       - name: Executar testes e verificar API publicada
         run: node scripts/r18-ci.cjs
+      - name: Preparar Chromium de validação
+        run: npx playwright install --with-deps chromium
+      - name: Capturar interface com dados de teste
+        run: node scripts/r18-visual.cjs
       - name: Guardar resultados
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
