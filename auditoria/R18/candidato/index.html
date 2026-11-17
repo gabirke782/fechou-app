@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-revision="R20.1-2026-11-17-chat-compacto" data-fechou-build="R20" data-fechou-version="1.0.6" lang="pt-BR">
+<html data-fechou-revision="R21-2026-11-17-apple-oauth-preparado" data-fechou-build="R20" data-fechou-version="1.0.6" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-r19-chat-icons">
@@ -3149,7 +3149,7 @@ html body #app:not(#r17a):not(#r17b):not(#r17c):not(#r17d) .r17-record-fold>summ
             )}${field(
               "Senha",
               `<input type="password" data-input="authPassword" value="${esc(state.authPassword || "")}" autocomplete="${isCreate ? "new-password" : "current-password"}" placeholder="${isCreate ? "Mínimo de 6 caracteres" : "Sua senha"}" minlength="6">`
-            )}</div>${isCreate ? `<div class="fechou-legal-accept"><label for="fechou-legal-accept"><input type="checkbox" id="fechou-legal-accept" style="width:auto;min-width:18px;min-height:18px;accent-color:#4f7fb8"><span>Li e aceito os Termos de Uso e declaro que li a Política de Privacidade (versão pública 1.0.0).</span></label><div class="fechou-legal-links"><button type="button" class="v281-auth-legal-link" data-ew-welcome="policies">Ler Política de Privacidade</button></div></div>` : ""}<div class="actions v165-auth-actions v176-auth-actions" data-auth-mode="${isCreate ? "signup" : "login"}" style="margin-top:14px">${isCreate ? button("Criar conta", "authSignup") + button("Já tenho conta · Entrar", "authStartLogin", "secondary") : button("Entrar na minha conta", "authLogin") + button("Criar conta", "authStartSignup", "secondary")}</div><button type="button" class="btn secondary v178-google-auth" data-v178-google-auth><svg class="v214-google-mark" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#FFC107" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11c-.5 2.5-1.9 4.6-4.1 6v5h6.6c3.9-3.6 6.1-8.7 6.1-14.7z"/><path fill="#FF3D00" d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.6-5c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.2C9.2 39.5 16 44 24 44z"/><path fill="#4CAF50" d="M12.6 27.8a12 12 0 0 1 0-7.6V15H5.8a20 20 0 0 0 0 18l6.8-5.2z"/><path fill="#1976D2" d="M24 12c3 0 5.7 1 7.8 3.1l5.9-5.9C34.1 6.1 29.5 4 24 4 16 4 9.2 8.5 5.8 15l6.8 5.2C14.2 15.6 18.7 12 24 12z"/></svg>Entrar com o Gmail</button>${window.FechouV215?.confirmationSent(state.authEmail) ? '<p class="v165-auth-pending" role="status">Cadastro registrado. Confirme o endereço pelo e-mail enviado para liberar o primeiro acesso.</p>' : ""}<div class="divider"></div><p class="muted">Seus dados de perfil podem ser atualizados na área Meu perfil.</p><p class="muted v281-auth-legal">Antes de criar a conta, leia e aceite os Termos de Uso e a Política de Privacidade, versão pública 1.0.0.</p></section>`;
+            )}</div>${isCreate ? `<div class="fechou-legal-accept"><label for="fechou-legal-accept"><input type="checkbox" id="fechou-legal-accept" style="width:auto;min-width:18px;min-height:18px;accent-color:#4f7fb8"><span>Li e aceito os Termos de Uso e declaro que li a Política de Privacidade (versão pública 1.0.0).</span></label><div class="fechou-legal-links"><button type="button" class="v281-auth-legal-link" data-ew-welcome="policies">Ler Política de Privacidade</button></div></div>` : ""}<div class="actions v165-auth-actions v176-auth-actions" data-auth-mode="${isCreate ? "signup" : "login"}" style="margin-top:14px">${isCreate ? button("Criar conta", "authSignup") + button("Já tenho conta · Entrar", "authStartLogin", "secondary") : button("Entrar na minha conta", "authLogin") + button("Criar conta", "authStartSignup", "secondary")}</div><button type="button" class="btn secondary v178-google-auth" data-v178-google-auth><svg class="v214-google-mark" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#FFC107" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11c-.5 2.5-1.9 4.6-4.1 6v5h6.6c3.9-3.6 6.1-8.7 6.1-14.7z"/><path fill="#FF3D00" d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.6-5c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.8-3.6-11.4-8.4H5.8v5.2C9.2 39.5 16 44 24 44z"/><path fill="#4CAF50" d="M12.6 27.8a12 12 0 0 1 0-7.6V15H5.8a20 20 0 0 0 0 18l6.8-5.2z"/><path fill="#1976D2" d="M24 12c3 0 5.7 1 7.8 3.1l5.9-5.9C34.1 6.1 29.5 4 24 4 16 4 9.2 8.5 5.8 15l6.8 5.2C14.2 15.6 18.7 12 24 12z"/></svg>Entrar com o Gmail</button><button type="button" class="btn secondary fechou-r21-apple-auth" data-fechou-apple-auth aria-label="Continuar com Apple"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16.55 12.94c-.07-2.28 1.86-3.39 1.94-3.44-1.08-1.55-2.75-1.76-3.34-1.77-1.41-.15-2.61.82-3.33.82-.74 0-1.84-.8-3.05-.78-1.57.02-3.02.94-3.82 2.31-1.63 2.81-.42 6.94 1.15 9.23.79 1.12 1.7 2.38 2.9 2.33 1.18-.04 1.62-.76 3.05-.76 1.43 0 1.84.76 3.06.74 1.26-.02 2.05-1.13 2.81-2.27.92-1.32 1.29-2.61 1.3-2.68-.03-.01-2.65-1.01-2.67-3.73ZM14.25 6.21c.64-.77 1.09-1.83.97-2.89-.94.04-2.05.62-2.73 1.4-.62.7-1.17 1.78-1.03 2.79 1.05.08 2.13-.52 2.79-1.3Z"/></svg><span>Continuar com Apple</span></button>${window.FechouV215?.confirmationSent(state.authEmail) ? '<p class="v165-auth-pending" role="status">Cadastro registrado. Confirme o endereço pelo e-mail enviado para liberar o primeiro acesso.</p>' : ""}<div class="divider"></div><p class="muted">Seus dados de perfil podem ser atualizados na área Meu perfil.</p><p class="muted v281-auth-legal">Antes de criar a conta, leia e aceite os Termos de Uso e a Política de Privacidade, versão pública 1.0.0.</p></section>`;
         }
         if (state.page === "pricing") {
           a =
@@ -7764,7 +7764,12 @@ function renderServiceRecord(o, archive = false) {
             if (_event === "SIGNED_OUT") fechouGoogleCallbackUser = "";
             if (["SIGNED_IN", "INITIAL_SESSION"].includes(_event) && session?.user) {
               let pendingRole = "";
-              try { pendingRole = sessionStorage.getItem("fechou_google_pending_role") || localStorage.getItem("fechou_google_pending_role") || ""; } catch (_) {}
+              let pendingProvider = "Google";
+              try {
+                const appleRole = sessionStorage.getItem("fechou_apple_pending_role") || localStorage.getItem("fechou_apple_pending_role") || "";
+                pendingProvider = appleRole ? "Apple" : "Google";
+                pendingRole = appleRole || sessionStorage.getItem("fechou_google_pending_role") || localStorage.getItem("fechou_google_pending_role") || "";
+              } catch (_) {}
               const callbackUserId = String(session.user.id || "");
               if (["Cliente", "Profissional"].includes(pendingRole) && callbackUserId && callbackUserId !== fechouGoogleCallbackUser) {
                 fechouGoogleCallbackUser = callbackUserId;
@@ -7783,9 +7788,9 @@ function renderServiceRecord(o, archive = false) {
                       state.page = "home";
                     }
                     try { localStorage.setItem("ew_currentRole", state.currentRole || pendingRole); } catch (_) {}
-                    try { sessionStorage.removeItem("fechou_google_pending_role"); localStorage.removeItem("fechou_google_pending_role"); } catch (_) {}
+                    try { sessionStorage.removeItem("fechou_google_pending_role"); localStorage.removeItem("fechou_google_pending_role"); sessionStorage.removeItem("fechou_apple_pending_role"); localStorage.removeItem("fechou_apple_pending_role"); } catch (_) {}
                     render();
-                    toast(profile ? "Acesso realizado com Google." : "Acesso Google criado. Complete os dados do seu perfil para continuar.");
+                    toast(profile ? "Acesso realizado com " + pendingProvider + "." : "Acesso " + pendingProvider + " criado. Complete os dados do seu perfil para continuar.");
                   } catch (oauthError) {
                     fechouGoogleCallbackUser = "";
                     console.error("FECHOU V305 Google OAuth:", oauthError);
@@ -44376,4 +44381,67 @@ html body #app button:focus-visible,html body .fechou-pop button:focus-visible,h
 #v121ChatOverlay .fc-chat-tools-grid:has(>button[data-fc-tool="photos"]:disabled)>button:not(:disabled){grid-column:span 3!important}
 #v121ChatOverlay .fc-chat-tools-grid:has(>button[data-fc-tool="photos"]:disabled)>button:not(:disabled):nth-child(n+3){grid-column:span 2!important}
 </style>
+
+<style id="fechou-r21-apple-auth-style">
+#app .fechou-r21-apple-auth{display:flex!important;width:100%!important;min-height:44px!important;align-items:center!important;justify-content:center!important;gap:10px!important;margin-top:8px!important;padding:9px 12px!important;background:#08090b!important;color:#fff!important;border:1px solid #53606b!important;border-radius:10px!important;font-size:12px!important;font-weight:700!important;line-height:1.2!important;box-shadow:none!important}
+#app .fechou-r21-apple-auth:hover{background:#15171a!important;border-color:#a2a9b1!important}
+#app .fechou-r21-apple-auth:focus-visible{outline:2px solid #f3ad49!important;outline-offset:2px!important}
+#app .fechou-r21-apple-auth:disabled{opacity:.58!important;cursor:wait!important}
+#app .fechou-r21-apple-auth svg{display:block!important;width:19px!important;height:19px!important;flex:none!important}
+</style>
+<script id="fechou-r21-apple-oauth">
+(function(){
+ 'use strict';
+ if(window.__FECHOU_R21_APPLE_OAUTH__)return;
+ window.__FECHOU_R21_APPLE_OAUTH__=true;
+ function message(value){if(typeof window.toast==='function')window.toast(value);else console.warn('FECHOU Apple OAuth:',value)}
+ async function getClient(){
+   let client=window.__FECHOU_SUPABASE_CLIENT||window.ewSupabase||null;
+   if(!client?.auth?.signInWithOAuth&&typeof window.fechouEnsureSupabaseClient==='function')client=await window.fechouEnsureSupabaseClient();
+   if(!client?.auth?.signInWithOAuth)throw Error('Autenticação indisponível. Recarregue o aplicativo.');
+   return client;
+ }
+ async function appleEnabled(client){
+   const base=String(client.supabaseUrl||'https://ziubcqxmxialhmwevtiy.supabase.co').replace(/\/$/,'');
+   const headers={};
+   if(client.supabaseKey)headers.apikey=client.supabaseKey;
+   const response=await fetch(base+'/auth/v1/settings',{method:'GET',headers,cache:'no-store',signal:AbortSignal.timeout(8500)});
+   if(!response.ok)throw Error('Não foi possível verificar a configuração da Apple. Tente novamente.');
+   const settings=await response.json();
+   return settings?.external?.apple===true;
+ }
+ document.addEventListener('click',async function(event){
+   const button=event.target?.closest?.('[data-fechou-apple-auth]');
+   if(!button)return;
+   event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+   if(button.disabled)return;
+   const state=window.__fechouAppState||null;
+   const role=state?.currentRole;
+   if(!['Cliente','Profissional'].includes(role)){
+     document.getElementById('exylonWelcome')?.classList.add('show');
+     message('Escolha Sou cliente ou Sou profissional antes de continuar com Apple.');
+     return;
+   }
+   button.disabled=true;
+   const label=button.querySelector('span');const oldLabel=label?.textContent||'Continuar com Apple';
+   if(label)label.textContent='Conectando à Apple…';
+   try{
+     const client=await getClient();
+     if(!await appleEnabled(client)){
+       message('Acesso com Apple ainda não ativado no Supabase. Use Gmail ou e-mail e senha.');
+       return;
+     }
+     try{sessionStorage.setItem('fechou_apple_pending_role',role);localStorage.setItem('fechou_apple_pending_role',role)}catch(_){}
+     const callback=new URL(location.href);
+     callback.searchParams.set('fechou_oauth_return','1');
+     callback.hash='';
+     const {error}=await client.auth.signInWithOAuth({provider:'apple',options:{redirectTo:callback.toString()}});
+     if(error)throw error;
+   }catch(error){
+     try{sessionStorage.removeItem('fechou_apple_pending_role');localStorage.removeItem('fechou_apple_pending_role')}catch(_){}
+     message(String(error?.message||'Falha ao iniciar acesso Apple.'));
+   }finally{button.disabled=false;if(label)label.textContent=oldLabel}
+ },true);
+})();
+</script>
 </html>
