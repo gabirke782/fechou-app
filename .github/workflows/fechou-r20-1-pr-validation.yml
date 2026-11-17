@@ -1,16 +1,7 @@
 name: Validar candidato FECHOU R20.1
 on:
-  pull_request:
-    branches: [fechou-r15-validacao-2026-11-16]
-    types: [opened, synchronize, reopened]
-  push:
-    branches: [fechou-r16-correcao-2026-11-16]
-    paths:
-      - '.github/workflows/fechou-r20-1-pr-validation.yml'
-      - 'auditoria/R18/candidato/index.html'
-      - 'scripts/r18-visual.cjs'
-      - 'scripts/r20-stability.cjs'
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
@@ -49,5 +40,5 @@ jobs:
         with:
           name: fechou-r20-1-validacao
           path: retomada-r18/
-          retention-days: 30
+          retention-days: 1
           if-no-files-found: warn
