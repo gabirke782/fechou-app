@@ -25666,6 +25666,7 @@ body #app .fechou-profile-progress>div:first-child b {
         document.addEventListener("click", async function (ev) {
           const target = ev.target instanceof Element ? ev.target : null;
           if (!target) return;
+          if (target.closest('[data-fc-tool]') && window.__FECHOU_V335_CHATUX__) return;
           const chatRootForHint = target.closest("#v121ChatOverlay");
           if (chatRootForHint) {
             const hint = chatRootForHint.querySelector(".fc-chat-attachment-hint");
@@ -42625,8 +42626,9 @@ window.fechouNativeBtnClassV335 = function (name) {
 
   let lastPaint = 0;
   const mo = new MutationObserver(() => {
-    clearTimeout(mo._t);
+    if (mo._t) return;
     mo._t = setTimeout(() => {
+      mo._t = 0;
       restoreSnap();
       enhanceOrderCards();
       const ov = overlay();
@@ -43132,8 +43134,8 @@ window.fechouNativeBtnClassV335 = function (name) {
   else boot();
 
   const mo = new MutationObserver(() => {
-    clearTimeout(mo._t);
-    mo._t = setTimeout(upgradeAll, 160);
+    if (mo._t) return;
+    mo._t = setTimeout(() => { mo._t = 0; upgradeAll(); }, 160);
   });
   if (document.body) mo.observe(document.body, { childList: true, subtree: true });
 })();
