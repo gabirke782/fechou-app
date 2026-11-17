@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-revision="R20-2026-11-17-chat-seguranca" data-fechou-build="R20" data-fechou-version="1.0.6" lang="pt-BR">
+<html data-fechou-revision="R20.1-2026-11-17-chat-compacto" data-fechou-build="R20" data-fechou-version="1.0.6" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-r19-chat-icons">
@@ -24067,8 +24067,8 @@ function renderServiceRecord(o, archive = false) {
                 <button type="button" data-fc-tool="service" class="fc-tool-service" ${serviceAction ? "" : "disabled"}><span aria-hidden="true">${window.fechouChatIcon(serviceAction || "start")}</span>${esc121(serviceLabel)}</button>
                 <button type="button" data-fc-tool="attach"><span aria-hidden="true">${window.fechouChatIcon("attach")}</span>Anexar arquivo</button>
                 <button type="button" data-fc-tool="attachments"><span aria-hidden="true">${window.fechouChatIcon("attachments")}</span>Ver anexos</button>
-                <button type="button" data-fc-tool="team"><span aria-hidden="true">${window.fechouChatIcon("team")}</span>Equipe</button>
                 <button type="button" data-fc-tool="photos"><span aria-hidden="true">${window.fechouChatIcon("photos")}</span>Fotos do serviço</button>
+                <button type="button" data-fc-tool="team"><span aria-hidden="true">${window.fechouChatIcon("team")}</span>Equipe</button>
               </div>
               <span class="fc-chat-attachment-hint" hidden aria-hidden="true">Fotos e documentos: JPG, PNG, WEBP, GIF, HEIC, PDF, DOC, XLS, TXT ou CSV · até 5 por envio · 20 MB cada.</span>
               <span class="fc-chat-selected-files" aria-live="polite"></span>
@@ -39999,33 +39999,8 @@ button, .btn, [role="button"], a.btn, summary{
   }
 
   function ensureContestButtons() {
-    const overlay = $('#v121ChatOverlay');
-    if (!overlay) return;
-    const approve = overlay.querySelector('[data-v134-service-action="approve"]');
-    if (!approve) return;
-    if (overlay.querySelector('[data-v134-service-action="contest"]')) {
-      overlay.querySelectorAll('[data-v134-service-action="contest"]').forEach((b) => { if (b.textContent.trim() !== 'Contestar') b.textContent = 'Contestar'; });
-      return;
-    }
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = approve.className.includes('btn') ? 'btn secondary' : 'fc-primary-action';
-    btn.dataset.v134ServiceAction = 'contest';
-    btn.dataset.orderId = approve.dataset.orderId || overlay.dataset.orderId || '';
-    btn.textContent = 'Contestar';
-    approve.insertAdjacentElement('afterend', btn);
-    const toolHost = overlay.querySelector('.fc-chat-tools-grid');
-    if (toolHost && !toolHost.querySelector('[data-v134-service-action="contest"]')) {
-      const tool = document.createElement('button');
-      tool.type = 'button';
-      tool.dataset.fcTool = 'contest';
-      tool.innerHTML = '<span aria-hidden="true">'+window.fechouChatIcon('contest')+'</span>Contestar';
-      tool.addEventListener('click', () => {
-        if (typeof window.__fechouRunServiceAction === 'function') window.__fechouRunServiceAction(btn);
-      });
-      const serviceTool = toolHost.querySelector('[data-fc-tool="service"]');
-      if (serviceTool) serviceTool.insertAdjacentElement('afterend', tool);
-    }
+    // R20.1: não adicionar uma segunda ação de contestação à grade do chat.
+    // A ação original continua no fluxo de contratação e nas notificações.
   }
 
   function dedupeServiceButtons() {
@@ -42066,21 +42041,13 @@ window.fechouNativeBtnClassV335 = function (name) {
     if (!o || !waitingClient(o) || !isClient(o)) return;
     const grid = ov.querySelector('.fc-chat-tools-grid');
     if (!grid) return;
-    const service = grid.querySelector('[data-fc-tool="service"]');
+    const service = grid.querySelector('[data-fc-tool="service"],[data-fc-tool="approve"]');
     if (service && !/Contestar/i.test(service.textContent || '')) {
       service.innerHTML = '<span aria-hidden="true">'+window.fechouChatIcon('approve')+'</span>Aprovar serviço';
       service.disabled = false;
       service.dataset.fcTool = 'approve';
     }
-    if (!grid.querySelector('[data-fc-tool="contest"]')) {
-      const t = document.createElement('button');
-      t.type = 'button';
-      t.dataset.fcTool = 'contest';
-      t.innerHTML = '<span aria-hidden="true">'+window.fechouChatIcon('contest')+'</span>Contestar';
-      const host = grid.querySelector('[data-fc-tool="approve"], [data-fc-tool="service"]');
-      if (host) host.insertAdjacentElement('afterend', t);
-      else grid.appendChild(t);
-    }
+    // A contestação não duplica o botão de aprovação nesta grade.
   }
 
   function actionRoot(ov) {
@@ -44404,7 +44371,9 @@ html body #app button:focus-visible,html body .fechou-pop button:focus-visible,h
 #v121ChatOverlay .v322-inline-actions,
 #v121ChatOverlay .v134-service-actions{display:none!important}
 #v121ChatOverlay .fc-chat-tools-grid>button[data-fc-tool="photos"]:disabled{display:none!important}
-#v121ChatOverlay .fc-chat-tools-grid>button:last-child:nth-child(odd){grid-column:1/-1}
-#v121ChatOverlay .fc-chat-tools-grid:has(>button[data-fc-tool="photos"]:disabled)>button[data-fc-tool="team"]:nth-child(odd){grid-column:1/-1}
+#v121ChatOverlay .fc-chat-tools-grid>button[data-fc-tool="contest"]{display:none!important}
+#v121ChatOverlay .fc-chat-tools-grid:has(>button[data-fc-tool="photos"]:disabled){grid-template-columns:repeat(6,minmax(0,1fr))!important}
+#v121ChatOverlay .fc-chat-tools-grid:has(>button[data-fc-tool="photos"]:disabled)>button:not(:disabled){grid-column:span 3!important}
+#v121ChatOverlay .fc-chat-tools-grid:has(>button[data-fc-tool="photos"]:disabled)>button:not(:disabled):nth-child(n+3){grid-column:span 2!important}
 </style>
 </html>
