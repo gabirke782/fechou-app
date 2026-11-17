@@ -1,0 +1,128 @@
+{
+  "access": {
+    "type": "Função real; banco simulado; sem mudar permissões de contas reais",
+    "results": [
+      {
+        "name": "Reprodução antes da correção: convite reativa cadastro desativado",
+        "passed": true
+      },
+      {
+        "name": "Conta administrativa ativa continua autorizada sem escrita",
+        "passed": true
+      },
+      {
+        "name": "Cadastro desativado não é reativado por convite ainda ativo",
+        "passed": true
+      },
+      {
+        "name": "E-mail divergente em cadastro existente não admite fallback",
+        "passed": true
+      },
+      {
+        "name": "Conhecer o e-mail público do suporte não permite reivindicar convite sem UID",
+        "passed": true
+      },
+      {
+        "name": "Convite de outro usuário não concede acesso",
+        "passed": true
+      },
+      {
+        "name": "Convite desativado não concede acesso",
+        "passed": true
+      },
+      {
+        "name": "Convite já vinculado ao UID pode criar apenas um cadastro novo",
+        "passed": true
+      },
+      {
+        "name": "Concorrência com cadastro criado ou revogado não sobrescreve autorização",
+        "passed": true
+      },
+      {
+        "name": "Sem e-mail confirmado, nenhuma consulta administrativa é executada",
+        "passed": true
+      },
+      {
+        "name": "Metadados editáveis do usuário não concedem administração",
+        "passed": true
+      },
+      {
+        "name": "Fonte administrativa mantém sintaxe TypeScript válida",
+        "passed": true
+      }
+    ]
+  },
+  "refund": {
+    "kind": "Função real com banco e provedor simulados; nenhuma operação financeira",
+    "results": [
+      {
+        "name": "TypeScript administrativo tem sintaxe válida",
+        "passed": true
+      },
+      {
+        "name": "timeout: reserva permanece e segunda tentativa não envia outro reembolso",
+        "passed": true
+      },
+      {
+        "name": "server: reserva permanece e segunda tentativa não envia outro reembolso",
+        "passed": true
+      },
+      {
+        "name": "Recusa explícita permite análise e não é tratada como confirmação",
+        "passed": true
+      },
+      {
+        "name": "Boleto sem link depois do POST também bloqueia nova tentativa",
+        "passed": true
+      },
+      {
+        "name": "Sucesso continua pendente de confirmação oficial e não duplica",
+        "passed": true
+      }
+    ]
+  },
+  "cors": {
+    "results": [
+      {
+        "name": "Origem autorizada: https://admpainel-6js.pages.dev",
+        "passed": true
+      },
+      {
+        "name": "Origem autorizada: https://startup5.pages.dev",
+        "passed": true
+      },
+      {
+        "name": "Origem não autorizada: https://terceiro.pages.dev",
+        "passed": true
+      },
+      {
+        "name": "Origem não autorizada: https://terceiro.workers.dev",
+        "passed": true
+      },
+      {
+        "name": "Origem não autorizada: https://admpainel-6js.pages.dev.evil.invalid",
+        "passed": true
+      },
+      {
+        "name": "Origem não autorizada: https://admpainel-6js.pages.dev@evil.invalid",
+        "passed": true
+      },
+      {
+        "name": "Origem não autorizada: http://localhost:4173",
+        "passed": true
+      },
+      {
+        "name": "Origem não autorizada: null",
+        "passed": true
+      },
+      {
+        "name": "Allowlist explícita do ambiente é preservada",
+        "passed": true
+      },
+      {
+        "name": "Sandbox permite prévia local",
+        "passed": true
+      }
+    ]
+  }
+}

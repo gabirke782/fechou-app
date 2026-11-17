@@ -1,0 +1,21 @@
+name: Empacotar candidato FECHOU R18
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  pacote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Pacote com index.html na raiz
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fechou-r18-publicar
+          path: auditoria/R18/candidato/index.html
+          retention-days: 1
+          if-no-files-found: error

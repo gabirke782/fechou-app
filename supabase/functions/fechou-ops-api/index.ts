@@ -14,21 +14,41 @@ const admin = () => {
 const clean = (v: unknown, max = 500) => String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
 const obj = (v: unknown): Record<string, any> => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, any> : {};
 const validUuid = (v: unknown) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
-const cors = (req: Request) => {
-  const origin = req.headers.get("origin") || "";
-  let allowed = !origin;
-  if (origin) {
+const NativeURL = globalThis.URL; // [FECHOU_CORS_FIX_V336] o "const URL" acima sombreia o construtor global URL
+const normalizedOrigin = (value: string) => {
+  const v = String(value ?? "").trim();
+  if (!v) return "";
+  try { const o = new NativeURL(v).origin.toLowerCase(); return o === "null" ? "" : o; } catch { return ""; }
+};
+const allowedOriginSet = new Set([
+  ...origins.map(normalizedOrigin),
+  normalizedOrigin(Deno.env.get("FECHOU_APP_URL") || ""),
+  "https://startup5.pages.dev",
+  "https://startup-bur.pages.dev",
+  "http://localhost",
+  "http://127.0.0.1",
+].map(normalizedOrigin).filter(Boolean));
+const productionHosts = new Set(["startup5.pages.dev", "www.startup5.pages.dev", "startup-bur.pages.dev"]);
+const originDecision = (rawOrigin: string) => {
+  const raw = String(rawOrigin || "").trim();
+  const normalized = normalizedOrigin(raw);
+  let allowed = !raw;
+  if (!allowed && normalized) {
     try {
-      const u = new URL(origin);
-      allowed = origins.includes(u.origin) ||
-        (Deno.env.get("FECHOU_APP_URL") || "").replace(/\/$/, "") === u.origin ||
-        (u.protocol === "https:" && (u.hostname.endsWith(".csb.app") || u.hostname.endsWith(".codesandbox.io") || u.hostname.endsWith(".pages.dev"))) ||
-        ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && u.protocol === "http:");
+      const parsed = new NativeURL(normalized);
+      allowed = (parsed.protocol === "https:" && productionHosts.has(parsed.hostname.toLowerCase())) || allowedOriginSet.has(normalized);
     } catch { allowed = false; }
   }
-  return { ...(allowed && origin ? { "Access-Control-Allow-Origin": origin } : {}), "Vary": "Origin",
-    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
-    "Access-Control-Allow-Methods": "POST, OPTIONS", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
+  console.log("[CORS_DIAGNOSTIC]", JSON.stringify({ rawOrigin: raw, normalizedOrigin: normalized, allowed, allowedOrigins: [...allowedOriginSet].sort() }));
+  return { allowed, normalized };
+};
+const isOriginAllowed = (origin: string) => originDecision(origin).allowed;
+const cors = (req: Request) => {
+  const decision = originDecision(req.headers.get("origin") || "");
+  return { ...(decision.normalized && decision.allowed ? { "Access-Control-Allow-Origin": decision.normalized } : {}), "Vary": "Origin",
+    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-supabase-api-version, x-retry-count, x-fechou-request-id",
+    "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Max-Age": "86400", "Access-Control-Expose-Headers": "x-request-id",
+    "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 };
 const reply = (req: Request, status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: cors(req) });
@@ -263,32 +283,6 @@ async function serviceCancel(db: any, user: any, payload: any) {
     return result;
   }
   if (result.action !== "refund") return result;
-  const orderMeta = obj(order.metadata);
-  const isTestOrder = ["temporary_test_price","temporary_test_payment_only","test_mode","test_order"].some((key) => {
-    const value = orderMeta[key];
-    return value === true || String(value ?? "").trim().toLowerCase() === "true";
-  });
-  if (isTestOrder && ASAAS_ENV === "production") {
-    const now = new Date().toISOString();
-    const note = "Estorno automático bloqueado para contratação marcada como teste em ambiente de produção.";
-    await db.from("orders").update({
-      refund_status: "review_required",
-      metadata: { ...orderMeta, auto_refund_state: "blocked_test_mode", auto_refund_error: note, refund_test_mode_blocked_at: now },
-      updated_at: now
-    }).eq("id", orderId);
-    const { data: existingCase } = await db.from("fechou_service_cases").select("id").eq("order_id", orderId).eq("case_type", "refund_test_mode_blocked").in("status", ["open","in_review"]).limit(1).maybeSingle();
-    if (!existingCase) {
-      await db.from("fechou_service_cases").insert({
-        order_id: orderId, opened_by: user.id, case_type: "refund_test_mode_blocked",
-        reason: note + " Use o Asaas Sandbox para validar o fluxo de reembolso.",
-        status: "open", response_due_at: new Date(Date.now() + 86400000).toISOString(),
-        metadata: { test_order: true, temporary_test_price: orderMeta.temporary_test_price === true || String(orderMeta.temporary_test_price || "").toLowerCase() === "true", temporary_test_payment_only: orderMeta.temporary_test_payment_only === true || String(orderMeta.temporary_test_payment_only || "").toLowerCase() === "true", payment_id: order.payment_id, amount: order.total }
-      });
-    }
-    await notify(db, String(order.client_id), orderId, "refund_review_required", "Cancelamento registrado — estorno em análise", "Esta contratação está marcada como teste. Nenhum estorno foi enviado ao Asaas em Produção; a validação financeira precisa ocorrer no Sandbox.", { event_key: "blocked_test_refund" });
-    if (order.professional_id) await notify(db, String(order.professional_id), orderId, "refund_review_required", "Cancelamento de contratação de teste", "O cancelamento foi registrado. O estorno automático foi bloqueado em Produção para evitar movimentação de dinheiro real.", { event_key: "blocked_test_refund" });
-    return { ...result, refund_status: "review_required", message: "Pedido de teste cancelado. Nenhum estorno foi enviado ao Asaas em Produção; use o Sandbox para testar o reembolso." };
-  }
   const paymentId = clean(order.payment_id, 120);
   if (!/^pay_[A-Za-z0-9]+$/.test(paymentId)) {
     await db.from("orders").update({ refund_status: "review_required", metadata: { ...obj(order.metadata), auto_refund_state: "review_required", auto_refund_error: "payment_id_missing_or_invalid" }, updated_at: new Date().toISOString() }).eq("id", orderId);
@@ -332,7 +326,7 @@ async function serviceCancel(db: any, user: any, payload: any) {
       requestUrl = clean(providerResult.requestUrl || "", 1000);
       if (!requestUrl) throw new Error("O provedor não retornou a etapa de dados bancários para o estorno de boleto.");
     } else if (billing === "PIX" || billing === "CREDIT_CARD") {
-      providerResult = await asaas("/payments/" + encodeURIComponent(paymentId) + "/refund", "POST", { description: "FECHOU: cancelamento antes de vínculo contratual ou início do serviço. Motivo: " + reason.slice(0, 250) });
+      providerResult = await asaas("/payments/" + encodeURIComponent(paymentId) + "/refund", "POST", { description: clean("FECHOU: cancelamento antes de vínculo contratual ou início do serviço. Motivo: " + reason, 140).replace(/[\uD800-\uDBFF]$/, "") });
     } else throw new Error("A forma de pagamento exige conferência manual antes de solicitar o estorno.");
     const nextStatus = billing === "BOLETO" ? "bank_slip_action_required" : "pending";
     const nextMeta = { ...obj(order.metadata), refund_status: nextStatus, refund_requested_at: new Date().toISOString(), refund_reason: reason,
@@ -397,7 +391,7 @@ async function adminRefundCase(db: any, user: any, payload: any) {
       requestUrl = clean(providerResult.requestUrl || "", 1000);
       if (!requestUrl) throw new Error("O Asaas não retornou o link necessário para o cliente informar os dados bancários.");
     } else if (billing === "PIX" || billing === "CREDIT_CARD") {
-      providerResult = await asaas("/payments/" + encodeURIComponent(paymentId) + "/refund", "POST", { description: "FECHOU: reembolso aprovado após análise administrativa. Motivo: " + reason.slice(0, 250) });
+      providerResult = await asaas("/payments/" + encodeURIComponent(paymentId) + "/refund", "POST", { description: clean("FECHOU: reembolso aprovado após análise administrativa. Motivo: " + reason, 140).replace(/[\uD800-\uDBFF]$/, "") });
     } else throw new Error("Esta forma de pagamento exige conciliação manual com o provedor.");
     const status = billing === "BOLETO" ? "bank_slip_action_required" : "pending";
     const metadata = { ...obj(order.metadata), refund_status: status, refund_requested_at: new Date().toISOString(), refund_reason: reason,
@@ -473,7 +467,17 @@ async function financeData(db: any) {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
+  const originCheck = originDecision(req.headers.get("origin") || "");
+  if (req.method === "OPTIONS") {
+    if (!originCheck.allowed) return new Response("Origem não autorizada.", { status: 403, headers: { "Cache-Control": "no-store", "Vary": "Origin" } });
+    return new Response(null, { status: 204, headers: {
+      ...(originCheck.normalized ? { "Access-Control-Allow-Origin": originCheck.normalized } : {}),
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-supabase-api-version, x-retry-count, x-fechou-request-id",
+      "Access-Control-Max-Age": "86400", "Vary": "Origin"
+    }});
+  }
+  if (!originCheck.allowed) return reply(req, 403, { ok: false, error: "Origem não autorizada." });
   if (req.method !== "POST") return reply(req, 405, { ok: false, error: "Método não permitido." });
   try {
     const auth = await authenticate(req), body = obj(await req.json().catch(() => ({}))), action = clean(body.action, 100);

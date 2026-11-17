@@ -75,8 +75,8 @@ const getCorsHeaders = (req: Request) => {
     try {
       const u = new URL(origin);
       allowed = allowedOrigins.includes(u.origin) || appUrl === u.origin ||
-        (u.protocol === "https:" && (u.hostname.endsWith(".pages.dev") || u.hostname.endsWith(".workers.dev"))) ||
-        ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && u.protocol === "http:");
+        ["https://admpainel-6js.pages.dev", "https://startup5.pages.dev"].includes(u.origin) ||
+        (ASAAS_ENV === "sandbox" && (u.hostname === "localhost" || u.hostname === "127.0.0.1") && u.protocol === "http:");
     } catch { allowed = false; }
   }
   return {
@@ -104,12 +104,12 @@ async function asaasRequest(path:string,method="GET",body?:Record<string,unknown
   const raw=await response.text();let data:any={};try{data=raw?JSON.parse(raw):{};}catch{data={};}
   if(!response.ok) {
     const detail=Array.isArray(data.errors)?data.errors.map((x:any)=>clean(x.description||x.code||"",180)).filter(Boolean).join("; "):clean(data.message||"",300);
-    throw Object.assign(new Error("Asaas recusou a operação ("+response.status+"). "+(detail||"Verifique permissões da chave e os dados da cobrança.")),{status:response.status===401||response.status===403?503:502});
+    throw Object.assign(new Error("Asaas recusou a operação ("+response.status+"). "+(detail||"Verifique permissões da chave e os dados da cobrança.")),{status:response.status===401||response.status===403?503:response.status,provider_rejected:[400,401,403,404,422].includes(response.status)});
   }
   return data;
 }
 async function asaasBalance() {
-  const data=await asaasRequest("/finance/getCurrentBalance");
+  const data=await asaasRequest("/finance/balance");
   return {connected:true,environment:ASAAS_ENV,balance:Number(data.balance||0),checked_at:new Date().toISOString(),webhook_token_configured:Boolean(ASAAS_WEBHOOK_TOKEN)};
 }
 async function asaasRefundCreate(db:any,user:any,params:any,requestId:string) {
@@ -130,11 +130,6 @@ async function asaasRefundCreate(db:any,user:any,params:any,requestId:string) {
   if(orderError||!order) throw Object.assign(new Error("Contratação vinculada ao caso não encontrada."),{status:404});
   if(!["approved","paid","received","confirmed"].includes(norm(order.payment_status))) throw Object.assign(new Error("O pagamento ainda não está confirmado."),{status:409});
   const orderMeta=asObj(order.metadata);
-  const isTestOrder=["temporary_test_price","temporary_test_payment_only","test_mode","test_order"].some((key:any)=>{
-    const value=orderMeta[key];
-    return value===true||String(value??"").trim().toLowerCase()==="true";
-  });
-  if(ASAAS_ENV==="production"&&isTestOrder)throw Object.assign(new Error("Reembolso automático de contratação marcada como teste está bloqueado em Produção. Use o Asaas Sandbox para validar este fluxo."),{status:409,code:"TEST_MODE_REFUND_BLOCKED"});
   if(["initiating","pending","refund_pending","bank_slip_action_required","refunded"].includes(norm(order.refund_status))) throw Object.assign(new Error("Já existe uma solicitação de estorno ou devolução registrada."),{status:409});
   const paymentId=clean(order.payment_id,120);
   if(!/^pay_[A-Za-z0-9]+$/.test(paymentId)) throw Object.assign(new Error("Identificador da cobrança Asaas inválido; conciliação manual necessária."),{status:409});
@@ -154,14 +149,17 @@ async function asaasRefundCreate(db:any,user:any,params:any,requestId:string) {
   const {data:claim,error:claimError}=await claimQuery.select("id").maybeSingle();
   if(claimError||!claim) throw Object.assign(new Error("Não foi possível reservar o reembolso; atualize o caso."),{status:409});
   let providerAccepted=false;
+  let providerCallStarted=false;
   try {
     let providerResult:any,requestUrl="";
     if(billing==="BOLETO") {
+      providerCallStarted=true;
       providerResult=await asaasRequest("/payments/"+encodeURIComponent(paymentId)+"/bankSlip/refund","POST",{});
       requestUrl=clean(providerResult.requestUrl||"",1000);
       if(!requestUrl) throw new Error("O Asaas não retornou o link para o cliente informar os dados bancários.");
       providerAccepted=true;
     } else if(billing==="PIX"||billing==="CREDIT_CARD") {
+      providerCallStarted=true;
       providerResult=await asaasRequest("/payments/"+encodeURIComponent(paymentId)+"/refund","POST",{description:"FECHOU: reembolso aprovado pela administração. Caso "+caseId});
       providerAccepted=true;
     } else throw new Error("Esta forma de pagamento exige conferência manual antes do estorno.");
@@ -174,8 +172,11 @@ async function asaasRefundCreate(db:any,user:any,params:any,requestId:string) {
     await audit(db,user,"asaas_refund_requested","orders",orderId,{case_id:caseId,amount,billing_type:billing,provider_status:clean(providerResult.status||"requested",80)},requestId);
     return {ok:true,refund_status:status,amount,request_url:requestUrl||null,provider_status:clean(providerResult.status||"requested",80),message:billing==="BOLETO"?"Solicitação iniciada. O cliente ainda precisa informar os dados bancários no link do Asaas.":"Estorno solicitado ao Asaas; a carteira só será atualizada como devolvida após confirmação do Webhook."};
   } catch(error) {
-    if(providerAccepted) {
-      await db.from("orders").update({metadata:{...asObj(order.metadata),refund_status:"pending_sync",refund_sync_error:clean((error as Error)?.message||error,400),refund_provider_accepted_at:new Date().toISOString()},updated_at:new Date().toISOString()}).eq("id",orderId).eq("refund_status","initiating");
+    const uncertain = providerCallStarted && (error as any)?.provider_rejected !== true;
+    if(providerAccepted || uncertain) {
+      // Uma resposta perdida não prova recusa. Mantém a reserva e impede outro POST.
+      await db.from("orders").update({metadata:{...asObj(order.metadata),refund_status:"pending_sync",refund_reconciliation_required:true,refund_sync_error:clean((error as Error)?.message||error,400),refund_provider_attempted_at:new Date().toISOString(),...(providerAccepted?{refund_provider_accepted_at:new Date().toISOString()}:{})},updated_at:new Date().toISOString()}).eq("id",orderId).eq("refund_status","initiating");
+      await audit(db,user,"asaas_refund_reconciliation_required","orders",orderId,{case_id:caseId,provider_response_confirmed:providerAccepted},requestId);
     } else {
       await db.from("orders").update({refund_status:"review_required",metadata:{...asObj(order.metadata),refund_status:"review_required",refund_error:clean((error as Error)?.message||error,400),refund_failed_at:new Date().toISOString()},updated_at:new Date().toISOString()}).eq("id",orderId).eq("refund_status","initiating");
     }
@@ -206,30 +207,30 @@ async function ensureAdmin(db: any, user: any) {
     .eq("user_id", user.id).maybeSingle();
   if (error) throw new Error("Não foi possível validar a autorização administrativa.");
 
-  if (row && row.active && norm(row.email) === email) return row;
+  if (row) {
+    if (row.active === true && norm(row.email) === email) return row;
+    // Um convite antigo não pode reativar uma autorização revogada.
+    throw Object.assign(new Error("Acesso administrativo desativado ou não autorizado para esta conta."), { status: 403 });
+  }
 
   const { data: invite, error: inviteError } = await db.from("admin_access_invites")
     .select("email,active,permissions,claimed_user_id")
     .eq("email", email).eq("active", true).maybeSingle();
   if (inviteError) throw new Error("Não foi possível validar o convite administrativo.");
 
-  if (invite && (email === ADMIN_EMAIL || invite.claimed_user_id === user.id)) {
+  if (invite && invite.claimed_user_id === user.id) {
     if (invite.claimed_user_id && invite.claimed_user_id !== user.id) {
       throw Object.assign(new Error("Este convite administrativo já foi utilizado por outra conta."), { status: 403 });
     }
     const permissions = asObj(invite.permissions);
-    const { error: insertError } = await db.from("admin_access").upsert({
+    const { error: insertError } = await db.from("admin_access").insert({
       user_id: user.id,
       email,
       active: true,
       permissions,
       created_by: null
-    }, { onConflict: "user_id" });
+    });
     if (insertError) throw new Error("Não foi possível vincular a conta à lista administrativa.");
-    await db.from("admin_access_invites").update({
-      claimed_user_id: user.id,
-      claimed_at: new Date().toISOString()
-    }).eq("email", email).eq("active", true);
     return { user_id: user.id, email, active: true, permissions };
   }
 
@@ -483,25 +484,43 @@ async function subscriptionsList(db: any, params: any) {
 }
 
 async function casesList(db: any, params: any) {
-  const [a,b,c,ordersQ,profiles,authUsers] = await Promise.all([
+  // V29 (painel): além das três filas de casos, inclui pedidos com cancelamento/motivo registrado
+  // diretamente em orders (cancelamentos sem caso aberto) e enriquece contestações com fotos e respostas.
+  const [a,b,c,ordersQ,profiles,authUsers,repliesQ] = await Promise.all([
     db.from("fechou_service_cases").select("id,order_id,opened_by,case_type,status,reason,decision,decision_reason,created_at,metadata").order("created_at",{ascending:false}).limit(200),
     db.from("fechou_service_review_cases").select("id,order_id,opened_by,case_type,status,reason,decision,decision_reason,created_at").order("created_at",{ascending:false}).limit(200),
     db.from("fechou_support_cases").select("id,order_id,opened_by,case_type,status,reason,decision,created_at,metadata").order("created_at",{ascending:false}).limit(200),
-    db.from("orders").select("id,title,total,client_id,professional_id").limit(10000),
-    profilesMap(db),listAuthUsers(db)
+    db.from("orders").select("id,title,total,client_id,professional_id,status,service_state,refund_status,cancellation_requested_at,cancel_reason,updated_at").limit(10000),
+    profilesMap(db),listAuthUsers(db),
+    db.from("fechou_contest_replies").select("*").limit(500)
   ]);
   if(a.error||b.error||c.error||ordersQ.error) throw new Error("Não foi possível consultar as ocorrências.");
   const orderMap=new Map(arr(ordersQ.data).map((x:any)=>[String(x.id),x]));
   const authMap=new Map(authUsers.map((u:any)=>[String(u.id),u]));
+  const repliesByOrder=new Map<string,any[]>();
+  if(!repliesQ?.error){for(const r of arr(repliesQ?.data)){const k=String(r.order_id||"");if(!k)continue;if(!repliesByOrder.has(k))repliesByOrder.set(k,[]);repliesByOrder.get(k)!.push(r);}}
   const normalize=(row:any,source:string)=>{
-    const o=orderMap.get(String(row.order_id))||{};
+    const o:any=orderMap.get(String(row.order_id))||{};
     const requester=profiles.get(String(row.opened_by));
     const user=authMap.get(String(row.opened_by))||{};
     const meta=asObj(row.metadata);
     const t=classifyCaseType(row.case_type);
-    return {id:row.id,source_table:source,order_id:row.order_id,order_code:String(row.order_id||"").slice(0,8).toUpperCase(),type:t,case_type:row.case_type,requester_name:requester?.full_name||"",requester_email:user.email||"",reason:row.reason||"",amount:meta.amount??o.total??null,created_at:row.created_at,status:normalizedCaseStatus(row),decision:row.decision||null,decision_reason:row.decision_reason||null,description:row.reason||""};
+    const photos=Array.isArray(meta.photos)?meta.photos.length:0;
+    const replies=(repliesByOrder.get(String(row.order_id))||[]).sort((x:any,y:any)=>String(y.created_at).localeCompare(String(x.created_at)));
+    const lastReply=replies[0]||null;
+    return {id:row.id,source_table:source,order_id:row.order_id,order_code:String(row.order_id||"").slice(0,8).toUpperCase(),order_title:o.title||"",type:t,case_type:row.case_type,requester_name:requester?.full_name||"",requester_email:user.email||"",reason:row.reason||"",amount:meta.amount??o.total??null,created_at:row.created_at,status:normalizedCaseStatus(row),decision:row.decision||null,decision_reason:row.decision_reason||null,description:row.reason||"",photos_count:photos,replies_count:replies.length,last_reply:lastReply?clean(lastReply.message||lastReply.reply||lastReply.text||lastReply.body||"",500):null,actionable:true};
   };
   let items=[...arr(a.data).map((x:any)=>normalize(x,"fechou_service_cases")),...arr(b.data).map((x:any)=>normalize(x,"fechou_service_review_cases")),...arr(c.data).map((x:any)=>normalize(x,"fechou_support_cases"))];
+  const ordersWithCancelCase=new Set(items.filter((x:any)=>x.type==="cancellation").map((x:any)=>String(x.order_id)));
+  for(const o of arr(ordersQ.data)){
+    if(!(o.cancellation_requested_at||o.cancel_reason))continue;
+    if(ordersWithCancelCase.has(String(o.id)))continue;
+    const requester=profiles.get(String(o.client_id));
+    const user=authMap.get(String(o.client_id))||{};
+    const st=norm(o.service_state);
+    const status=st==="support_review"||norm(o.refund_status)==="review_required"?"in_review":(st.startsWith("cancel")||norm(o.status).startsWith("cancel")?"cancelled":"open");
+    items.push({id:"order:"+o.id,source_table:"orders",order_id:o.id,order_code:String(o.id).slice(0,8).toUpperCase(),order_title:o.title||"",type:"cancellation",case_type:"order_cancellation",requester_name:requester?.full_name||"",requester_email:user.email||"",reason:o.cancel_reason||"",amount:o.total??null,created_at:o.cancellation_requested_at||o.updated_at,status,decision:null,decision_reason:null,description:o.cancel_reason||"",refund_status:o.refund_status||null,photos_count:0,replies_count:0,last_reply:null,actionable:false});
+  }
   const type=norm(params.type),status=norm(params.status),search=norm(params.search);
   if(type)items=items.filter((x:any)=>x.type===type);
   if(status && status!=="all"){
@@ -510,7 +529,7 @@ async function casesList(db: any, params: any) {
     else if(status==="rejected")items=items.filter((x:any)=>norm(x.status)==="rejected");
     else items=items.filter((x:any)=>norm(x.status).includes(status));
   }
-  if(search)items=items.filter((x:any)=>[x.order_id,x.order_code,x.requester_name,x.requester_email,x.reason].some(v=>norm(v).includes(search)));
+  if(search)items=items.filter((x:any)=>[x.order_id,x.order_code,x.order_title,x.requester_name,x.requester_email,x.reason].some(v=>norm(v).includes(search)));
   items.sort((x:any,y:any)=>String(y.created_at).localeCompare(String(x.created_at)));
   return {items:items.slice(0,100),total:items.length};
 }
@@ -528,10 +547,127 @@ async function activityList(db:any,params:any) {
 }
 
 async function paymentsList(db:any,params:any) {
-  let q=db.from("payments").select("id,order_id,client_id,professional_id,provider,provider_payment_id,amount,currency,status,provider_status,created_at").order("created_at",{ascending:false}).limit(500);
-  const since=periodStart(params.period);if(since)q=q.gte("created_at",since);
-  const {data,error}=await q;if(error)throw new Error("Não foi possível consultar os pagamentos registrados.");
-  return {items:arr(data).map((x:any)=>({id:x.id,type:x.provider||"Pagamento",direction:"entrada",reference:x.provider_payment_id||x.order_id,order_id:x.order_id,asaas_id:x.provider_payment_id,value:x.amount,amount:x.amount,status:x.status||x.provider_status,created_at:x.created_at,provider:x.provider,currency:x.currency})),total:arr(data).length};
+  const since=periodStart(params.period);
+  let cq=db.from("fechou_asaas_checkouts")
+    .select("id,checkout_id,external_reference,purpose,user_id,order_id,plan,amount,status,subscription_status,provider_payload,created_at")
+    .order("created_at",{ascending:false}).limit(500);
+  let lq=db.from("payments")
+    .select("id,order_id,client_id,professional_id,provider,provider_payment_id,amount,currency,status,provider_status,created_at")
+    .order("created_at",{ascending:false}).limit(500);
+  if(since){cq=cq.gte("created_at",since);lq=lq.gte("created_at",since);}
+  const [checkouts,legacy]=await Promise.all([cq,lq]);
+  if(checkouts.error)throw new Error("Não foi possível consultar os checkouts registrados no Asaas: "+checkouts.error.message);
+  if(legacy.error)throw new Error("Não foi possível consultar os pagamentos legados: "+legacy.error.message);
+  const items:any[]=[];
+  const providerIds=new Set<string>();
+  for(const x of arr(checkouts.data)){
+    const paymentId=clean(x.checkout_id||"",160);
+    if(paymentId)providerIds.add(paymentId);
+    const payload=asObj(x.provider_payload);
+    const payment=asObj(payload.payment);
+    items.push({
+      id:x.id,type:x.purpose==="subscription"?"Assinatura":(x.purpose==="prepublication"?"Pagamento de serviço":"Pagamento"),
+      direction:"entrada",reference:paymentId||x.external_reference||x.order_id,order_id:x.order_id||null,
+      asaas_id:paymentId||null,value:x.amount,amount:x.amount,
+      status:x.status,provider_status:payment.status||payload.payment_status||x.subscription_status||x.status,
+      created_at:x.created_at,provider:"asaas",currency:"BRL",purpose:x.purpose,plan:x.plan||null
+    });
+  }
+  for(const x of arr(legacy.data)){
+    const paymentId=clean(x.provider_payment_id||"",160);
+    if(paymentId&&providerIds.has(paymentId))continue;
+    items.push({id:x.id,type:x.provider||"Pagamento",direction:"entrada",reference:paymentId||x.order_id,order_id:x.order_id,asaas_id:paymentId||null,value:x.amount,amount:x.amount,status:x.status||x.provider_status,provider_status:x.provider_status||x.status,created_at:x.created_at,provider:x.provider,currency:x.currency});
+  }
+  const ledgerQuery=await db.from("fechou_wallet_ledger")
+    .select("id,order_id,amount,status,provider,provider_reference,created_at")
+    .eq("entry_type","service_payment").order("created_at",{ascending:false}).limit(500);
+  if(ledgerQuery.error)throw new Error("Não foi possível conciliar os lançamentos de pagamentos na carteira: "+ledgerQuery.error.message);
+  const coveredOrders=new Set(items.map((x:any)=>String(x.order_id||"")).filter(Boolean));
+  for(const x of arr(ledgerQuery.data)){
+    const orderId=String(x.order_id||"");
+    const ref=clean(x.provider_reference||"",160);
+    if((orderId&&coveredOrders.has(orderId))||(ref&&providerIds.has(ref)))continue;
+    if(since&&String(x.created_at)<since)continue;
+    items.push({id:x.id,type:"Pagamento de serviço",direction:"entrada",reference:ref||orderId,order_id:orderId||null,asaas_id:ref||null,value:x.amount,amount:x.amount,status:x.status,provider_status:x.status,created_at:x.created_at,provider:x.provider||"asaas",currency:"BRL"});
+  }
+  items.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
+  const verify=items.filter((x:any)=>x.provider==="asaas"&&/^pay_[A-Za-z0-9]+$/.test(String(x.asaas_id||""))).slice(0,100);
+  for(const item of verify){
+    try{
+      const provider=await asaasRequest("/payments/"+encodeURIComponent(item.asaas_id));
+      item.fechou_status=item.status;
+      item.provider_status=clean(provider.status||item.provider_status,60);
+      item.provider_refunds_count=Array.isArray(provider.refunds)?provider.refunds.length:0;
+      item.provider_refunded=String(provider.status||"").toUpperCase()==="REFUNDED"||item.provider_refunds_count>0;
+      item.provider_confirmed=["RECEIVED","CONFIRMED","RECEIVED_IN_CASH"].includes(String(provider.status||"").toUpperCase());
+      item.status=item.provider_refunded?"REFUNDED":item.provider_status;
+      item.notes="FECHOU: "+String(item.fechou_status||"—")+" | Asaas: "+String(item.provider_status||"—")+" | Estornos: "+String(item.provider_refunds_count);
+      if(item.purpose&&item.id){
+        const {error:reconcileError}=await db.from("fechou_asaas_checkouts").update({
+          provider_payload:{...asObj(item.provider_payload),provider_reconciliation:{
+            status:item.provider_status,refunds_count:item.provider_refunds_count,refunded:item.provider_refunded,
+            confirmed:item.provider_confirmed,checked_at:new Date().toISOString()
+          }},
+          ...(item.provider_refunded?{status:"refunded"}:{}),
+          updated_at:new Date().toISOString()
+        }).eq("id",item.id);
+        if(reconcileError)throw new Error("Não foi possível registrar a conciliação do Asaas para o pagamento "+String(item.asaas_id||"")+": "+reconcileError.message);
+      }
+    }catch(error){
+      item.provider_lookup_error=clean((error as Error)?.message||error,220);
+    }
+  }
+  return {items:items.slice(0,500),total:items.length,source:"fechou_asaas_checkouts+fechou_wallet_ledger+payments",provider_verified:verify.length};
+}
+
+async function reconcilePendingPayoutTransfers(db:any, payoutRows:any[]) {
+  if(!ASAAS_API_KEY) return;
+  const ids=arr(payoutRows).filter((x:any)=>norm(x.status)==="transfer_pending").map((x:any)=>String(x.id));
+  if(!ids.length)return;
+  const {data:attempts,error}=await db.from("fechou_wallet_asaas_transfers")
+    .select("id,payout_request_id,user_id,order_id,asaas_transfer_id,amount,status")
+    .in("payout_request_id",ids).in("status",["pending","in_bank_processing"]).not("asaas_transfer_id","is",null).limit(100);
+  if(error)throw new Error("Falha ao consultar transferências pendentes para conciliação: "+error.message);
+  for(const attempt of arr(attempts)){
+    try{
+      const transfer=await asaasRequest("/transfers/"+encodeURIComponent(String(attempt.asaas_transfer_id)));
+      const providerStatus=clean(transfer.status||"",40).toUpperCase();
+      const statusMap:Record<string,string>={PENDING:"pending",SCHEDULED:"pending",BANK_PROCESSING:"in_bank_processing",IN_BANK_PROCESSING:"in_bank_processing",DONE:"done",FAILED:"failed",CANCELLED:"cancelled",CANCELED:"cancelled",BLOCKED:"blocked"};
+      const mapped=statusMap[providerStatus];
+      if(!mapped)continue;
+      if(Math.round(Number(transfer.value||0)*100)!==Math.round(Number(attempt.amount||0)*100)) {
+        console.error("FECHOU payout reconciliation blocked: Asaas amount mismatch",{transfer_id:attempt.asaas_transfer_id});
+        continue;
+      }
+      const now=new Date().toISOString();
+      const receipt=clean(transfer.transactionReceiptUrl||"",1500);
+      let receiptUrl="";
+      try{const u=new URL(receipt);if(u.protocol==="https:")receiptUrl=u.toString();}catch{}
+      const {error:updateError}=await db.from("fechou_wallet_asaas_transfers").update({
+        status:mapped,provider_status:providerStatus,fail_reason:clean(transfer.failReason||"",1400)||null,
+        transaction_receipt_url:receiptUrl||null,effective_at:transfer.effectiveDate?new Date(transfer.effectiveDate).toISOString():null,updated_at:now
+      }).eq("id",attempt.id);
+      if(updateError)throw new Error("Falha ao atualizar tentativa: "+updateError.message);
+      if(mapped==="done"){
+        const {data:request,error:reqError}=await db.from("fechou_wallet_payout_requests").select("id,user_id,order_id").eq("id",attempt.payout_request_id).maybeSingle();
+        if(reqError||!request)throw new Error("Solicitação vinculada não encontrada: "+(reqError?.message||""));
+        const {data:ledger,error:ledgerReadError}=await db.from("fechou_wallet_ledger").select("status").eq("user_id",request.user_id).eq("order_id",request.order_id).eq("entry_type","payout").maybeSingle();
+        if(ledgerReadError||!ledger)throw new Error("Lançamento de carteira não encontrado: "+(ledgerReadError?.message||""));
+        if(String(ledger.status)==="release_ready"){
+          const {error:ledgerUpdateError}=await db.from("fechou_wallet_ledger").update({status:"paid",description:"Pix transferido pelo Asaas (ID "+attempt.asaas_transfer_id+").",updated_at:now}).eq("user_id",request.user_id).eq("order_id",request.order_id).eq("entry_type","payout").eq("status","release_ready");
+          if(ledgerUpdateError)throw new Error("Falha ao confirmar carteira: "+ledgerUpdateError.message);
+        }else if(String(ledger.status)!=="paid")throw new Error("Estado inesperado do lançamento: "+ledger.status);
+        const {error:reqUpdateError}=await db.from("fechou_wallet_payout_requests").update({status:"paid",review_reason:"Transferência confirmada pela consulta direta do status DONE no Asaas.",updated_at:now}).eq("id",request.id).neq("status","paid");
+        if(reqUpdateError)throw new Error("Falha ao concluir solicitação: "+reqUpdateError.message);
+        const {error:orderError}=await db.from("orders").update({payout_status:"paid",payout_id:attempt.asaas_transfer_id,payout_transfer_id:attempt.asaas_transfer_id,released_at:now,payout_error:null,updated_at:now}).eq("id",request.order_id);
+        if(orderError)throw new Error("Falha ao atualizar pedido: "+orderError.message);
+      }else if(["failed","cancelled","blocked"].includes(mapped)){
+        const {error:reqUpdateError}=await db.from("fechou_wallet_payout_requests").update({status:"under_review",review_reason:clean(transfer.failReason||("Asaas informou "+providerStatus+" na conciliação."),1000),updated_at:now}).eq("id",attempt.payout_request_id).neq("status","paid");
+        if(reqUpdateError)throw new Error("Falha ao devolver solicitação para análise: "+reqUpdateError.message);
+      }
+      console.info("FECHOU payout reconciled from Asaas transfer GET",{transfer_id:attempt.asaas_transfer_id,status:providerStatus});
+    }catch(e){console.error("FECHOU payout reconciliation failed",{transfer_id:attempt.asaas_transfer_id,error:clean((e as Error)?.message||e,500)});}
+  }
 }
 
 async function payoutsList(db:any,params:any) {
@@ -539,8 +675,13 @@ async function payoutsList(db:any,params:any) {
   if(norm(params.status)==="pending")q=q.in("status",["requested_review","under_review","transfer_pending"]);
   const [res,profiles,users]=await Promise.all([q,profilesMap(db),listAuthUsers(db)]);
   if(res.error)throw new Error("Não foi possível consultar as solicitações de saque.");
+  await reconcilePendingPayoutTransfers(db,arr(res.data));
+  const {data:refreshed,error:refreshError}=await db.from("fechou_wallet_payout_requests")
+    .select("id,user_id,order_id,amount,status,pix_key_type,pix_key_last4,review_reason,created_at,updated_at")
+    .order("created_at",{ascending:false}).limit(500);
+  if(refreshError)throw new Error("Não foi possível atualizar a fila após a conciliação dos saques.");
   const userMap=new Map(users.map((u:any)=>[String(u.id),u]));
-  let items=arr(res.data).map((x:any)=>{
+  let items=arr(refreshed||res.data).map((x:any)=>{
     const p=profiles.get(String(x.user_id));const u=userMap.get(String(x.user_id))||{};
     const displayStatus = ["requested_review","under_review"].includes(norm(x.status)) ? "Pendente" : (norm(x.status)==="transfer_pending" ? "Em processamento" : x.status);
     return {id:x.id,user_id:x.user_id,professional_name:p?.full_name||"",user_name:p?.full_name||"",professional_email:u.email||"",order_id:x.order_id,order_code:String(x.order_id).slice(0,8).toUpperCase(),amount:x.amount,value:x.amount,pix_key:maskPix(x),status:displayStatus,raw_status:x.status,created_at:x.created_at,review_reason:x.review_reason};
@@ -553,12 +694,26 @@ async function transactionsList(db:any,params:any) {
   const since=periodStart(params.period);
   let q=db.from("fechou_wallet_ledger").select("id,user_id,order_id,entry_type,amount,status,provider,provider_reference,provider_ref,description,created_at").order("created_at",{ascending:false}).limit(400);
   if(since)q=q.gte("created_at",since);
-  const [ledger,transfers,profiles,users]=await Promise.all([
+  const [ledger,transfers,manualTransfers,profiles,users]=await Promise.all([
     q,
     db.from("fechou_wallet_asaas_transfers").select("id,payout_request_id,user_id,order_id,asaas_transfer_id,amount,pix_key_type,pix_key_last4,status,provider_status,transaction_receipt_url,created_at,effective_at").order("created_at",{ascending:false}).limit(200),
+    db.from("fechou_admin_manual_transfers").select("id,amount,pix_key_type,status,provider_status,asaas_transfer_id,description,created_at,updated_at").order("created_at",{ascending:false}).limit(100),
     profilesMap(db),listAuthUsers(db)
   ]);
-  if(ledger.error||transfers.error)throw new Error("Não foi possível consultar as movimentações financeiras.");
+  if(ledger.error||transfers.error||manualTransfers.error)throw new Error("Não foi possível consultar as movimentações financeiras.");
+  for(const x of arr(manualTransfers.data)) {
+    if(!x.asaas_transfer_id||!["pending","in_bank_processing","unknown","initiating"].includes(norm(x.status)))continue;
+    try {
+      const provider=await asaasRequest("/transfers/"+encodeURIComponent(x.asaas_transfer_id));
+      const ps=clean(provider.status||x.provider_status||"UNKNOWN",40).toUpperCase();
+      const mapped=ps==="DONE"?"done":["BANK_PROCESSING","IN_BANK_PROCESSING"].includes(ps)?"in_bank_processing":["FAILED","CANCELLED","BLOCKED"].includes(ps)?"failed":"pending";
+      await db.from("fechou_admin_manual_transfers").update({
+        status:mapped,provider_status:ps,fail_reason:["FAILED","CANCELLED","BLOCKED"].includes(ps)?clean(provider.failReason||provider.description||ps,400):null,
+        updated_at:new Date().toISOString()
+      }).eq("id",x.id);
+      x.status=mapped;x.provider_status=ps;
+    } catch(e) { console.warn("manual transfer reconciliation deferred",clean((e as Error)?.message||e,180)); }
+  }
   const userMap=new Map(users.map((u:any)=>[String(u.id),u]));
   const items:any[]=[];
   for(const x of arr(ledger.data)){
@@ -567,6 +722,9 @@ async function transactionsList(db:any,params:any) {
   }
   for(const x of arr(transfers.data)){
     items.push({id:x.id,type:"Transferência Pix",direction:"saída",reference:x.asaas_transfer_id||x.payout_request_id,order_id:x.order_id,asaas_id:x.asaas_transfer_id,value:x.amount,amount:x.amount,status:x.provider_status||x.status,counterparty_name:userMap.get(String(x.user_id))?.email||"",pix_key:maskPix(x),receipt_url:x.transaction_receipt_url||null,created_at:x.effective_at||x.created_at});
+  }
+  for(const x of arr(manualTransfers.data)){
+    items.push({id:x.id,type:"Transferência administrativa Pix",direction:"saída",reference:x.asaas_transfer_id||x.id,asaas_id:x.asaas_transfer_id,value:x.amount,amount:x.amount,status:x.provider_status||x.status,counterparty_name:"Favorecido autorizado",created_at:x.created_at});
   }
   items.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
   return {items:items.slice(0,300),total:items.length};
@@ -630,8 +788,6 @@ async function payoutDecide(db:any,user:any,params:any,requestId:string) {
     return {id,status:data.status};
   }
 
-  if(!ASAAS_PIX_PAYOUTS_ENABLED)throw Object.assign(new Error("Repasse Pix desativado. Habilite FECHOU_ASAAS_PIX_PAYOUTS_ENABLED somente após homologar o fluxo de teste."),{status:409,code:"PIX_PAYOUTS_DISABLED"});
-  if(ASAAS_ENV==="production"&&ASAAS_PIX_PAYOUTS_PRODUCTION_CONFIRMATION!=="I_ACCEPT_REAL_PIX_TRANSFERS")throw Object.assign(new Error("Repasse Pix em Produção bloqueado. Homologue o Sandbox e configure a confirmação explícita de transferências reais antes de liberar."),{status:409,code:"PIX_PAYOUT_PRODUCTION_LOCKED"});
   if(!ASAAS_API_KEY)throw Object.assign(new Error("Asaas não configurado para transferências. Confira ASAAS_API_KEY nos secrets."),{status:503});
   const {data:req,error:reqError}=await db.from("fechou_wallet_payout_requests")
     .select("id,user_id,order_id,amount,status,pix_key_type,pix_key_last4").eq("id",id).maybeSingle();
@@ -643,9 +799,14 @@ async function payoutDecide(db:any,user:any,params:any,requestId:string) {
     .in("status",["initiating","unknown","pending","in_bank_processing"]).limit(1).maybeSingle();
   if(activeError)throw new Error("Não foi possível verificar tentativas anteriores de transferência.");
   if(active)throw Object.assign(new Error("Já existe uma transferência em andamento ou com resultado incerto. Não repita a operação; aguarde o webhook do Asaas."),{status:409});
+  const {data:duplicateAttempt,error:duplicateAttemptError}=await db.from("fechou_wallet_asaas_transfers")
+    .select("id,fail_reason").eq("payout_request_id",id).eq("status","failed")
+    .ilike("fail_reason","%HTTP 409%já havia sido solicitado%").limit(1).maybeSingle();
+  if(duplicateAttemptError)throw new Error("Não foi possível verificar conflito anterior de duplicidade no Asaas.");
+  if(duplicateAttempt)throw Object.assign(new Error("O Asaas já recusou esta solicitação por possível duplicidade com outra transferência. Não tente novamente até conferir o ID retornado no Asaas e confirmar que não houve pagamento para esta solicitação."),{status:409,code:"ASAAS_DUPLICATE_TRANSFER_REVIEW"});
 
   const [{data:order,error:orderError},{data:profile,error:profileError},{data:ledger,error:ledgerError}] = await Promise.all([
-    db.from("orders").select("id,professional_id,status,service_state,payment_status,metadata").eq("id",req.order_id).maybeSingle(),
+    db.from("orders").select("id,professional_id,status,service_state,payment_status,total,professional_net,platform_fee,metadata").eq("id",req.order_id).maybeSingle(),
     db.from("fechou_payout_profiles").select("user_id,pix_key,pix_key_type,last4,status,verified,confirmed_by_user,metadata").eq("user_id",req.user_id).maybeSingle(),
     db.from("fechou_wallet_ledger").select("id,amount,status").eq("user_id",req.user_id).eq("order_id",String(req.order_id)).eq("entry_type","payout").eq("status","release_ready").maybeSingle()
   ]);
@@ -656,7 +817,16 @@ async function payoutDecide(db:any,user:any,params:any,requestId:string) {
   if(!["approved","paid","received","confirmed"].includes(norm(order.payment_status)))throw Object.assign(new Error("O pagamento da contratação não está confirmado."),{status:409});
   if(!["completed","concluido","concluído"].includes(norm(order.service_state))&&!["completed","concluido","concluído"].includes(norm(order.status)))throw Object.assign(new Error("A contratação ainda não foi concluída."),{status:409});
   const meta=asObj(order.metadata);
-  if(meta.temporary_test_price===true||norm(meta.temporary_test_price)==="true"||meta.temporary_test_payment_only===true||norm(meta.temporary_test_payment_only)==="true"||meta.test_order===true||norm(meta.test_order)==="true"||meta.test_mode===true||norm(meta.test_mode)==="true")throw Object.assign(new Error("Repasse de contratação de teste bloqueado."),{status:409,code:"TEST_MODE_PAYOUT_BLOCKED"});
+  const payoutBase=Number(meta.professional_payout_base||order.total||0);
+  const commissionRate=Number(meta.platform_commission_rate||0);
+  const expectedNet=Number((payoutBase*0.98).toFixed(2));
+  const expectedFee=Number((payoutBase*0.02).toFixed(2));
+  if(commissionRate!==2||!Number.isFinite(payoutBase)||payoutBase<=0||
+     Math.round(Number(order.professional_net||0)*100)!==Math.round(expectedNet*100)||
+     Math.round(Number(order.platform_fee||0)*100)!==Math.round(expectedFee*100)||
+     Math.round(Number(ledger.amount||0)*100)!==Math.round(expectedNet*100)) {
+    throw Object.assign(new Error("A composição do repasse não confere com a comissão FECHOU de 2%; o saldo não será transferido."),{status:409,code:"PAYOUT_COMPOSITION_INVALID"});
+  }
   if(norm(profile.status)!=="verified"||profile.verified!==true||profile.confirmed_by_user!==true||!profile.pix_key)throw Object.assign(new Error("A chave Pix ainda não foi verificada e confirmada pelo profissional."),{status:409});
   const pixType=norm(profile.pix_key_type).toUpperCase();
   const requestType=norm(req.pix_key_type).toUpperCase();
@@ -672,11 +842,11 @@ async function payoutDecide(db:any,user:any,params:any,requestId:string) {
   if(openCase.error||openReview.error)throw new Error("Não foi possível conferir se existe contestação ou análise pendente.");
   if(openCase.data||openReview.data)throw Object.assign(new Error("Existe uma contestação ou revisão de serviço pendente; o repasse permanece bloqueado."),{status:409});
 
-  const balance=await asaasRequest("/finance/getCurrentBalance");
+  const balance=await asaasRequest("/finance/balance");
   const available=Number(balance.balance||0);
   if(!Number.isFinite(available)||available+0.0001<amount)throw Object.assign(new Error("Saldo disponível no Asaas insuficiente para este repasse."),{status:409});
 
-  const normalizedKey=/^[+()\\d\\s.-]+$/.test(pixKey)?pixKey.replace(/\\D/g,""):pixKey.toLowerCase();
+  const normalizedKey=/^[+()\d\s.-]+$/.test(pixKey)?pixKey.replace(/\D/g,""):pixKey.toLowerCase();
   const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(normalizedKey));
   const fingerprint=Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,"0")).join("");
   const adminReason=reason.length>=12?reason:"Aprovação administrativa de repasse após validação de saldo, contratação e titularidade Pix.";
@@ -685,6 +855,20 @@ async function payoutDecide(db:any,user:any,params:any,requestId:string) {
       .update({status:"under_review",review_reason:"Em validação administrativa para repasse.",updated_at:new Date().toISOString()})
       .eq("id",id).eq("status","requested_review").select("id").maybeSingle();
     if(claimError||!claimed)throw Object.assign(new Error("Não foi possível reservar a solicitação para análise. Atualize a fila e tente novamente."),{status:409});
+  }
+  {
+    /* V338: o Asaas recusa (409 "Saque ... já solicitado") um Pix de mesmo valor para a mesma chave logo após outro. Bloqueia antes de chamar o Asaas. */
+    const since=new Date(Date.now()-10*60*1000).toISOString();
+    const {data:recentSame,error:recentSameError}=await db.from("fechou_wallet_asaas_transfers")
+      .select("id,amount,created_at").eq("pix_key_fingerprint",fingerprint)
+      .neq("payout_request_id",id).in("status",["initiating","unknown","pending","in_bank_processing","done"])
+      .gte("created_at",since).order("created_at",{ascending:false}).limit(20);
+    if(recentSameError)throw new Error("Não foi possível verificar repasses recentes para a mesma chave Pix.");
+    const clash=(recentSame||[]).find((x:any)=>Math.round(Number(x.amount||0)*100)===Math.round(amount*100));
+    if(clash){
+      const waitMin=Math.max(1,Math.ceil((Date.parse(clash.created_at)+10*60*1000-Date.now())/60000));
+      throw Object.assign(new Error("Outro repasse de mesmo valor para esta mesma chave Pix foi enviado há poucos minutos e o Asaas bloqueia a sequência como duplicidade. Nada foi transferido nem baixado. Aguarde cerca de "+waitMin+" min e clique em Aprovar e pagar novamente."),{status:409,code:"ASAAS_SAME_KEY_COOLDOWN"});
+    }
   }
   const {data:reserved,error:reserveError}=await db.rpc("fechou_reserve_asaas_payout_attempt",{
     p_payout_request_id:id,p_user_id:req.user_id,p_order_id:req.order_id,p_admin_id:user.id,
@@ -740,6 +924,11 @@ async function payoutDecide(db:any,user:any,params:any,requestId:string) {
   }
 }
 
+
+async function asaasManualTransferCreate(_db:any,_user:any,_params:any,_requestId:string) {
+  throw Object.assign(new Error("Transferências manuais pelo painel administrativo foram desativadas. Utilize o fluxo de saque aprovado do profissional."),{status:410});
+}
+
 async function handleAction(db:any,user:any,admin:any,action:string,params:any,requestId:string) {
   if(action==="session_check")return {is_admin:true,isAdmin:true,role:"admin",email:user.email,permissions:admin.permissions};
   assertPermission(admin,action);
@@ -761,10 +950,7 @@ async function handleAction(db:any,user:any,admin:any,action:string,params:any,r
   }
   if(action==="asaas_balance") return await asaasBalance();
   if(action==="asaas_refund_create") return await asaasRefundCreate(db,user,params,requestId);
-  if(action==="asaas_transfer_create"){
-    await audit(db,user,"asaas_transfer_blocked",null,null,{reason:"transfer_requires_approved_payout_request_and_verified_pix_owner"},requestId);
-    throw Object.assign(new Error("Transferência manual desativada. O repasse precisa estar vinculado a uma solicitação de saque aprovada, com titularidade da chave Pix validada."),{status:409});
-  }
+  if(action==="asaas_transfer_create")return await asaasManualTransferCreate(db,user,params,requestId);
   throw Object.assign(new Error("Ação administrativa desconhecida."),{status:400});
 }
 
@@ -795,3 +981,4 @@ Deno.serve(async (req:Request)=>{
     return reply(req,status,{ok:false,error:message});
   }
 });
+
