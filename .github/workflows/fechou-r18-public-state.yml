@@ -1,0 +1,42 @@
+name: Conferir publicação FECHOU R18
+on:
+  push:
+    branches: [fechou-r16-correcao-2026-11-16]
+    paths: ['.github/workflows/fechou-r18-public-state.yml', 'index.html']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  conferir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Comparar bytes servidos com o arquivo validado
+        run: |
+          node <<'JS'
+          const fs=require('node:fs'),crypto=require('node:crypto');
+          const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+          (async()=>{
+            const expected=fs.readFileSync('index.html');
+            const result={checked_at:new Date().toISOString(),expected_sha256:sha(expected),checks:[]};
+            for(const url of ['https://startup5.pages.dev/','https://admpainel-6js.pages.dev/']){
+              try{
+                const r=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(30000)});
+                const bytes=Buffer.from(await r.arrayBuffer()),html=bytes.toString('utf8');
+                result.checks.push({url:r.url,status:r.status,bytes:bytes.length,sha256:sha(bytes),matches_candidate:url.includes('startup5')?sha(bytes)===sha(expected):null,build:html.match(/data-fechou-build=["']([^"']+)/)?.[1]||null,revision:html.match(/data-fechou-revision=["']([^"']+)/)?.[1]||null,title:html.match(/<title>([^<]*)<\/title>/i)?.[1]||null});
+              }catch(e){result.checks.push({url,error:e.message})}
+            }
+            fs.mkdirSync('public-state',{recursive:true});fs.writeFileSync('public-state/publication-state.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
+          })();
+          JS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fechou-r18-public-state
+          path: public-state/
+          retention-days: 30
