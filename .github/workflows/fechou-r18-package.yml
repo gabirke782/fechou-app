@@ -1,10 +1,7 @@
 name: Empacotar candidato FECHOU R18
 on:
-  push:
-    branches: [fechou-r16-correcao-2026-11-16]
-    paths:
-      - '.github/workflows/fechou-r18-package.yml'
-      - 'auditoria/R18/candidato/index.html'
+  workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
@@ -20,5 +17,5 @@ jobs:
         with:
           name: fechou-r18-publicar
           path: auditoria/R18/candidato/index.html
-          retention-days: 30
+          retention-days: 1
           if-no-files-found: error
