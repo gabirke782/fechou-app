@@ -1,9 +1,7 @@
 name: Preparar revisão de segurança R20
 on:
-  push:
-    branches: [fechou-r16-correcao-2026-11-16]
-    paths: ['.github/workflows/fechou-r20-review.yml', 'scripts/r20-review-bundle.py']
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
@@ -21,5 +19,5 @@ jobs:
           name: fechou-r20-fontes-para-revisao
           path: review-bundle/
           include-hidden-files: true
-          retention-days: 14
+          retention-days: 1
           if-no-files-found: error
