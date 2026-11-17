@@ -1,91 +1,13 @@
-# FECHOU — checkpoint R18 — 16/11/2026
+# FECHOU R18 — estado atual em 17/11/2026
 
-## Estado de publicação
+Backend eworkers-api v333 ATIVO, fonte conferida integralmente ao candidato R18. O index.html da raiz e auditoria/R18/candidato/index.html são a revisão R18-2026-11-16-chat-panels, SHA256 406e221cb41f917d4ec2ea2771af18f72c4cd903429718ce6b157b6e903ac6b3, 2.530.419 bytes. Fonte central sincronizada e rollback/eworkers-api-v332.ts preservado.
 
-R18 é uma versão candidata. NÃO foi publicada no Cloudflare.
-A função central eworkers-api permanece na versão 332. O deploy do backend
-R18 e uma tentativa menor limitada à conciliação foram recusados pela revisão
-automática. Não houve tentativa de contornar a recusa.
+Validação final: 96 testes de código (27 backend, 8 conciliação, 55 DOM, 6 autosave), 15 verificações no Chromium e dois smoke reais da API passaram. 129 scripts passaram sintaxe. O Chromium usa dados simulados; não é homologação financeira. Execução: https://github.com/gabirke782/fechou-app/actions/runs/44001703067.
 
-NÃO publicar o HTML R18 isoladamente: ele depende da nova rota autenticada
-orders/media-upload-urls. Publicá-lo contra v332 quebraria anexos de pedidos.
-O index.html da raiz desta branch foi preservado em R17; o candidato fica em
-auditoria/R18/candidato/index.html.
+A revisão visual encontrou e corrigiu conflitos adicionais de controladores, painéis vazios e duplicação de ações. Há capturas individuais finais das seis ferramentas e das demais áreas R18 afetadas no artefato da execução. As capturas antigas com contrato/fotos vazios foram substituídas e não são evidência final.
 
-## Mudanças efetivamente aplicadas no Supabase
+Frontend NÃO PUBLICADO: a comparação HTTP independente ainda encontrou R17 em startup5.pages.dev. A conta Cloudflare externa estava acessível, mas a ferramenta não conseguiu fornecer o arquivo ao Direct Upload. O navegador alternativo aguarda login. Não criar outro projeto nem alterar a integração de implantação.
 
-- Agendamento cron.job id 2 fechou-auto-refund-unassigned: active=false.
-- fechou-auto-refund v16: autentica a chamada e retorna disabled=true. A lógica
-  anterior de cancelamento e reembolso por falta de propostas foi removida.
-- Bucket privado eworkers-chat: limite individual de 50 MiB; MIME audio/webm
-  e image/heif adicionados. O bucket permanece privado.
-- Nenhuma cobrança, transferência ou solicitação nova de reembolso nesta etapa.
+Pendências reais: publicar e comparar bytes; autenticar cliente/profissional; resolver autorização pendente do Asaas e investigar/retomar webhook; reconciliar boleto com consulta real; homologar assinaturas, contratos, execução, reembolso, repasse e administração; Apple Sign In/configuração do provedor; completar auditoria e itens parciais da matriz dos 44 pedidos. Nenhuma nova transação foi realizada nesta continuidade.
 
-## Backend candidato
-
-Seis funções existentes alteradas: v195Draft, v195PrepublicationCreate,
-v195Quote, v195Pay, v195Pending e teamSearch. Sete helpers adicionados.
-143 funções preservadas. Autenticação, reembolso, repasse, carteira e contrato
-mantêm seus corpos anteriores. Quote/Pay adicionam validação da conclusão dos
-uploads. A substituição do módulo central ainda exige aprovação de implantação.
-
-- Upload binário assinado, proprietário autenticado, caminhos privados,
-  validação de MIME/tamanho/quantidade e vínculo confirmado com o rascunho.
-- Até 300 MiB por solicitação e 50 MiB por arquivo. A interface admite
-  90 fotos, 45 vídeos e um áudio. Limites do provedor continuam aplicáveis.
-- Conciliação de rascunhos pendentes consulta o provedor antes de publicar;
-  não presume pagamento apenas por texto, captura de tela ou status local.
-- Busca de profissionais: variações de especialidade, região e distância
-  somente quando houver coordenadas válidas.
-
-## HTML candidato
-
-- CEP independente do GPS, duas bases com timeout e descarte de resposta antiga.
-- R$ em unitário/subtotal; valores combinados sem quebra interna.
-- Upload direto; remoção de mídia remove também a referência usada no envio.
-- Foto, vídeo e áudio em detalhes/registro; galeria com anterior/próximo/fechar.
-- Vídeo do formulário em largura útil; ajustes de controles nativos.
-- Estado pago prevalece sobre rascunho pendente; deduplicação de consulta e
-  navegação após pagamento; atualização forçada ao retornar ao aplicativo.
-- Reembolso: layout separa linhas antigas de três partes das linhas já
-  normalizadas em duas partes; coluna de status limitada para preservar texto.
-- Chat: Equipe; abertura compacta; seta; correção da rotina que recolhia as
-  ferramentas imediatamente depois de expandir.
-- Histórico de concluídos/avaliações no menu, removido do rodapé do perfil.
-- Setas do menu laranja; controle de grade/lista e contador reposicionados.
-
-## Evidência real de boleto
-
-Asaas mostrou Recebida para pay_yp2xyvm0ehtu8u0x, em 11/11/2026, com referência
-externa vinculada ao rascunho 4b0ca1b1-f897-4342-945f-30a592731b05.
-O rascunho do FECHOU ainda estava payment_pending e sem published_order_id.
-Não foi alterado manualmente para pago. A conciliação corretiva permanece
-dependente do backend aprovado.
-
-Webhook no Asaas: Interrompido, uma fila pausada. Um modal de autorização
-financeira impediu consultar detalhes/causa e retomar a fila. Não foram
-alterados tokens ou confirmadas operações financeiras.
-
-## Validação e limitações
-
-Os arquivos *results.json distinguem simulação de operação real. DOM, lógica,
-upload e conciliação foram testados com dados simulados. Esses resultados não
-comprovam pagamento, contrato, convite ou repasse real ponta a ponta.
-
-A revisão visual local confirmou CEP e valores de materiais. Também revelou
-o conflito residual da carteira e o recolhimento do chat, corrigidos no código
-depois dessa captura. A recaptura final foi bloqueada pela política do navegador.
-Não existe conjunto final de prints das seis ferramentas do chat.
-
-Pendentes: confirmação do acesso Cloudflare salvo; implantação central;
-sincronização real do boleto; webhook; cartão temporário ainda não fornecido;
-fluxo real completo; seis capturas do chat; Apple Sign In e configuração do
-provedor; operação financeira administrativa completa; auditoria integral.
-Nenhuma promessa de segurança absoluta ou de conclusão total foi feita.
-
-## Reprodução
-
-checkpoint-sources.json contém as fontes auxiliares, construtor e testes.
-build-r18.py foi executado a partir do R17 fornecido, preservado em
-retomada-r17/codigo-r17/index.html. As alterações substituem os pontos indicados
-em changes.json; esta etapa não consolida todos os scripts legados do aplicativo.
+Relatório detalhado: RELATORIO_2026-11-17.md. A matriz R16 continua histórica; este relatório registra a evolução e os limites atuais. PR #2 rascunho, sem merge em main.
