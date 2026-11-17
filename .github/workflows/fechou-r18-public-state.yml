@@ -1,9 +1,7 @@
 name: Conferir publicação FECHOU R19
 on:
-  push:
-    branches: [fechou-r16-correcao-2026-11-16]
-    paths: ['.github/workflows/fechou-r18-public-state.yml', 'index.html']
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
@@ -39,4 +37,4 @@ jobs:
         with:
           name: fechou-r18-public-state
           path: public-state/
-          retention-days: 30
+          retention-days: 1
