@@ -125,7 +125,7 @@ await test('R20 atualização explícita mantém rascunho e atualiza dados alter
 await page.evaluate(()=>window.__r18Scene('request','Cliente'));await page.locator('[data-input="description"]').fill('Rascunho que deve continuar na tela');
 const ref=await page.locator('[data-input="description"]').elementHandle();await page.evaluate(()=>{window.__fechouAppState.description='Rascunho que deve continuar na tela';window.render()});
 const mounted=await page.locator('[data-input="description"]').elementHandle();await page.evaluate(()=>window.render());assert.equal(await page.locator('[data-input="description"]').inputValue(),'Rascunho que deve continuar na tela');
-await page.evaluate(()=>{window.__fechouAppState.description='Conteúdo atualizado';window.render()});assert.equal(await page.locator('[data-input="description"]').inputValue(),'Conteúdo atualizado');
+await page.locator('[data-input="description"]').blur();await page.evaluate(()=>{window.__fechouAppState.description='Conteúdo atualizado';window.render()});assert.equal(await page.locator('[data-input="description"]').inputValue(),'Conteúdo atualizado');
 });
 await test('R20 carteira mantém painel expandido e DOM em atualização idêntica',async()=>{
 await page.evaluate(async()=>{window.__r18Scene('home','Cliente');window.__fechouAppState.__v134Wallet=true;window.render();await window.__fechouRefreshWalletNow()});await page.locator('.v240-wallet-explainer').evaluate(d=>d.open=true);const hero=await page.locator('.v240-wallet-hero').elementHandle();await page.evaluate(async()=>{await window.__fechouRefreshWalletNow()});assert.equal(await hero.evaluate(el=>el.isConnected),true);assert.equal(await page.locator('.v240-wallet-explainer').evaluate(d=>d.open),true);

@@ -20,5 +20,6 @@ jobs:
         with:
           name: fechou-r20-fontes-para-revisao
           path: review-bundle/
+          include-hidden-files: true
           retention-days: 14
           if-no-files-found: error
