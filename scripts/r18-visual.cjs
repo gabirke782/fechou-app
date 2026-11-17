@@ -58,7 +58,7 @@ assert.match(await page.locator('.v240-wallet-explainer').innerText(),/ainda nã
 assert.match(await page.locator('.v240-wallet-explainer').innerText(),/cancelamento e o reembolso/);
 assert.equal(await page.locator('.v240-wallet-value').innerText(),value);
 await shot('14-carteira-cliente-ajuda');
-await page.locator('.v240-wallet-explainer summary').click();assert.equal(await page.locator('[data-r19-wallet-help]').getAttribute('aria-expanded'),'false');
+await page.locator('.v240-wallet-explainer summary').click();await page.waitForFunction(()=>document.querySelector('[data-r19-wallet-help]')?.getAttribute('aria-expanded')==='false');
 });
 await test('R19 carteira profissional: reserva e repasse explicados separadamente',async()=>{
 await page.evaluate(async()=>{window.__r18Scene('home','Profissional');window.__r18Db.fechou_wallet_ledger=[{id:'payout-fixture',user_id:window.__fechouAppState.supabaseUser.id,order_id:window.__r18Order.id,entry_type:'payout',amount:147,status:'held',created_at:'2026-11-16T10:00:00Z'}];window.__fechouAppState.__v134Wallet=true;window.render();await window.__fechouRefreshWalletNow()});
