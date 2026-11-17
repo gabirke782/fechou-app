@@ -66,7 +66,7 @@ if(kind==='photos'){for(const phase of ['before','during','after'])await page.lo
 if(kind==='attach')await page.locator('#fechou-v335-chat-action [data-v335-pick-file]').waitFor();
 if(kind==='attachments')await page.locator('#fechouChatAttachmentsOverlay [data-fechou-attachments-contract]').waitFor();
 if(kind==='team')await page.locator('#fechou-v212-team-overlay.open').waitFor();
-if(kind==='service'){await page.locator('#ewMessageModal').waitFor();assert.match(await page.locator('#ewMessageModal').innerText(),/Falta: Antes, Durante, Depois/);await shot('13-fotos-obrigatorias');await page.locator('#ewMessageModal .ew-message-close').click();await page.locator('#fechou-v335-event-modal').waitFor();}
+if(kind==='service'){await page.locator('#fechou-v335-event-modal').waitFor();assert.equal(await page.locator('#fechou-v335-event-modal .v335-check.is-missing').count(),3);assert.equal(await page.locator('#fechou-v335-event-modal [data-v335-kind="confirm-complete"]').isDisabled(),true);assert.equal(await page.locator('#ewMessageModal').count(),0);}
 assert.ok(await page.locator('#v121ChatOverlay [data-v134-service-action="complete"]').count()<=2,'Não duplicar botões de conclusão');
 await shot('11-chat-'+label);
 if(kind==='service')await page.locator('#fechou-v335-event-modal [data-v335-kind="close"]').click();
