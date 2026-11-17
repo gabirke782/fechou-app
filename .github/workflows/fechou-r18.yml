@@ -1,13 +1,7 @@
 name: Validar FECHOU R20
 on:
-  push:
-    branches: [fechou-r16-correcao-2026-11-16]
-    paths:
-      - '.github/workflows/fechou-r18.yml'
-      - 'scripts/r18-*.cjs'
-      - 'auditoria/R18/candidato/**'
-      - 'auditoria/R18/checkpoint-sources.json'
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
@@ -37,5 +31,5 @@ jobs:
         with:
           name: fechou-r18-validacao
           path: retomada-r18/
-          retention-days: 30
+          retention-days: 1
           if-no-files-found: error
