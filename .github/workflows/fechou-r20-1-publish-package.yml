@@ -1,13 +1,7 @@
 name: Empacotar publicacao FECHOU R20.1
 on:
-  pull_request:
-    branches: [fechou-r15-validacao-2026-11-16]
-    types: [opened, synchronize, reopened]
-  push:
-    branches: [fechou-r16-correcao-2026-11-16]
-    paths:
-      - '.github/workflows/fechou-r20-1-publish-package.yml'
-      - 'index.html'
+  workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
@@ -31,5 +25,5 @@ jobs:
         with:
           name: fechou-r20-1-publicar
           path: deploy/
-          retention-days: 30
+          retention-days: 1
           if-no-files-found: error
