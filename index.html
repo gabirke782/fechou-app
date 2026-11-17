@@ -1,7 +1,25 @@
 <!DOCTYPE html>
-<html data-fechou-revision="R18-2026-11-16-chat-panels" data-fechou-build="R18" data-fechou-version="1.0.4" lang="pt-BR">
+<html data-fechou-revision="R19-2026-11-16-icones-portugues-carteira" data-fechou-build="R19" data-fechou-version="1.0.5" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
+<script id="fechou-r19-chat-icons">
+window.fechouChatIcon = function(kind) {
+  const paths = {
+    contract:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 12h8M8 16h8M8 8h2"/>',
+    attach:'<path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.9-2.9L15 6"/>',
+    attachments:'<path d="M9 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3"/><path d="M14 2h-4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9zM14 2v7h7M12 12h6"/>',
+    photos:'<path d="M14.5 4h-5L8 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-4z"/><circle cx="12" cy="13" r="4"/>',
+    team:'<circle cx="9" cy="7" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M16 3a4 4 0 0 1 0 8M22 21v-2a7 7 0 0 0-4-6.3"/>',
+    start:'<circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4z"/>',
+    complete:'<circle cx="12" cy="12" r="10"/><path d="m7 12 3 3 7-7"/>',
+    approve:'<circle cx="12" cy="12" r="10"/><path d="m7 12 3 3 7-7"/>',
+    contest:'<path d="m12 3 10 18H2zM12 9v4M12 17h.01"/>',
+    already_completed:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'
+  };
+  const key=Object.hasOwn(paths,kind)?kind:'start';
+  return '<svg data-chat-icon="'+key+'" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+paths[key]+'</svg>';
+};
+</script>
 <script id="fechou-v215-core">
 
 (()=>{
@@ -23914,7 +23932,7 @@ function renderServiceRecord(o, archive = false) {
           const peerLastSeen = peerData.last_seen_at || peerData.lastSeenAt || peerData.last_active_at || peerData.lastActiveAt || null;
           const peerLastSeenMs = peerLastSeen ? Date.parse(peerLastSeen) : NaN;
           const peerOnline = peerData.is_online === true || peerData.online === true || (Number.isFinite(peerLastSeenMs) && Date.now() - peerLastSeenMs >= 0 && Date.now() - peerLastSeenMs < 120000);
-          const peerStatusLabel = peerOnline ? "Online" : "Ausente";
+          const peerStatusLabel = peerOnline ? "Ativo agora" : "Ausente";
           const peerStatusClass = peerOnline ? "fc-online" : "fc-away";
           const initials = String(otherName).trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase() || "F";
           const serviceState = String(o.service_state || o.metadata?.service_state || "pending").toLowerCase();
@@ -24045,12 +24063,12 @@ function renderServiceRecord(o, archive = false) {
             <div class="fc-chat-tools" aria-label="Ferramentas da conversa">
               <button type="button" class="fc-chat-tools-toggle" data-fc-tools-toggle aria-expanded="${expanded}" title="Recolher ou expandir ferramentas" aria-label="${expanded ? "Recolher" : "Expandir"} ferramentas"><span>${expanded ? "⌃" : "⌄"}</span></button>
               <div class="fc-chat-tools-grid ${expanded ?"" : "collapsed"}">
-                <button type="button" data-fc-tool="contract"><span>▤</span>Contrato</button>
-                <button type="button" data-fc-tool="service" class="fc-tool-service" ${serviceAction ? "" : "disabled"}><span>✓</span>${esc121(serviceLabel)}</button>
-                <button type="button" data-fc-tool="attach"><span>⌁</span>Anexar arquivo</button>
-                <button type="button" data-fc-tool="attachments"><span>▣</span>Ver anexos</button>
-                <button type="button" data-fc-tool="photos"><span>▧</span>Fotos do serviço</button>
-                <button type="button" data-fc-tool="team"><span>♟♟</span>Equipe</button>
+                <button type="button" data-fc-tool="contract"><span aria-hidden="true">${window.fechouChatIcon("contract")}</span>Contrato</button>
+                <button type="button" data-fc-tool="service" class="fc-tool-service" ${serviceAction ? "" : "disabled"}><span aria-hidden="true">${window.fechouChatIcon(serviceAction || "start")}</span>${esc121(serviceLabel)}</button>
+                <button type="button" data-fc-tool="attach"><span aria-hidden="true">${window.fechouChatIcon("attach")}</span>Anexar arquivo</button>
+                <button type="button" data-fc-tool="attachments"><span aria-hidden="true">${window.fechouChatIcon("attachments")}</span>Ver anexos</button>
+                <button type="button" data-fc-tool="photos"><span aria-hidden="true">${window.fechouChatIcon("photos")}</span>Fotos do serviço</button>
+                <button type="button" data-fc-tool="team"><span aria-hidden="true">${window.fechouChatIcon("team")}</span>Equipe</button>
               </div>
               <span class="fc-chat-attachment-hint" hidden aria-hidden="true">Fotos e documentos: JPG, PNG, WEBP, GIF, HEIC, PDF, DOC, XLS, TXT ou CSV · até 5 por envio · 20 MB cada.</span>
               <span class="fc-chat-selected-files" aria-live="polite"></span>
@@ -27765,7 +27783,7 @@ body #app .fechou-profile-progress>div:first-child b {
                 )
                 .join("")
             : '<div class="empty"><h3>Nenhuma movimentação ainda</h3><p>Pagamentos, reembolsos e repasses confirmados aparecerão aqui após a confirmação pelo prestador de pagamento.</p></div>';
-          return `<section class="v134-wallet"><section class="v240-wallet-hero" aria-label="Resumo da carteira"><div class="v240-wallet-hero-head"><span class="v240-wallet-kicker">FECHOU <i>·</i> CARTEIRA E EXTRATO</span><span class="v240-wallet-mark" aria-hidden="true">◈</span></div><div class="v240-wallet-label">${pro ? "Disponível para solicitar repasse" : "Pagamentos registrados"}</div><div class="v240-wallet-value">${walletDisplay(pro ? payoutReadyToRequestRows.reduce((sum, r) => sum + Number(r.amount || 0), 0) : clientPaid)}</div><div class="v240-wallet-foot"><span class="v240-wallet-dot"></span>${pro ? "Valores liberados que ainda não possuem solicitação ativa" : "Total dos pagamentos vinculados às suas contratações"}</div><details class="v240-wallet-explainer"><summary>Como este valor funciona</summary><p>${pro ? "O valor considera apenas lançamentos liberados e sem solicitação de repasse ativa. A solicitação ainda passa por análise e processamento do provedor; não significa crédito bancário imediato." : "O valor soma pagamentos registrados para os serviços. A carteira é um extrato operacional, não uma conta bancária. Reembolsos só são considerados concluídos após confirmação do provedor."}</p></details></section><div class="v134-wallet-stats v176-wallet-stats ${pro ?"v178-pro-wallet-stats" : "v178-client-wallet-stats"}">${pro ? `<div class="v134-wallet-stat"><span>Pendente de conclusão do serviço</span><b>${walletDisplay(Math.max(0, awaitingPayout))}</b></div><div class="v134-wallet-stat"><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div class="v134-wallet-stat"><span>Em análise / transferência</span><b>${walletDisplay(activePayoutRequests.reduce((sum, r) => sum + Number(r.amount || r.requested_amount || 0), 0))}</b></div><div class="v134-wallet-stat"><span>Transferidos</span><b>${walletDisplay(released)}</b></div>` : `<div class="v134-wallet-stat"><span>Guardado na carteira</span><b class="fechou-green">${walletDisplay(Math.max(0, held))}</b></div><div class="v134-wallet-stat"><span>Reembolsos</span><b>${walletDisplay(refund)}</b></div><div class="v134-wallet-stat"><span>Movimentações</span><b>${walletBusy || walletLoadError ? "—" : rows.length}</b></div><div class="v134-wallet-stat"><span>Reembolsos em análise</span><b>${walletDisplay(walletRefundRequests.length ? walletRefundRequests.filter((r) => ["reserved","submitted","pending","in_progress","bank_slip_action_required","unknown","review_required","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum,r) => sum + Number(r.provider_summary?.pending_value ?? r.amount ?? 0),0) : rows.filter((r) => r.entry_type === "refund" && ["refund_pending","pending","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum, r) => sum + Number(r.amount || 0), 0))}</b></div>`}</div>${walletChartMarkup}${!pro ? `<section class="v169-wallet-client-summary"><div><span>Total de pagamentos confirmados</span><b>${walletDisplay(clientPaid)}</b></div><div><span>Reembolsos solicitados ou concluídos</span><b>${walletDisplay(refund)}</b></div></section><section class="panel v173-refund-panel"><div><h2>Reembolsos dos serviços</h2><p class="muted">Acompanhe solicitações enviadas ao Asaas. Um pedido só aparece como reembolsado quando o provedor confirma a devolução.</p></div>${walletBusy ? '<p class="muted" role="status">Carregando solicitações de reembolso…</p>' : walletRefundRequests.length ? walletRefundRequests.map((r)=>{const labels={reserved:"Reserva registrada",submitted:"Solicitação enviada",pending:"Aguardando processamento",in_progress:"Em processamento pelo Asaas",bank_slip_action_required:"Aguardando dados bancários do cliente",unknown:"Resultado inconclusivo — conciliação necessária",done:"Reembolso confirmado",partial:"Reembolso parcial confirmado",failed:"Estorno não concluído",cancelled:"Solicitação cancelada",review_required:"Em análise financeira"};return `<article class="v134-ledger-row"><div class="v134-ledger-symbol">↩</div><div class="v134-ledger-info"><b>${esc134(r.service || "Serviço")} · #${esc134(String(r.order_id||"").slice(0,8))}</b><small>${esc134(r.billing_type||"Pagamento")} · ${esc134(r.created_at?new Date(r.created_at).toLocaleString("pt-BR", { timeZone: window.FECHOU_DISPLAY_TZ || "America/Sao_Paulo" }):"Data não informada")}</small><span class="v134-status">${esc134(labels[String(r.status||"").toLowerCase()]||prettyStatus(r.status))}</span>${r.reason?`<small>Motivo: ${esc134(r.reason)}</small>`:""}${r.request_url?`<small><a href="${esc134(r.request_url)}" target="_blank" rel="noopener noreferrer">Preencher dados para reembolso no Asaas</a></small>`:""}${r.receipt_url?`<small><a href="${esc134(r.receipt_url)}" target="_blank" rel="noopener noreferrer">Ver comprovante do reembolso</a></small>`:""}</div><b>${money134((Number(r.provider_summary?.refunded_value||0)+Number(r.provider_summary?.pending_value||0))||r.amount)}</b></article>`;}).join("") : (walletRefundError ? '<p class="notice" role="alert">Não foi possível carregar as solicitações de reembolso. Atualize a carteira para consultar novamente.</p>' : '<p class="muted">Nenhuma solicitação de reembolso registrada.</p>')}</section>` : `<details class="v178-pro-wallet-details"><summary>Resumo complementar de valores <span aria-hidden="true">⌄</span></summary><div class="v178-pro-wallet-details-body"><section class="v169-wallet-pro-summary"><div><span>Aguardando liberação</span><b>${walletDisplay(awaitingPayout)}</b></div><div><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div><span>Disponível para saque</span><b>${money134(0)}</b><small>Não há saldo de saque individual confirmado nesta carteira.</small></div></section></div></details>`}<details class="v134-wallet-flow v134-wallet-collapse"><summary class="v134-wallet-collapse-head"><span class="v134-wallet-flow-title"><span>Acompanhamento dos valores</span><small>Etapas da movimentação</small></span></summary><div class="v134-wallet-collapse-body"><div class="v134-wallet-flow-steps"><div class="v134-wallet-flow-step"><i>1</i><b>Pagamento</b><small>Registro confirmado</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>2</i><b>Conclusão</b><small>Serviço e evidências</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>3</i><b>Liberação</b><small>Após validação</small></div></div><p>Os valores apresentados correspondem aos lançamentos registrados no extrato. A liberação ou o reembolso depende da confirmação da conclusão, de eventual análise e do processamento pelo meio de pagamento.</p></div></details>${
+          return `<section class="v134-wallet"><section class="v240-wallet-hero" aria-label="Resumo da carteira"><div class="v240-wallet-hero-head"><span class="v240-wallet-kicker">FECHOU <i>·</i> CARTEIRA E EXTRATO</span><button type="button" class="v240-wallet-mark" data-r19-wallet-help aria-label="Entender os valores da carteira" aria-expanded="false">◈</button></div><div class="v240-wallet-label">${pro ? "Disponível para solicitar repasse" : "Pagamentos registrados"}</div><div class="v240-wallet-value">${walletDisplay(pro ? payoutReadyToRequestRows.reduce((sum, r) => sum + Number(r.amount || 0), 0) : clientPaid)}</div><div class="v240-wallet-foot"><span class="v240-wallet-dot"></span>${pro ? "Valores liberados que ainda não possuem solicitação ativa" : "Total dos pagamentos vinculados às suas contratações"}</div><details class="v240-wallet-explainer"><summary>Como este valor funciona</summary><p>${pro ? "Este valor mostra o que já foi liberado para solicitar repasse; ainda não significa dinheiro recebido na sua conta. Os pagamentos em “Pendente de conclusão do serviço” continuam reservados e ainda não estão disponíveis para você. A liberação depende da execução do serviço, da aprovação do cliente e das verificações da contratação. Depois, solicite o repasse: ele só aparece como transferido após a confirmação do meio de pagamento." : "Este total reúne os pagamentos confirmados dos seus serviços. Enquanto o valor estiver em “Guardado na carteira”, ele ainda não foi repassado ao profissional. Se precisar cancelar, abra o serviço e solicite o cancelamento e o reembolso. A solicitação será analisada conforme o contrato e a execução do serviço. A devolução aparece aqui após a confirmação do meio de pagamento."}</p></details></section><div class="v134-wallet-stats v176-wallet-stats ${pro ?"v178-pro-wallet-stats" : "v178-client-wallet-stats"}">${pro ? `<div class="v134-wallet-stat"><span>Pendente de conclusão do serviço</span><b>${walletDisplay(Math.max(0, awaitingPayout))}</b></div><div class="v134-wallet-stat"><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div class="v134-wallet-stat"><span>Em análise / transferência</span><b>${walletDisplay(activePayoutRequests.reduce((sum, r) => sum + Number(r.amount || r.requested_amount || 0), 0))}</b></div><div class="v134-wallet-stat"><span>Transferidos</span><b>${walletDisplay(released)}</b></div>` : `<div class="v134-wallet-stat"><span>Guardado na carteira</span><b class="fechou-green">${walletDisplay(Math.max(0, held))}</b></div><div class="v134-wallet-stat"><span>Reembolsos</span><b>${walletDisplay(refund)}</b></div><div class="v134-wallet-stat"><span>Movimentações</span><b>${walletBusy || walletLoadError ? "—" : rows.length}</b></div><div class="v134-wallet-stat"><span>Reembolsos em análise</span><b>${walletDisplay(walletRefundRequests.length ? walletRefundRequests.filter((r) => ["reserved","submitted","pending","in_progress","bank_slip_action_required","unknown","review_required","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum,r) => sum + Number(r.provider_summary?.pending_value ?? r.amount ?? 0),0) : rows.filter((r) => r.entry_type === "refund" && ["refund_pending","pending","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum, r) => sum + Number(r.amount || 0), 0))}</b></div>`}</div>${walletChartMarkup}${!pro ? `<section class="v169-wallet-client-summary"><div><span>Total de pagamentos confirmados</span><b>${walletDisplay(clientPaid)}</b></div><div><span>Reembolsos solicitados ou concluídos</span><b>${walletDisplay(refund)}</b></div></section><section class="panel v173-refund-panel"><div><h2>Reembolsos dos serviços</h2><p class="muted">Acompanhe solicitações enviadas ao Asaas. Um pedido só aparece como reembolsado quando o provedor confirma a devolução.</p></div>${walletBusy ? '<p class="muted" role="status">Carregando solicitações de reembolso…</p>' : walletRefundRequests.length ? walletRefundRequests.map((r)=>{const labels={reserved:"Reserva registrada",submitted:"Solicitação enviada",pending:"Aguardando processamento",in_progress:"Em processamento pelo Asaas",bank_slip_action_required:"Aguardando dados bancários do cliente",unknown:"Resultado inconclusivo — conciliação necessária",done:"Reembolso confirmado",partial:"Reembolso parcial confirmado",failed:"Estorno não concluído",cancelled:"Solicitação cancelada",review_required:"Em análise financeira"};return `<article class="v134-ledger-row"><div class="v134-ledger-symbol">↩</div><div class="v134-ledger-info"><b>${esc134(r.service || "Serviço")} · #${esc134(String(r.order_id||"").slice(0,8))}</b><small>${esc134(r.billing_type||"Pagamento")} · ${esc134(r.created_at?new Date(r.created_at).toLocaleString("pt-BR", { timeZone: window.FECHOU_DISPLAY_TZ || "America/Sao_Paulo" }):"Data não informada")}</small><span class="v134-status">${esc134(labels[String(r.status||"").toLowerCase()]||prettyStatus(r.status))}</span>${r.reason?`<small>Motivo: ${esc134(r.reason)}</small>`:""}${r.request_url?`<small><a href="${esc134(r.request_url)}" target="_blank" rel="noopener noreferrer">Preencher dados para reembolso no Asaas</a></small>`:""}${r.receipt_url?`<small><a href="${esc134(r.receipt_url)}" target="_blank" rel="noopener noreferrer">Ver comprovante do reembolso</a></small>`:""}</div><b>${money134((Number(r.provider_summary?.refunded_value||0)+Number(r.provider_summary?.pending_value||0))||r.amount)}</b></article>`;}).join("") : (walletRefundError ? '<p class="notice" role="alert">Não foi possível carregar as solicitações de reembolso. Atualize a carteira para consultar novamente.</p>' : '<p class="muted">Nenhuma solicitação de reembolso registrada.</p>')}</section>` : `<details class="v178-pro-wallet-details"><summary>Resumo complementar de valores <span aria-hidden="true">⌄</span></summary><div class="v178-pro-wallet-details-body"><section class="v169-wallet-pro-summary"><div><span>Aguardando liberação</span><b>${walletDisplay(awaitingPayout)}</b></div><div><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div><span>Disponível para saque</span><b>${money134(0)}</b><small>Não há saldo de saque individual confirmado nesta carteira.</small></div></section></div></details>`}<details class="v134-wallet-flow v134-wallet-collapse"><summary class="v134-wallet-collapse-head"><span class="v134-wallet-flow-title"><span>Acompanhamento dos valores</span><small>Etapas da movimentação</small></span></summary><div class="v134-wallet-collapse-body"><div class="v134-wallet-flow-steps"><div class="v134-wallet-flow-step"><i>1</i><b>Pagamento</b><small>Registro confirmado</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>2</i><b>Conclusão</b><small>Serviço e evidências</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>3</i><b>Liberação</b><small>Após validação</small></div></div><p>Os valores apresentados correspondem aos lançamentos registrados no extrato. A liberação ou o reembolso depende da confirmação da conclusão, de eventual análise e do processamento pelo meio de pagamento.</p></div></details>${
             pro
               ? `<section class="panel"><div class="row between"><div><h2>Recebimento por Pix</h2><p class="muted">Cadastre a chave Pix que receberá os repasses dos serviços, quando a transferência estiver autorizada e processada.</p></div><button type="button" class="btn secondary" data-v134-open-pix>${
                   payoutFormOpen ? "Fechar" : (pixProfile ? "Alterar chave Pix" : "Configurar chave Pix")
@@ -34273,12 +34291,12 @@ async function contractReview(o,options={}){
  let r;try{r=await api('contracts/prepaid-document',{protocol_version:189,order_id:String(o.id),...(isProfessional&&hasContractFieldEdits?{contract_fields:contractFields}:{})});}catch(error){const conflict=/409|already exists|já exist|conflict/i.test(String(error?.message||error?.code||error||''));if(conflict){try{r=await api('contracts/prepaid-document',{protocol_version:189,order_id:String(o.id)});}catch(error2){loading.close();try{options.printWindow?.close()}catch(_){}throw new Error('O contrato já foi criado, mas não foi possível abri-lo agora. Feche e abra novamente.');}}else{loading.close();try{options.printWindow?.close()}catch(_){}throw error}}loading.close();
  if(isProfessional&&hasContractFieldEdits)Object.values(fieldNodes).forEach(node=>{if(node)node.dataset.original=node.value});
  const c=r.document;
- required(r,paid(o)&&c?.id&&c?.sha256&&c?.text,'O documento imutável desta contratação ainda não está disponível. Nenhuma assinatura foi simulada.');
+ required(r,paid(o)&&c?.id&&c?.sha256&&c?.text,'O contrato deste serviço ainda não está disponível. Atualize a conversa e tente novamente. A assinatura só será liberada quando o contrato original estiver pronto.');
  if(!options.print){
   let signedStatus=null;
   try{signedStatus=await api('contracts/esign-status',{order_id:String(o.id)});}catch(error){console.info('FECHOU: status do contrato assinado ainda não disponível.',error);}
   if(signedStatus?.signature_status==='signed'){
-   required(signedStatus,signedStatus.pdf_available===true,'O contrato foi assinado, mas o PDF final ainda não está disponível. O documento original e seu hash foram preservados.');
+   required(signedStatus,signedStatus.pdf_available===true,'O contrato foi assinado, mas o PDF final ainda não está disponível. Tente novamente em instantes para abrir o documento original.');
    const file=await api('contracts/esign-download',{order_id:String(o.id)});
    const documentUrl=file?.url||file?.documents?.[0]?.url;let signedUrl;
    try{signedUrl=new URL(documentUrl)}catch(_){}
@@ -39993,7 +40011,7 @@ button, .btn, [role="button"], a.btn, summary{
       const tool = document.createElement('button');
       tool.type = 'button';
       tool.dataset.fcTool = 'contest';
-      tool.innerHTML = '<span>!</span>Contestar';
+      tool.innerHTML = '<span aria-hidden="true">'+window.fechouChatIcon('contest')+'</span>Contestar';
       tool.addEventListener('click', () => {
         if (typeof window.__fechouRunServiceAction === 'function') window.__fechouRunServiceAction(btn);
       });
@@ -42042,7 +42060,7 @@ window.fechouNativeBtnClassV335 = function (name) {
     if (!grid) return;
     const service = grid.querySelector('[data-fc-tool="service"]');
     if (service && !/Contestar/i.test(service.textContent || '')) {
-      service.innerHTML = '<span>✓</span>Aprovar serviço';
+      service.innerHTML = '<span aria-hidden="true">'+window.fechouChatIcon('approve')+'</span>Aprovar serviço';
       service.disabled = false;
       service.dataset.fcTool = 'approve';
     }
@@ -42050,7 +42068,7 @@ window.fechouNativeBtnClassV335 = function (name) {
       const t = document.createElement('button');
       t.type = 'button';
       t.dataset.fcTool = 'contest';
-      t.innerHTML = '<span>!</span>Contestar';
+      t.innerHTML = '<span aria-hidden="true">'+window.fechouChatIcon('contest')+'</span>Contestar';
       const host = grid.querySelector('[data-fc-tool="approve"], [data-fc-tool="service"]');
       if (host) host.insertAdjacentElement('afterend', t);
       else grid.appendChild(t);
@@ -44333,5 +44351,43 @@ html body #app button:focus-visible,html body .fechou-pop button:focus-visible,h
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
 
+</script>
+
+<style id="fechou-r19-portugues-ui">
+#v121ChatOverlay .fc-chat-tools-grid button>span>svg{display:block;width:20px;height:20px;flex:none}
+#app button.v240-wallet-mark{min-width:36px;min-height:36px;padding:0;cursor:pointer}
+#app button.v240-wallet-mark:focus-visible{outline:2px solid #e8ad48;outline-offset:3px}
+.r19-file-picker{display:flex!important;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;width:100%;margin:4px 0}
+.r19-file-picker>input[type="file"][hidden]{display:none!important}
+.r19-file-picker>button.r19-file-select{display:inline-flex!important;align-items:center;justify-content:center;min-height:42px;max-width:100%;padding:9px 12px;border:1px solid #48617a;border-radius:10px;background:#1a3046;color:#edf4fb;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.r19-file-picker>.r19-file-status{display:block;min-width:0;max-width:100%;overflow-wrap:anywhere;color:#b9c9dc;font-size:12px;line-height:1.4}
+.r19-file-picker>button:focus-visible{outline:2px solid #e8ad48;outline-offset:3px}
+</style>
+<script id="fechou-r19-portugues-ui-js">
+(() => {
+  'use strict';
+  function localizeFiles() {
+    document.querySelectorAll('input[type="file"]:not([hidden])').forEach(input => {
+      if(input.closest('.r19-file-picker') || input.style.opacity==='0' || input.style.display==='none')return;
+      const wrapper=document.createElement('span');wrapper.className='r19-file-picker';
+      const button=document.createElement('button');button.type='button';button.className='r19-file-select';
+      button.textContent=input.multiple?'Escolher arquivos':'Escolher arquivo';
+      button.disabled=input.disabled;
+      const status=(input.id&&document.getElementById(input.id+'-name'))||document.createElement('span');status.classList.add('r19-file-status');status.setAttribute('aria-live','polite');
+      const sync=()=>{const files=Array.from(input.files||[]);status.textContent=files.length===0?'Nenhum arquivo selecionado':files.length===1?files[0].name:files.length+' arquivos selecionados: '+files.map(file=>file.name).join(', ');};
+      input.before(wrapper);wrapper.append(button,status,input);input.hidden=true;
+      button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(!input.disabled)input.click();});
+      input.addEventListener('change',sync);sync();
+    });
+  }
+  function helpState(){document.querySelectorAll('[data-r19-wallet-help]').forEach(button=>{const details=button.closest('.v240-wallet-hero')?.querySelector('.v240-wallet-explainer');if(details)button.setAttribute('aria-expanded',String(details.open));});}
+  document.addEventListener('click',event=>{const button=event.target.closest('[data-r19-wallet-help]');if(!button)return;const details=button.closest('.v240-wallet-hero')?.querySelector('.v240-wallet-explainer');if(!details)return;event.preventDefault();details.open=!details.open;helpState();});
+  document.addEventListener('toggle',event=>{if(event.target.matches?.('.v240-wallet-explainer'))helpState();},true);
+  let queued=false;
+  function run(){queued=false;localizeFiles();helpState();}
+  function schedule(){if(queued)return;queued=true;requestAnimationFrame(run);}
+  function boot(){run();new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+})();
 </script>
 </html>

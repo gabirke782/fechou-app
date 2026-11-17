@@ -8,7 +8,7 @@ const results=[],errors=[];let browser;
 (async()=>{
 await new Promise(r=>server.listen(8765,'127.0.0.1',r));
 browser=await chromium.launch({headless:true,executablePath:process.env.R18_CHROMIUM_PATH||undefined});
-const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
+const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,locale:'en-US'});
 page.setDefaultTimeout(7000);
 page.on('pageerror',e=>errors.push(String(e)));
 await page.route('**/*',route=>route.request().url().startsWith('http://127.0.0.1:8765/')?route.continue():route.fulfill({status:200,contentType:route.request().resourceType()==='script'?'application/javascript':'text/plain',body:''}));
@@ -48,6 +48,31 @@ await test('Registro: mídias de foto, vídeo e áudio',async()=>{await page.eva
 await test('Galeria: abrir e fechar sem trocar o pedido',async()=>{await page.locator('[data-request-media-open="0"]').click();await page.locator('#fechou-request-gallery').waitFor();await shot('05-galeria');await page.locator('[data-media-close]').click();});
 await test('Menu e histórico de concluídos',async()=>{await page.evaluate(()=>window.__r18Scene('menu','Profissional'));await shot('06-menu');await page.locator('[data-act="page:completedreviews"]').click();await shot('07-historico');});
 await test('Carteira: pedido de reembolso com valor e situação',async()=>{await page.evaluate(async()=>{window.__r18Scene('home');window.__r18Db.fechou_wallet_ledger=[{id:'ledger-fixture',user_id:window.__fechouAppState.supabaseUser.id,order_id:window.__r18Order.id,entry_type:'service_payment',amount:150,status:'held',created_at:'2026-11-16T10:00:00Z'}];window.__fechouAppState.__v134Wallet=true;window.render();await window.__fechouRefreshWalletNow()});await page.locator('#v134WalletRoot').waitFor();await shot('08-carteira');const d=page.locator('#v134WalletRoot details');for(let i=0;i<await d.count();i++)await d.nth(i).evaluate(x=>x.open=true);await shot('09-reembolso');});
+
+await test('R19 carteira cliente: explicação e símbolo clicável sem alterar o valor',async()=>{
+await page.locator('#v134WalletRoot .v240-wallet-explainer').evaluate(d=>d.open=false);
+const value=await page.locator('#v134WalletRoot .v240-wallet-value').innerText();
+await page.locator('[data-r19-wallet-help]').click();
+assert.equal(await page.locator('.v240-wallet-explainer').evaluate(d=>d.open),true);
+assert.match(await page.locator('.v240-wallet-explainer').innerText(),/ainda não foi repassado ao profissional/);
+assert.match(await page.locator('.v240-wallet-explainer').innerText(),/cancelamento e o reembolso/);
+assert.equal(await page.locator('.v240-wallet-value').innerText(),value);
+await shot('14-carteira-cliente-ajuda');
+await page.locator('.v240-wallet-explainer summary').click();assert.equal(await page.locator('[data-r19-wallet-help]').getAttribute('aria-expanded'),'false');
+});
+await test('R19 carteira profissional: reserva e repasse explicados separadamente',async()=>{
+await page.evaluate(async()=>{window.__r18Scene('home','Profissional');window.__r18Db.fechou_wallet_ledger=[{id:'payout-fixture',user_id:window.__fechouAppState.supabaseUser.id,order_id:window.__r18Order.id,entry_type:'payout',amount:147,status:'held',created_at:'2026-11-16T10:00:00Z'}];window.__fechouAppState.__v134Wallet=true;window.render();await window.__fechouRefreshWalletNow()});
+await page.locator('[data-r19-wallet-help]').click();
+assert.match(await page.locator('.v240-wallet-explainer').innerText(),/continuam reservados e ainda não estão disponíveis para você/);
+assert.match(await page.locator('.v240-wallet-explainer').innerText(),/aprovação do cliente/);
+await shot('15-carteira-profissional-ajuda');
+});
+for(const [scene,role,ids] of [['client','Cliente',['clientPhoto']],['pro','Profissional',['proPhoto','proDocument']]]){
+await test('R19 seletores de arquivo em português no perfil '+role,async()=>{
+await page.evaluate(([scene,role])=>window.__r18Scene(scene,role),[scene,role]);
+for(const id of ids){const picker=page.locator('.r19-file-picker').filter({has:page.locator('#'+id)});await picker.waitFor();assert.equal(await picker.locator('input').isVisible(),false);assert.equal(await picker.locator('button').innerText(),'Escolher arquivo');assert.equal(await picker.locator('.r19-file-status').innerText(),'Nenhum arquivo selecionado');await shot('16-perfil-'+id,'.field:has(#'+id+')');}
+});
+}
 for(const [kind,label] of [['contract','contrato'],['attach','anexar'],['attachments','anexos'],['photos','fotos'],['team','equipe'],['service','servico']]){
 await test('Chat: abrir ferramenta '+label,async()=>{
 await page.evaluate(async()=>{window.__r18Order.photos=[];window.__r18Scene('myquotes','Profissional');await window.__fechouOpenChatByOrder(window.__r18Order.id)});
@@ -59,14 +84,14 @@ await page.waitForTimeout(700);
 const toolsState=await page.locator('#v121ChatOverlay').evaluate(ov=>{const t=ov.querySelector('[data-fc-tools-toggle]'),g=ov.querySelector('.fc-chat-tools-grid'),b=g.getBoundingClientRect(),style=getComputedStyle(g);return {expanded:t.getAttribute('aria-expanded'),dataset:ov.dataset.toolsExpanded,classes:g.className,height:b.height,opacity:style.opacity,display:style.display}});console.log('CHAT_TOOLS_STATE '+kind+' '+JSON.stringify(toolsState));
 assert.equal(toolsState.expanded,'true','As ferramentas devem permanecer expandidas depois de 700 ms');
 await page.evaluate(()=>window.renderV121ChatOverlay());await page.waitForTimeout(250);assert.equal(await toggle.getAttribute('aria-expanded'),'true','Atualizar a conversa deve preservar a expansão');
-if(kind==='contract')await shot('10-chat-ferramentas');
+if(kind==='contract'){for(const icon of ['contract','complete','attach','attachments','photos','team']){await page.locator('#v121ChatOverlay .fc-chat-tools-grid svg[data-chat-icon="'+icon+'"]').waitFor();}await shot('10-chat-ferramentas');}
 await page.locator('#v121ChatOverlay [data-fc-tool="'+kind+'"]').click();
 await page.waitForTimeout(900);fs.writeFileSync(path.join(out,'diagnostico-'+kind+'.html'),await page.locator('#v121ChatOverlay').evaluate(x=>x.outerHTML));fs.writeFileSync(path.join(out,'modais-'+kind+'.html'),await page.locator('body').evaluate(x=>Array.from(x.children).filter(n=>n.id!=='app'&&n.id!=='v121ChatOverlay'&&n.offsetHeight>0).map(n=>n.outerHTML).join('\n')));if(kind==='contract'){await page.locator('#fechou-v335-chat-action h2').filter({hasText:'Contrato'}).waitFor();await page.locator('#fechou-v335-chat-action [data-v121-print-contract]').waitFor();await page.evaluate(()=>window.renderV121ChatOverlay());await page.waitForTimeout(500);await page.locator('#fechou-v335-chat-action [data-v121-print-contract]').waitFor();}
 if(kind==='photos'){for(const phase of ['before','during','after'])await page.locator('#fechou-v335-chat-action .v335-fotos-phase[data-phase="'+phase+'"]').waitFor();assert.equal(await page.locator('#fechou-v335-chat-action .v335-fotos-phase').count(),3);}
 if(kind==='attach')await page.locator('#fechou-v335-chat-action [data-v335-pick-file]').waitFor();
 if(kind==='attachments')await page.locator('#fechouChatAttachmentsOverlay [data-fechou-attachments-contract]').waitFor();
 if(kind==='team')await page.locator('#fechou-v212-team-overlay.open').waitFor();
-if(kind==='service'){await page.locator('#fechou-v335-event-modal').waitFor();assert.equal(await page.locator('#fechou-v335-event-modal .v335-check.is-missing').count(),3);assert.equal(await page.locator('#fechou-v335-event-modal [data-v335-kind="confirm-complete"]').isDisabled(),true);assert.equal(await page.locator('#ewMessageModal').count(),0);}
+if(kind==='service'){await page.locator('#fechou-v335-event-modal').waitFor();assert.equal(await page.locator('#fechou-v335-event-modal .v335-check.is-missing').count(),3);assert.equal(await page.locator('#fechou-v335-event-modal [data-v335-kind="confirm-complete"]').isDisabled(),true);assert.equal(await page.locator('#ewMessageModal').count(),0);const picker=page.locator('#fechou-v335-event-modal .r19-file-picker');await picker.waitFor();assert.equal(await picker.locator('input').isVisible(),false);assert.equal(await picker.locator('button').innerText(),'Escolher arquivos');const chooserPromise=page.waitForEvent('filechooser');await picker.locator('button').click();const chooser=await chooserPromise;await chooser.setFiles({name:'foto-teste.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWZkAAAAASUVORK5CYII=','base64')});assert.match(await picker.locator('.r19-file-status').innerText(),/foto-teste.png/);await shot('17-arquivo-selecionado-portugues');await picker.locator('input').setInputFiles([]);assert.equal(await picker.locator('.r19-file-status').innerText(),'Nenhum arquivo selecionado');}
 assert.ok(await page.locator('#v121ChatOverlay [data-v134-service-action="complete"]').count()<=2,'Não duplicar botões de conclusão');
 await shot('11-chat-'+label);
 if(kind==='service')await page.locator('#fechou-v335-event-modal [data-v335-kind="close"]').click();
@@ -74,8 +99,17 @@ await page.evaluate(()=>{document.getElementById('fechou-v212-team-overlay')?.re
 });
 }
 await test('Chat: reabrir conversa começa compacto e sem painel anterior',async()=>{await page.evaluate(async()=>{await window.__fechouOpenChatByOrder(window.__r18Order.id)});await page.waitForTimeout(250);assert.equal(await page.locator('#v121ChatOverlay [data-fc-tools-toggle]').getAttribute('aria-expanded'),'false');assert.equal(await page.locator('#v121ChatOverlay').evaluate(ov=>ov.classList.contains('is-v335-action')),false);assert.equal(await page.locator('#ewMessageModal, #fechou-v335-event-modal').count(),0);await shot('12-chat-reaberto');await page.evaluate(()=>window.__fechouCloseChatWithoutReopen(window.__r18Order.id));});
+
+await test('R19 ícone de iniciar e abertura da confirmação',async()=>{
+await page.evaluate(async()=>{window.__r18Order.service_state='pending';window.__r18Order.metadata.service_state='pending';window.__r18Scene('myquotes','Profissional');await window.__fechouOpenChatByOrder(window.__r18Order.id)});
+await page.locator('#v121ChatOverlay [data-fc-tools-toggle]').click();await page.locator('[data-fc-tool="service"] svg[data-chat-icon="start"]').waitFor();await shot('18-chat-iniciar');await page.locator('[data-fc-tool="service"]').click();await page.locator('#fechou-v335-event-modal [data-v335-kind="confirm-start"]').waitFor();await page.locator('#fechou-v335-event-modal [data-v335-kind="close"]').click();await page.evaluate(()=>window.__fechouCloseChatWithoutReopen(window.__r18Order.id));
+});
+await test('R19 ícones de aprovação e contestação do cliente',async()=>{
+await page.evaluate(async()=>{window.__r18Order.service_state='awaiting_customer_confirmation';window.__r18Order.metadata.service_state='awaiting_customer_confirmation';window.__r18Scene('orders','Cliente');await window.__fechouOpenChatByOrder(window.__r18Order.id)});
+await page.locator('#v121ChatOverlay [data-fc-tools-toggle]').click();await page.locator('[data-fc-tool="approve"] svg[data-chat-icon="approve"]').waitFor();await page.locator('[data-fc-tool="contest"] svg[data-chat-icon="contest"]').waitFor();await shot('19-chat-aprovar-contestar');await page.evaluate(()=>window.__fechouCloseChatWithoutReopen(window.__r18Order.id));
+});
 await test('Larguras móveis sem rolagem horizontal nos detalhes',async()=>{for(const width of [320,360,390,430]){await page.setViewportSize({width,height:844});await page.evaluate(()=>window.__r18Scene('proposals'));const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,'largura '+width)}});
-fs.writeFileSync(path.join(out,'visual-results.json'),JSON.stringify({kind:'Chromium real; DOM/CSS e controladores do R18; dados e rede simulados. Não comprova publicação nem transações reais.',results,pageErrors:errors},null,2));
+fs.writeFileSync(path.join(out,'visual-results.json'),JSON.stringify({kind:'Chromium real en-US; DOM/CSS e controladores do R19; dados e rede simulados. Não comprova publicação nem transações reais.',results,pageErrors:errors},null,2));
 console.log(JSON.stringify({passed:results.filter(x=>x.passed).length,total:results.length,failed:results.filter(x=>!x.passed),pageErrors:errors},null,2));
 process.exitCode=results.some(x=>!x.passed)||errors.length?1:0;
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{await browser?.close();server.close()});
