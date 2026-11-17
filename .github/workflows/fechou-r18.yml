@@ -1,4 +1,4 @@
-name: Validar candidato FECHOU R18
+name: Validar FECHOU R20
 on:
   push:
     branches: [fechou-r16-correcao-2026-11-16]
@@ -29,6 +29,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Capturar interface com dados de teste
         run: node scripts/r18-visual.cjs
+      - name: Verificar estabilidade com timers reais
+        run: node scripts/r20-stability.cjs
       - name: Guardar resultados
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

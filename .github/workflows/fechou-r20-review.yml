@@ -1,0 +1,24 @@
+name: Preparar revisão de segurança R20
+on:
+  push:
+    branches: [fechou-r16-correcao-2026-11-16]
+    paths: ['.github/workflows/fechou-r20-review.yml', 'scripts/r20-review-bundle.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Baixar fontes como dados para revisão
+        run: python3 scripts/r20-review-bundle.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fechou-r20-fontes-para-revisao
+          path: review-bundle/
+          retention-days: 14
+          if-no-files-found: error

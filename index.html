@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-revision="R19-2026-11-16-icones-portugues-carteira" data-fechou-build="R19" data-fechou-version="1.0.5" lang="pt-BR">
+<html data-fechou-revision="R20-2026-11-17-chat-seguranca" data-fechou-build="R20" data-fechou-version="1.0.6" lang="pt-BR">
 <head>
 <!-- FECHOU V129: compatibilidade global para o identificador ew + cliente Supabase compartilhado. -->
 <script id="fechou-r19-chat-icons">
@@ -4746,7 +4746,12 @@ function renderServiceRecord(o, archive = false) {
             )
             .join("")}</nav>`;
         }
-        $("app").innerHTML = a;
+        const appRoot = $("app");
+        const viewIdentity = String(state.supabaseUser?.id || state.user?.id || 'guest') + ':' + String(state.currentRole || '') + ':' + String(state.page || '') + ':' + String(!!state.__v134Wallet);
+        if (appRoot.__fechouBaseHtml === a && appRoot.__fechouBaseIdentity === viewIdentity && appRoot.childElementCount) return;
+        appRoot.innerHTML = a;
+        appRoot.__fechouBaseHtml = a;
+        appRoot.__fechouBaseIdentity = viewIdentity;
       }
       function analyze() {
         let t = state.description.toLowerCase();
@@ -24059,7 +24064,7 @@ function renderServiceRecord(o, archive = false) {
               <section class="fc-contract-drawer ${contractDrawerOpen ?"open" : ""}" id="fc-chat-contract-drawer" ${contractDrawerOpen ? "" : "hidden"}><div class="fc-contract-drawer-head"><strong>Contrato e condições</strong><button type="button" data-fc-contract-close aria-label="Fechar painel de contrato">×</button></div><div class="v149-stage-slot">${contractContent}</div></section>
               <section class="v185-payment-negotiation-slot" aria-label="Negociação de pagamento"></section>
             </div>
-            <div class="v134-service-actions${waitingClient && client ? "" : " fc-service-hidden"}" ${waitingClient && client ? "" : 'aria-hidden="true"'}>${waitingClient && client ? `<button type="button" class="btn" data-v134-service-action="approve" data-order-id="${esc121(o.id)}">Aprovar serviço</button><button type="button" class="btn secondary" data-v134-service-action="contest" data-order-id="${esc121(o.id)}">Contestar</button>` : (serviceAction ? `<button type="button" data-v134-service-action="${serviceAction}" data-order-id="${esc121(o.id)}">${esc121(serviceLabel)}</button>` : "")}</div>
+            <div class="fc-chat-action-bridge" hidden aria-hidden="true">${waitingClient && client ? `<button type="button" class="btn" data-v134-service-action="approve" data-order-id="${esc121(o.id)}">Aprovar serviço</button><button type="button" class="btn secondary" data-v134-service-action="contest" data-order-id="${esc121(o.id)}">Contestar</button>` : (serviceAction ? `<button type="button" data-v134-service-action="${serviceAction}" data-order-id="${esc121(o.id)}">${esc121(serviceLabel)}</button>` : "")}</div>
             <div class="fc-chat-tools" aria-label="Ferramentas da conversa">
               <button type="button" class="fc-chat-tools-toggle" data-fc-tools-toggle aria-expanded="${expanded}" title="Recolher ou expandir ferramentas" aria-label="${expanded ? "Recolher" : "Expandir"} ferramentas"><span>${expanded ? "⌃" : "⌄"}</span></button>
               <div class="fc-chat-tools-grid ${expanded ?"" : "collapsed"}">
@@ -24067,8 +24072,8 @@ function renderServiceRecord(o, archive = false) {
                 <button type="button" data-fc-tool="service" class="fc-tool-service" ${serviceAction ? "" : "disabled"}><span aria-hidden="true">${window.fechouChatIcon(serviceAction || "start")}</span>${esc121(serviceLabel)}</button>
                 <button type="button" data-fc-tool="attach"><span aria-hidden="true">${window.fechouChatIcon("attach")}</span>Anexar arquivo</button>
                 <button type="button" data-fc-tool="attachments"><span aria-hidden="true">${window.fechouChatIcon("attachments")}</span>Ver anexos</button>
-                <button type="button" data-fc-tool="photos"><span aria-hidden="true">${window.fechouChatIcon("photos")}</span>Fotos do serviço</button>
                 <button type="button" data-fc-tool="team"><span aria-hidden="true">${window.fechouChatIcon("team")}</span>Equipe</button>
+                <button type="button" data-fc-tool="photos"><span aria-hidden="true">${window.fechouChatIcon("photos")}</span>Fotos do serviço</button>
               </div>
               <span class="fc-chat-attachment-hint" hidden aria-hidden="true">Fotos e documentos: JPG, PNG, WEBP, GIF, HEIC, PDF, DOC, XLS, TXT ou CSV · até 5 por envio · 20 MB cada.</span>
               <span class="fc-chat-selected-files" aria-live="polite"></span>
@@ -27966,9 +27971,16 @@ body #app .fechou-profile-progress>div:first-child b {
           if (!app.querySelector("#v134WalletRoot")) {
             app.innerHTML = '<section id="v134WalletRoot"></section>';
           }
-          window.__fechouV225SaveWalletState?.();
-          $("#v134WalletRoot", app).innerHTML = renderWalletMarkup();
-          requestAnimationFrame(() => window.__fechouV225RestoreWalletState?.());
+          const walletRoot = $("#v134WalletRoot", app);
+          const walletMarkup = renderWalletMarkup();
+          const walletIdentity = String(currentUser()?.id || '') + ':' + String(state.currentRole || '');
+          if (walletRoot.__fechouMarkup !== walletMarkup || walletRoot.__fechouIdentity !== walletIdentity || !walletRoot.childElementCount) {
+            window.__fechouV225SaveWalletState?.();
+            walletRoot.innerHTML = walletMarkup;
+            walletRoot.__fechouMarkup = walletMarkup;
+            walletRoot.__fechouIdentity = walletIdentity;
+            requestAnimationFrame(() => window.__fechouV225RestoreWalletState?.());
+          }
           const focusOrderId = String(window.__fechouWalletFocusOrderId || "");
           if (focusOrderId) {
             window.__fechouWalletFocusOrderId = "";
@@ -28696,7 +28708,7 @@ body #app .fechou-profile-progress>div:first-child b {
         function addServiceActions(overlay) {
           const orderId = String(overlay?.dataset?.orderId || "");
           const o = (state.orders || []).find((x) => String(x.id) === orderId);
-          if (!overlay || !o || overlay.querySelector(".v322-inline-actions")) return;
+          if (!overlay || !o || overlay.querySelector(".fc-chat-tools-grid") || overlay.querySelector(".v322-inline-actions")) return;
           const client = String(o.client_id || "") === currentUid();
           const pro = String(o.contract?.professional_id || o.professional_id || o.selectedProposal?.professional_id || "") === currentUid() || (!client && state.currentRole === "Profissional");
           const paid = ["approved","received","confirmed","paid"].includes(String(o.payment_status || "").toLowerCase());
@@ -30294,9 +30306,10 @@ body #app .fechou-profile-progress>div:first-child b {
         if (typeof previousSync === "function" && !previousSync.__v137) {
           const stableSync = async function () {
             const result = await previousSync.apply(this, arguments);
+            const beforeSort = JSON.stringify(state.orders || []);
             sortOrders();
             try {
-              if (typeof window.render === "function") window.render();
+              if (beforeSort !== JSON.stringify(state.orders || []) && typeof window.render === "function") window.render();
             } catch (_) {}
             return result;
           };
@@ -44390,4 +44403,13 @@ html body #app button:focus-visible,html body .fechou-pop button:focus-visible,h
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
 </script>
+
+<style id="fechou-r20-chat-organizacao">
+#v121ChatOverlay .fc-chat-action-bridge,
+#v121ChatOverlay .v322-inline-actions,
+#v121ChatOverlay .v134-service-actions{display:none!important}
+#v121ChatOverlay .fc-chat-tools-grid>button[data-fc-tool="photos"]:disabled{display:none!important}
+#v121ChatOverlay .fc-chat-tools-grid>button:last-child:nth-child(odd){grid-column:1/-1}
+#v121ChatOverlay .fc-chat-tools-grid:has(>button[data-fc-tool="photos"]:disabled)>button[data-fc-tool="team"]:nth-child(odd){grid-column:1/-1}
+</style>
 </html>

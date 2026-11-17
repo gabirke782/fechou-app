@@ -106,7 +106,12 @@ await page.locator('#v121ChatOverlay [data-fc-tools-toggle]').click();await page
 });
 await test('R19 ícones de aprovação e contestação do cliente',async()=>{
 await page.evaluate(async()=>{window.__r18Order.service_state='awaiting_customer_confirmation';window.__r18Order.metadata.service_state='awaiting_customer_confirmation';window.__r18Scene('orders','Cliente');await window.__fechouOpenChatByOrder(window.__r18Order.id)});
-await page.locator('#v121ChatOverlay [data-fc-tools-toggle]').click();await page.locator('[data-fc-tool="approve"] svg[data-chat-icon="approve"]').waitFor();await page.locator('[data-fc-tool="contest"] svg[data-chat-icon="contest"]').waitFor();await shot('19-chat-aprovar-contestar');await page.evaluate(()=>window.__fechouCloseChatWithoutReopen(window.__r18Order.id));
+await page.locator('#v121ChatOverlay [data-fc-tools-toggle]').click();await page.locator('[data-fc-tool="approve"] svg[data-chat-icon="approve"]').waitFor();await page.locator('[data-fc-tool="contest"] svg[data-chat-icon="contest"]').waitFor();
+assert.equal(await page.locator('#v121ChatOverlay .v134-service-actions:visible, #v121ChatOverlay .v322-inline-actions:visible').count(),0);
+assert.equal(await page.locator('#v121ChatOverlay button:visible').filter({hasText:/^Aprovar serviço$/}).count(),1);
+assert.equal(await page.locator('#v121ChatOverlay button:visible').filter({hasText:/^Contestar$/}).count(),1);
+const layout=await page.locator('.fc-chat-tools-grid').evaluate(g=>{const team=g.querySelector('[data-fc-tool="team"]'),photos=g.querySelector('[data-fc-tool="photos"]'),attach=g.querySelector('[data-fc-tool="attachments"]');return {teamX:team.getBoundingClientRect().x,teamY:team.getBoundingClientRect().y,attachY:attach.getBoundingClientRect().y,photosVisible:!!photos.offsetHeight,teamAfterAttach:team.previousElementSibling===attach};});assert.equal(layout.teamAfterAttach,true);assert.equal(layout.teamY,layout.attachY);assert.equal(layout.photosVisible,false);
+await shot('19-chat-aprovar-contestar');await page.evaluate(()=>window.__fechouCloseChatWithoutReopen(window.__r18Order.id));
 });
 await test('R19 seletor em português no cancelamento do profissional',async()=>{
 await page.evaluate(()=>{window.__r18Order.service_state='in_progress';window.__r18Order.metadata.service_state='in_progress';window.__r18Scene('myquotes','Profissional');window.fechouOpenActionSheetV335('cancel',{order:window.__r18Order,orderId:window.__r18Order.id})});
@@ -115,6 +120,16 @@ const picker=page.locator('#fechou-v335-event-modal .r19-file-picker');await pic
 await test('R19 documento indisponível: mensagem clara e assinatura bloqueada',async()=>{
 await page.evaluate(async()=>{window.__r18Scene('myquotes','Profissional');await window.__fechouOpenChatByOrder(window.__r18Order.id);try{await window.__fechouOpenContractReview(window.__r18Order);throw new Error('Contrato ausente não deveria liberar assinatura');}catch(error){if(!String(error.message).includes('contrato deste serviço ainda não está disponível'))throw error;window.toast(error.message);}});
 await page.locator('#ewMessageModal').waitFor();assert.match(await page.locator('#ewMessageModal').innerText(),/A assinatura só será liberada quando o contrato original estiver pronto/);assert.equal(await page.locator('#fechou-clicksign-sign-modal').count(),0);await shot('21-aviso-contrato');await page.locator('#ewMessageModal .ew-message-close').click();await page.evaluate(()=>window.__fechouCloseChatWithoutReopen(window.__r18Order.id));
+});
+await test('R20 tela preserva elementos sem mudança e atualiza quando dados mudam',async()=>{
+await page.evaluate(()=>window.__r18Scene('request','Cliente'));await page.locator('[data-input="description"]').fill('Rascunho que deve continuar na tela');
+const ref=await page.locator('[data-input="description"]').elementHandle();await page.evaluate(()=>{window.__fechouAppState.description='Rascunho que deve continuar na tela';window.render()});
+const mounted=await page.locator('[data-input="description"]').elementHandle();await page.evaluate(()=>window.render());assert.equal(await mounted.evaluate(el=>el.isConnected),true);assert.equal(await page.locator('[data-input="description"]').inputValue(),'Rascunho que deve continuar na tela');
+await page.evaluate(()=>{window.__fechouAppState.description='Conteúdo atualizado';window.render()});assert.equal(await page.locator('[data-input="description"]').inputValue(),'Conteúdo atualizado');
+});
+await test('R20 carteira mantém painel expandido e DOM em atualização idêntica',async()=>{
+await page.evaluate(async()=>{window.__r18Scene('home','Cliente');window.__fechouAppState.__v134Wallet=true;window.render();await window.__fechouRefreshWalletNow()});await page.locator('.v240-wallet-explainer').evaluate(d=>d.open=true);const hero=await page.locator('.v240-wallet-hero').elementHandle();await page.evaluate(async()=>{await window.__fechouRefreshWalletNow()});assert.equal(await hero.evaluate(el=>el.isConnected),true);assert.equal(await page.locator('.v240-wallet-explainer').evaluate(d=>d.open),true);
+await page.evaluate(()=>{window.__fechouAppState.__v134Wallet=false;window.render()});assert.equal(await page.locator('#v134WalletRoot').count(),0);
 });
 await test('Larguras móveis sem rolagem horizontal nos detalhes',async()=>{for(const width of [320,360,390,430]){await page.setViewportSize({width,height:844});await page.evaluate(()=>window.__r18Scene('proposals'));const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,'largura '+width)}});
 fs.writeFileSync(path.join(out,'visual-results.json'),JSON.stringify({kind:'Chromium real en-US; DOM/CSS e controladores do R19; dados e rede simulados. Não comprova publicação nem transações reais.',results,pageErrors:errors},null,2));
