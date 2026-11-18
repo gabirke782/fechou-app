@@ -1,0 +1,30 @@
+name: FECHOU | Regressao sem transacoes
+on:
+  push:
+    branches:
+      - qa/fechou-fluxo-estabilidade-2026-11-18
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Obter codigo da revisao
+        uses: actions/checkout@v4
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Sintaxe, chat, fotos, desempenho e exposicao de contas
+        run: node qa/test-chat-flow-stability.cjs
+      - name: Conciliação de reembolsos simulada
+        run: node qa/test-admin-refund-reconciliation.cjs
+      - name: Eventos webhook checkout simulados
+        run: node qa/test-checkout-webhook-hotfix.cjs
+      - name: Repeticao de webhook estornado simulada
+        run: node qa/test-prepay-refunded-replay.cjs
