@@ -54,6 +54,15 @@ verify('Contas de QA não expostas no arquivo público',()=>{
  assert(!html.includes('closeoutsinternacional@gmail.com'));
  assert(!html.includes('soldasrio@gmail.com'));
 });
+verify('Pagamento direto acordado permite iniciar serviço sem assinatura Clicksign',()=>{
+ const found=html.match(/const contractActive = ([\\s\\S]*?);\\s*const paid =/);
+ assert(found,'expressão de liberação de serviço não encontrada');
+ const contractActive=(agreed,signed)=>vm.runInNewContext('('+found[1]+')',{directAgreed:agreed,window:{fechouBothSigned:()=>signed},o:{contract:null},modeOf:()=>agreed?'direct':'contract_prepaid'});
+ assert.equal(contractActive(true,false),true,'pagamento direto acordado bloqueado sem contrato');
+ assert.equal(contractActive(false,false),false,'contrato protegido sem assinatura deve ser bloqueado');
+ assert.equal(contractActive(false,true),true,'contrato assinado deve liberar checagem de pagamento');
+ assert(html.includes('if (contractActive && (modeOf(o) !== "contract_prepaid" || paid))'),'checagem de pagamento protegido removida');
+});
 const failed=checks.filter(([,ok])=>!ok).length;
 console.log(JSON.stringify({scenarios:checks.length,passed:checks.length-failed,failed},null,2));
 if(failed)process.exitCode=1;
