@@ -1,0 +1,90 @@
+[
+  {
+    "version": "before",
+    "viewport": "mobile",
+    "status": 200,
+    "elapsedMs": 3753,
+    "screenshot": "before-mobile.png",
+    "pageErrors": [],
+    "title": "FECHOU · Serviços",
+    "bodyCharacters": 333,
+    "domNodes": 404,
+    "appPresent": true,
+    "paintEntries": [
+      {
+        "name": "first-paint",
+        "milliseconds": 52
+      },
+      {
+        "name": "first-contentful-paint",
+        "milliseconds": 52
+      }
+    ]
+  },
+  {
+    "version": "after",
+    "viewport": "mobile",
+    "status": 200,
+    "elapsedMs": 2037,
+    "screenshot": "after-mobile.png",
+    "pageErrors": [],
+    "title": "FECHOU · Serviços",
+    "bodyCharacters": 333,
+    "domNodes": 404,
+    "appPresent": true,
+    "paintEntries": [
+      {
+        "name": "first-paint",
+        "milliseconds": 44
+      },
+      {
+        "name": "first-contentful-paint",
+        "milliseconds": 44
+      }
+    ]
+  },
+  {
+    "version": "before",
+    "viewport": "desktop",
+    "status": 200,
+    "elapsedMs": 2145,
+    "screenshot": "before-desktop.png",
+    "pageErrors": [],
+    "title": "FECHOU · Serviços",
+    "bodyCharacters": 333,
+    "domNodes": 404,
+    "appPresent": true,
+    "paintEntries": [
+      {
+        "name": "first-paint",
+        "milliseconds": 44
+      },
+      {
+        "name": "first-contentful-paint",
+        "milliseconds": 44
+      }
+    ]
+  },
+  {
+    "version": "after",
+    "viewport": "desktop",
+    "status": 200,
+    "elapsedMs": 2155,
+    "screenshot": "after-desktop.png",
+    "pageErrors": [],
+    "title": "FECHOU · Serviços",
+    "bodyCharacters": 333,
+    "domNodes": 404,
+    "appPresent": true,
+    "paintEntries": [
+      {
+        "name": "first-paint",
+        "milliseconds": 40
+      },
+      {
+        "name": "first-contentful-paint",
+        "milliseconds": 40
+      }
+    ]
+  }
+]
