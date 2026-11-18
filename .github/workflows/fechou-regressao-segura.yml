@@ -28,3 +28,33 @@ jobs:
         run: node qa/test-checkout-webhook-hotfix.cjs
       - name: Repeticao de webhook estornado simulada
         run: node qa/test-prepay-refunded-replay.cjs
+
+  visual-anonimo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Obter codigo e baseline
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Gerar baseline main
+        run: git show origin/main:index.html > qa/baseline-main.html
+      - name: Preparar Chromium/Playwright
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Capturar antes/depois em mobile e desktop sem login
+        run: node qa/test-visual-anon.cjs
+      - name: Guardar capturas do navegador
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fechou-capturas-anonimas
+          path: qa/screenshots/
+          if-no-files-found: warn
