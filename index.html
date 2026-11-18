@@ -2091,7 +2091,10 @@ function dropManage(){document.querySelectorAll('#app button[data-act="v85-manag
 function wrapPA(){document.querySelectorAll('#app .panel').forEach(function(p){if(p.dataset.fxpa)return;if(!p.querySelector(':scope>.grid>article.pro'))return;var bs=Array.prototype.filter.call(p.children,function(c){return c.tagName==='BUTTON'&&(/^(openarchive:|page:orders)/.test(c.getAttribute('data-act')||'')||c.hasAttribute('data-v51-share'))});if(bs.length<2)return;p.dataset.fxpa='1';var w=document.createElement('div');w.className='fx-actions';bs[0].parentNode.insertBefore(w,bs[0]);bs.forEach(function(b){w.appendChild(b)});})}
 function run(){try{addHelp();urgDate();stColor();gridIcons();dedupeTb();wrapPA();btnRows();walletColors();dropManage()}catch(e){}}
 var q=false;new MutationObserver(function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;run()})}).observe(document.documentElement,{childList:true,subtree:true});
-document.addEventListener('DOMContentLoaded',run);setInterval(run,1500);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
+document.addEventListener('visibilitychange',function(){if(!document.hidden)run()});
+window.addEventListener('pageshow',run);
+window.addEventListener('resize',function(){requestAnimationFrame(run)});
 })();
 </script>
 <style id="fechou-r17-service-layout">
@@ -13470,7 +13473,7 @@ function renderServiceRecord(o, archive = false) {
                   "</small></span></label>"
               )
               .join("") +
-            '</div><label for="v53-payment-note">Observações sobre o pagamento</label><textarea id="v53-payment-note" rows="3" placeholder="Ex.: pagamento após a conclusão, sinal combinado, necessidade de nota fiscal…">' +
+            '</div><label for="v53-payment-note">Observações sobre o pagamento</label><textarea id="v53-payment-note" rows="3" placeholder="Ex.: pagamento após a conclusão, sinal combinado ou condições do serviço…">' +
             v53Esc(prefs.note || "") +
             '</textarea><div class="actions"><button type="button" class="btn" data-v53="save-payment">Salvar preferências</button></div><p class="v53-small">Para proteção real do pagamento, reembolso e liberação de valores, a confirmação do provedor de pagamento é necessária para validar a transação. Não envie dados bancários sensíveis em observações.</p>';
           root.appendChild(panel);
@@ -41990,15 +41993,29 @@ window.fechouNativeBtnClassV335 = function (name) {
   const messageCache = new Map();
   let activeAction = null;
   let currentChatRoot = null;
+  let currentChatOrderId = '';
   let chatLoading = false;
   const parked = { evidence: null, drawer: null };
 
   function syncChatRoot(ov) {
-    if (currentChatRoot === ov) return;
+    const nextOrderId = ov ? orderIdOf(ov) : '';
+    if (currentChatRoot === ov && currentChatOrderId === nextOrderId) return;
+    // A mesma janela pode ser reutilizada para outro pedido: nunca reutilize ações do anterior.
+    if (ov && currentChatRoot === ov && currentChatOrderId !== nextOrderId) {
+      ov.classList.remove('is-v335-action');
+      const previousPane = ov.querySelector('#fechou-v335-chat-action');
+      if (previousPane) {
+        previousPane.hidden = true;
+        const previousBody = previousPane.querySelector('.v335-chat-action-body');
+        if (previousBody) previousBody.replaceChildren();
+      }
+      ov.dataset.toolsExpanded = 'false';
+    }
     activeAction = null;
     parked.evidence = null;
     parked.drawer = null;
     currentChatRoot = ov;
+    currentChatOrderId = nextOrderId;
   }
 
   function overlay() { return document.getElementById('v121ChatOverlay'); }
@@ -42443,48 +42460,8 @@ window.fechouNativeBtnClassV335 = function (name) {
     window.fechouOpenActionSheetV335 = wrapped;
   }
 
-  function wrapValidateEvidence() {
-    const orig = window.FECHOU_VALIDATE_EVIDENCE;
-    if (typeof orig !== 'function' || orig.__v335Chatux) return;
-    const countDom = () => {
-      const counts = { before: 0, during: 0, after: 0 };
-      $$('#v121ChatOverlay [data-v134-evidence-phase], #v121ChatOverlay .v134-evidence-item').forEach((el) => {
-        const phase = String(el.getAttribute('data-v134-evidence-phase') || el.dataset.phase || el.textContent || '').toLowerCase();
-        if (/before|antes/.test(phase)) counts.before++;
-        else if (/during|durante/.test(phase)) counts.during++;
-        else if (/after|depois/.test(phase)) counts.after++;
-      });
-      const grid = $('#v121ChatOverlay .v134-evidence-grid');
-      if (grid) {
-        const groups = grid.querySelectorAll('[data-phase], .v134-evidence-phase, figure, img, a');
-        /* if items already counted via evidence-item, leave as is */
-        if (!counts.before && !counts.during && !counts.after && groups.length) {
-          /* fallback: look at 1/5 labels */
-          const labels = $$('#v121ChatOverlay .v134-evidence [data-count], #v121ChatOverlay .v134-evidence small, #v121ChatOverlay .v134-evidence b');
-          labels.forEach((n) => {
-            const t = n.textContent || '';
-            const m = t.match(/(\d+)\s*\/\s*5/i);
-            if (!m) return;
-            const nCount = Number(m[1]) || 0;
-            if (/antes|before/i.test(t)) counts.before = Math.max(counts.before, nCount);
-            if (/durante|during/i.test(t)) counts.during = Math.max(counts.during, nCount);
-            if (/depois|after/i.test(t)) counts.after = Math.max(counts.after, nCount);
-          });
-        }
-      }
-      return counts;
-    };
-    const wrapped = async function (orderId, action) {
-      try { return await orig.apply(this, arguments); }
-      catch (e) {
-        const counts = countDom();
-        if (action === 'complete' && counts.before >= 1 && counts.during >= 1 && counts.after >= 1) return counts;
-        throw e;
-      }
-    };
-    wrapped.__v335Chatux = true;
-    window.FECHOU_VALIDATE_EVIDENCE = wrapped;
-  }
+  // A validação obrigatória das fotos pertence ao controlador original e ao servidor.
+  // Nunca converter uma falha da validação em sucesso baseado somente nas fotos exibidas.
 
   function focusedSnap() {
     const el = document.activeElement;
@@ -42609,7 +42586,6 @@ window.fechouNativeBtnClassV335 = function (name) {
   function boot() {
     wrapChatRender();
     wrapOpenSheet();
-    wrapValidateEvidence();
     wrapMainRender();
     afterChatRender();
     enhanceOrderCards();
@@ -42641,7 +42617,6 @@ window.fechouNativeBtnClassV335 = function (name) {
       }
       if (!window.renderV121ChatOverlay || !window.renderV121ChatOverlay.__v335Chatux) wrapChatRender();
       if (!window.render || !window.render.__v335Chatux) wrapMainRender();
-      if (!window.FECHOU_VALIDATE_EVIDENCE || !window.FECHOU_VALIDATE_EVIDENCE.__v335Chatux) wrapValidateEvidence();
       if (!window.fechouOpenActionSheetV335 || !window.fechouOpenActionSheetV335.__v335Chatux) wrapOpenSheet();
     }, 120);
   });
@@ -43894,7 +43869,10 @@ function walletFill(){document.querySelectorAll('#app .v335-wallet-grid').forEac
  if(need!==mine)last.classList.toggle('fx-fill',need);});}
 window.__fxLogos=ICONS;var q=false;function run(){try{logos();walletFill()}catch(e){}}
 new MutationObserver(function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;run()})}).observe(document.documentElement,{childList:true,subtree:true});
-document.addEventListener('DOMContentLoaded',run);setInterval(run,1200);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
+document.addEventListener('visibilitychange',function(){if(!document.hidden)run()});
+window.addEventListener('pageshow',run);
+window.addEventListener('resize',function(){requestAnimationFrame(run)});
 })();
 </script>
 
@@ -44031,7 +44009,10 @@ function wallet(){document.querySelectorAll('#app .v335-wallet-grid .v134-wallet
  if(/pendente|em an[aá]lise|aguardando/i.test(t))c.classList.add('fechou-stat-warn');else if(/liberado|confirmad|transferid/i.test(t))c.classList.add('fechou-stat-ok');});}
 function run(){try{plans();v185();profile();wallet()}catch(e){}}
 var q=false;new MutationObserver(function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;run()})}).observe(document.documentElement,{childList:true,subtree:true});
-document.addEventListener('DOMContentLoaded',run);setInterval(run,1200);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
+document.addEventListener('visibilitychange',function(){if(!document.hidden)run()});
+window.addEventListener('pageshow',run);
+window.addEventListener('resize',function(){requestAnimationFrame(run)});
 })();
 </script>
 <style id="fechou-fix-r10-wallet">
@@ -44072,7 +44053,10 @@ function run(){try{
   dedupe(w);pro(w);dedupe(w);restore(w);});
 }catch(e){}}
 var q=false;new MutationObserver(function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;run()})}).observe(document.documentElement,{childList:true,subtree:true});
-document.addEventListener('DOMContentLoaded',run);setInterval(run,1000);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
+document.addEventListener('visibilitychange',function(){if(!document.hidden)run()});
+window.addEventListener('pageshow',run);
+window.addEventListener('resize',function(){requestAnimationFrame(run)});
 })();
 </script>
 <style id="fechou-fix-r11-carteira">
