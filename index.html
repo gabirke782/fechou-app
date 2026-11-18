@@ -23955,9 +23955,9 @@ function renderServiceRecord(o, archive = false) {
           else if (waitingClient && client) { serviceAction = "approve"; serviceLabel = "Aprovar serviço"; }
           else if (waitingClient && !client) { serviceAction = "already_completed"; serviceLabel = "Serviço finalizado — aguardando cliente"; }
           else if (!client && !cancelled && !completed && !["in_progress","awaiting_customer_confirmation","support_review"].includes(serviceState)) {
-            const contractActive = (typeof window.fechouBothSigned === "function")
+            const contractActive = directAgreed || ((typeof window.fechouBothSigned === "function")
               ? window.fechouBothSigned(o)
-              : (directAgreed || !!(o.contract?.client_accepted_at && o.contract?.professional_accepted_at && modeOf(o) !== "contract_prepaid"));
+              : !!(o.contract?.client_accepted_at && o.contract?.professional_accepted_at && modeOf(o) !== "contract_prepaid"));
             const paid = ["approved","received","confirmed","paid"].includes(String(o.payment_status || "").toLowerCase());
             if (contractActive && (modeOf(o) !== "contract_prepaid" || paid)) { serviceAction = "start"; serviceLabel = "Iniciar serviço"; }
           }
