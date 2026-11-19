@@ -1,0 +1,27 @@
+name: Entrega HTML Painel FECHOU
+on:
+  push:
+    branches:
+      - entrega-download-painel-20261119
+    paths:
+      - .github/workflows/entrega-painel-chat.yml
+permissions:
+  contents: read
+jobs:
+  pacote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar index.html
+        run: |
+          mkdir -p pacote
+          cp admin-cloudflare/index.html pacote/index.html
+          test -s pacote/index.html
+          grep -q 'fechou-version.*1.0.4' pacote/index.html
+      - name: Gerar anexo
+        uses: actions/upload-artifact@v4
+        with:
+          name: FECHOU-PAINEL-ADMIN-1.0.4
+          path: pacote/index.html
+          retention-days: 1
+          if-no-files-found: error
