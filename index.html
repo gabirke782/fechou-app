@@ -28417,152 +28417,212 @@ body #app .fechou-profile-progress>div:first-child b {
         );
 
         // Add service status and evidence widgets to the draggable conversation window.
-        async function loadEvidence(overlay) {
-          const db = getDb(),
-            orderId = String(overlay?.dataset?.orderId || "");
-          if (!db || !orderId) return;
-          const host = overlay.querySelector(".v134-evidence");
-          if (!host) return;
-          try {
-            const { data, error } = await db
-              .from("fechou_service_evidence")
-              .select("*")
-              .eq("order_id", orderId)
-              .order("created_at", { ascending: false })
-              .limit(1000);
-            if (error) throw error;
-            const grid = $(".v134-evidence-grid", host);
-            if (!grid) return;
-            grid.innerHTML = "";
-            const phaseCounts = {before:0,during:0,after:0};
-            for (const item of data || []) if (Object.prototype.hasOwnProperty.call(phaseCounts, String(item.phase || ""))) phaseCounts[String(item.phase)]++;
-            const phaseLabels = {before:"Antes",during:"Durante",after:"Depois"};
-            host.querySelectorAll("[data-v134-evidence-button]").forEach(button => {
-              const phase = String(button.dataset.v134EvidenceButton || "");
-              const count = phaseCounts[phase] || 0;
-              button.disabled = count >= 5;
-              button.setAttribute("aria-label", `${phaseLabels[phase] || "Etapa"}: ${count} de 5 fotos`);
-              button.textContent = `${count >= 5 ? "✓" : "＋"} ${phaseLabels[phase] || "Etapa"} · ${count}/5`;
-              button.title = count >= 5 ? "Limite de cinco fotos desta etapa atingido" : `${count} de 5 fotos registradas`;
-            });
-            for (const item of data || []) {
-              const { data: urlData, error: signErr } = await db.storage
-                .from("eworkers-service-evidence")
-                .createSignedUrl(item.storage_path, 60 * 60);
-              if (signErr) continue;
-              const box = document.createElement("a");
-              box.className = "v134-evidence-item";
-              box.href = urlData.signedUrl;
-              box.target = "_blank";
-              box.rel = "noopener";
-              box.innerHTML = `<img src="${esc134(
-                urlData.signedUrl
-              )}" alt="Evidência ${esc134(item.phase)}"><small>${esc134(
-                item.phase
-              )} · ${esc134(
-                new Date(item.created_at).toLocaleDateString("pt-BR")
-              )}</small>`;
-              grid.appendChild(box);
+        // FECHOU R22: leitura de evidências coalescida, sem resultados antigos ou miniaturas duplicadas.
+        const fechouEvidenceReads = new WeakMap();
+        let fechouEvidenceGeneration = 0;
+        async function loadEvidence(overlay, force = false) {
+          const db = getDb();
+          const orderId = String(overlay?.dataset?.orderId || "");
+          const host = overlay?.querySelector(".v134-evidence");
+          const grid = host?.querySelector(".v134-evidence-grid");
+          if (!db || !orderId || !grid) return;
+          const active = fechouEvidenceReads.get(overlay);
+          if (active && active.orderId === orderId && !force) return active.task;
+          const generation = ++fechouEvidenceGeneration;
+          const task = (async () => {
+            try {
+              const { data, error } = await db.from("fechou_service_evidence")
+                .select("id,phase,storage_path,created_at")
+                .eq("order_id", orderId)
+                .order("created_at", { ascending: false })
+                .limit(100);
+              if (error) throw error;
+              const seen = new Set();
+              const items = [];
+              for (const item of data || []) {
+                const phase = String(item.phase || "");
+                const identity = String(item.id || item.storage_path || "");
+                if (!["before", "during", "after"].includes(phase) || !item.storage_path || !identity || seen.has(identity)) continue;
+                seen.add(identity);
+                items.push(item);
+              }
+              // Um único pedido de URLs assinadas em vez de uma chamada sequencial por foto.
+              const storage = db.storage.from("eworkers-service-evidence");
+              let urls = [];
+              if (items.length) {
+                try {
+                  const { data: signed, error: signError } = await storage.createSignedUrls(items.map(item => item.storage_path), 3600);
+                  if (signError) throw signError;
+                  urls = items.map((item, index) => String(signed?.[index]?.signedUrl || ""));
+                } catch (signError) {
+                  // Compatibilidade com versões antigas do cliente/storage: fallback paralelo.
+                  urls = await Promise.all(items.map(async item => {
+                    try {
+                      const { data: signed, error: oneError } = await storage.createSignedUrl(item.storage_path, 3600);
+                      return oneError ? "" : String(signed?.signedUrl || "");
+                    } catch (_) { return ""; }
+                  }));
+                }
+              }
+              // A interface só é substituída quando a leitura inteira terminou.
+              // Leituras antigas jamais podem acrescentar fotos após uma atualização recente.
+              if (fechouEvidenceReads.get(overlay)?.generation !== generation ||
+                  String(overlay.dataset.orderId || "") !== orderId || !grid.isConnected) return;
+              const counts = { before: 0, during: 0, after: 0 };
+              const fragment = document.createDocumentFragment();
+              items.forEach((item, index) => {
+                counts[item.phase]++;
+                const url = urls[index];
+                if (!url) return;
+                const box = document.createElement("a");
+                box.className = "v134-evidence-item";
+                box.href = url;
+                box.target = "_blank";
+                box.rel = "noopener";
+                box.dataset.evidenceId = String(item.id || "");
+                box.dataset.evidencePhase = String(item.phase);
+                box.innerHTML = '<img src="' + esc134(url) + '" alt="Evidência ' + esc134(item.phase) + '" loading="lazy" decoding="async"><small>' +
+                  esc134(item.phase) + ' · ' + esc134(new Date(item.created_at).toLocaleDateString("pt-BR")) + '</small>';
+                fragment.appendChild(box);
+              });
+              grid.replaceChildren(fragment);
+              const labels = { before: "Antes", during: "Durante", after: "Depois" };
+              host.querySelectorAll("[data-v134-evidence-button]").forEach(button => {
+                const phase = String(button.dataset.v134EvidenceButton || "");
+                const count = counts[phase] || 0;
+                button.disabled = count >= 5;
+                button.setAttribute("aria-label", (labels[phase] || "Etapa") + ": " + count + " de 5 fotos");
+                button.textContent = (count >= 5 ? "✓" : "＋") + " " + (labels[phase] || "Etapa") + " · " + count + "/5";
+                button.title = count >= 5 ? "Limite de cinco fotos desta etapa atingido" : count + " de 5 fotos registradas";
+              });
+            } catch (e) {
+              console.warn("Evidências de serviço não carregadas:", e);
             }
-          } catch (e) {
-            console.warn("Evidências de serviço não carregadas:", e);
+          })();
+          fechouEvidenceReads.set(overlay, { orderId, generation, task });
+          try { return await task; }
+          finally {
+            if (fechouEvidenceReads.get(overlay)?.generation === generation) fechouEvidenceReads.delete(overlay);
           }
         }
+        // Reduz a transferência de fotos grandes do celular sem bloquear formatos incompatíveis.
+        async function fechouPrepareEvidencePhoto(file) {
+          if (!file || file.type !== "image/jpeg" || file.size < 1024 * 1024 ||
+              typeof createImageBitmap !== "function") return file;
+          let bitmap = null;
+          try {
+            bitmap = await createImageBitmap(file);
+            const edge = Math.max(bitmap.width, bitmap.height);
+            const scale = Math.min(1, 1920 / edge);
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+            canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+            const ctx = canvas.getContext("2d", { alpha: false });
+            if (!ctx) return file;
+            ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            const optimized = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
+            canvas.width = canvas.height = 0;
+            if (!optimized || optimized.size >= file.size * 0.85) return file;
+            const name = String(file.name || "foto.jpg").replace(/\.[^.]+$/, "") + ".jpg";
+            return new File([optimized], name, { type: "image/jpeg", lastModified: file.lastModified });
+          } catch (_) { return file; }
+          finally { try { bitmap?.close(); } catch (_) {} }
+        }
+        // Evita que dois eventos change ou dois envios concorrentes salvem a mesma captura.
+        const fechouEvidencePending = new Set();
+        const fechouEvidenceRecent = new Map();
+        const fechouEvidenceQueues = new Map();
         async function persistEvidence(input) {
           const files = Array.from(input.files || []);
+          input.value = ""; // libera imediatamente a câmera para a próxima etapa
           if (!files.length) return;
-          const overlay = $("#v121ChatOverlay");
+          const overlay = input.closest("#v121ChatOverlay") || $("#v121ChatOverlay");
           const orderId = String(overlay?.dataset?.orderId || "");
           const phase = String(input.dataset.v134EvidencePhase || "during");
-          const db = getDb(),
-            user = currentUser();
-          if (!db || !user || !orderId)
-            return toast134(
-              "Abra uma conversa válida antes de registrar evidências."
-            );
-          if (!["before","during","after"].includes(phase)) return toast134("Etapa de evidência inválida.");
-          let phaseCount = 0;
-          let savedCount = 0;
+          const db = getDb(), user = currentUser();
+          if (!db || !user || !orderId) return toast134("Abra uma conversa válida antes de registrar evidências.");
+          if (!["before", "during", "after"].includes(phase)) return toast134("Etapa de evidência inválida.");
+          const phaseKey = orderId + "|" + phase;
+          const accepted = [];
           for (const file of files) {
-            try {
-              const {data: phaseRows, error: phaseCountError} = await db.from("fechou_service_evidence").select("phase").eq("order_id", orderId).eq("phase", phase).limit(5);
-              if (phaseCountError) throw phaseCountError;
-              phaseCount = (phaseRows || []).length;
-            } catch (countError) {
-              console.error("Falha ao consultar o limite de evidências:", countError);
-              input.value = "";
-              return toast134("Não foi possível verificar o limite de fotos desta etapa. Tente novamente.");
-            }
-            if (phaseCount >= 5) {
-              toast134(`Limite de cinco fotos atingido em ${{before:"Antes",during:"Durante",after:"Depois"}[phase]}.`);
-              break;
-            }
-            if (!String(file.type || "").startsWith("image/")) {
-              toast134(
-                "A galeria de evidências aceita fotos. Para vídeos ou documentos, use o anexo normal do chat."
-              );
-              continue;
-            }
-            if (file.size > 20 * 1024 * 1024) {
-              toast134("Cada foto pode ter no máximo 20 MB.");
-              continue;
-            }
-            try {
-              const ext =
-                (file.name.split(".").pop() || "jpg")
-                  .replace(/[^a-z0-9]/gi, "")
-                  .slice(0, 8) || "jpg";
-              const path = `${
-                user.id
-              }/${orderId}/evidence/${phase}/${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2)}.${ext}`;
-              const { error: upErr } = await db.storage
-                .from("eworkers-service-evidence")
-                .upload(path, file, {
-                  upsert: false,
-                  contentType: file.type || "image/jpeg",
-                  cacheControl: "3600",
-                });
-              if (upErr) throw upErr;
-              const order = (state.orders || []).find(
-                (o) => String(o.id) === orderId
-              );
-              const row = {
-                order_id: orderId,
-                contract_id: order?.contract?.id || null,
-                uploader_id: user.id,
-                phase,
-                storage_path: path,
-                file_name: file.name,
-                mime_type: file.type || "image/jpeg",
-                file_size: file.size,
-                notes: "",
-              };
-              const { error: insErr } = await db
-                .from("fechou_service_evidence")
-                .insert(row);
-              if (insErr) {
-                await db.storage
-                  .from("eworkers-service-evidence")
-                  .remove([path])
-                  .catch(() => {});
-                throw insErr;
-              }
-              phaseCount++;
-              savedCount++;
-            } catch (e) {
-              console.error("Evidência FECHOU:", e);
-              toast134(
-                e?.code === "23514" || /Limite de cinco fotos/.test(String(e?.message || ""))
-                  ? `Limite de cinco fotos atingido em ${{before:"Antes",during:"Durante",after:"Depois"}[phase]}.`
-                  : "Uma foto não foi arquivada. Verifique as permissões do Storage e tente novamente."
-              );
-            }
+            const fingerprint = phaseKey + "|" + String(file.name) + "|" + file.size + "|" + file.lastModified;
+            if (fechouEvidencePending.has(fingerprint) || Date.now() - (fechouEvidenceRecent.get(fingerprint) || 0) < 45000) continue;
+            fechouEvidencePending.add(fingerprint);
+            accepted.push({ file, fingerprint });
           }
-          input.value = "";
-          await loadEvidence(overlay);
-          if (savedCount) toast134(`${savedCount} foto(s) arquivada(s). ${phaseCount} de 5 nesta etapa.`);
+          if (!accepted.length) return;
+          const prior = fechouEvidenceQueues.get(phaseKey) || Promise.resolve();
+          const work = prior.catch(() => {}).then(async () => {
+            let savedCount = 0, phaseCount = 0;
+            for (const { file, fingerprint } of accepted) {
+              try {
+                if (!String(file.type || "").startsWith("image/")) {
+                  toast134("A galeria de evidências aceita fotos. Para vídeos ou documentos, use o anexo normal do chat.");
+                  continue;
+                }
+                if (file.size > 20 * 1024 * 1024) {
+                  toast134("Cada foto pode ter no máximo 20 MB.");
+                  continue;
+                }
+                const { data: phaseRows, error: countError } = await db.from("fechou_service_evidence")
+                  .select("id").eq("order_id", orderId).eq("phase", phase).limit(5);
+                if (countError) throw countError;
+                phaseCount = (phaseRows || []).length;
+                if (phaseCount >= 5) {
+                  toast134("Limite de cinco fotos atingido em " + ({before:"Antes",during:"Durante",after:"Depois"}[phase]) + ".");
+                  continue;
+                }
+                const uploadFile = await fechouPrepareEvidencePhoto(file);
+                const ext = (String(uploadFile.name || "foto.jpg").split(".").pop() || "jpg")
+                  .replace(/[^a-z0-9]/gi, "").slice(0, 8) || "jpg";
+                const path = user.id + "/" + orderId + "/evidence/" + phase + "/" +
+                  Date.now() + "_" + Math.random().toString(36).slice(2) + "." + ext;
+                const { error: uploadError } = await db.storage.from("eworkers-service-evidence")
+                  .upload(path, uploadFile, {
+                    upsert: false,
+                    contentType: uploadFile.type || "image/jpeg",
+                    cacheControl: "3600"
+                  });
+                if (uploadError) throw uploadError;
+                const order = (state.orders || []).find(o => String(o.id) === orderId);
+                const row = {
+                  order_id: orderId,
+                  contract_id: order?.contract?.id || null,
+                  uploader_id: user.id,
+                  phase,
+                  storage_path: path,
+                  file_name: uploadFile.name,
+                  mime_type: uploadFile.type || "image/jpeg",
+                  file_size: uploadFile.size,
+                  notes: ""
+                };
+                const { error: insertError } = await db.from("fechou_service_evidence").insert(row);
+                if (insertError) {
+                  try { await db.storage.from("eworkers-service-evidence").remove([path]); } catch (_) {}
+                  throw insertError;
+                }
+                savedCount++;
+                phaseCount++;
+                fechouEvidenceRecent.set(fingerprint, Date.now());
+              } catch (e) {
+                console.error("Evidência FECHOU:", e);
+                toast134(
+                  e?.code === "23514" || /Limite de cinco fotos/.test(String(e?.message || ""))
+                    ? "Limite de cinco fotos atingido em " + ({before:"Antes",during:"Durante",after:"Depois"}[phase]) + "."
+                    : "Uma foto não foi arquivada. Verifique sua conexão e tente novamente."
+                );
+              } finally { fechouEvidencePending.delete(fingerprint); }
+            }
+            await loadEvidence(overlay, true);
+            if (savedCount) toast134(savedCount + " foto(s) arquivada(s). " + phaseCount + " de 5 nesta etapa.");
+            return savedCount;
+          });
+          fechouEvidenceQueues.set(phaseKey, work);
+          try { return await work; }
+          finally {
+            accepted.forEach(item => fechouEvidencePending.delete(item.fingerprint));
+            if (fechouEvidenceQueues.get(phaseKey) === work) fechouEvidenceQueues.delete(phaseKey);
+          }
         }
         async function loadPaymentNegotiation(overlay) {
           const orderId = String(overlay?.dataset?.orderId || "");
@@ -42849,6 +42909,8 @@ window.fechouNativeBtnClassV335 = function (name) {
   }
   function db() { return window.__FECHOU_SUPABASE_CLIENT || window.ewSupabase || window.supabase || null; }
   function phaseOf(el) {
+    const known = String(el.getAttribute('data-evidence-phase') || '').toLowerCase();
+    if (phases.includes(known)) return known;
     const label = String(el.getAttribute('data-phase') || el.querySelector('small')?.textContent || '').toLowerCase();
     if (/before|antes/.test(label)) return 'before';
     if (/after|depois/.test(label)) return 'after';
@@ -42865,7 +42927,13 @@ window.fechouNativeBtnClassV335 = function (name) {
     }
     [...grid.querySelectorAll(':scope > a.v134-evidence-item')].forEach((a) => source.append(a));
     const groups = { before: [], during: [], after: [] };
-    [...source.querySelectorAll('a.v134-evidence-item')].forEach((a) => groups[phaseOf(a)].push(a));
+    const seen = new Set();
+    [...source.querySelectorAll('a.v134-evidence-item')].forEach((a) => {
+      const identity = String(a.dataset.evidenceId || a.dataset.evidencePath || a.href || '');
+      if (identity && seen.has(identity)) { a.remove(); return; }
+      if (identity) seen.add(identity);
+      groups[phaseOf(a)].push(a);
+    });
     return groups;
   }
 
