@@ -13780,28 +13780,44 @@ function renderServiceRecord(o, archive = false) {
           updateDiscountUI();
         }
         function copyAnalysis(source, result) {
-          if (!source || !result) return;
-          // Render the AI-generated regional analysis only once; preserve the AI logic itself.
-          result.innerHTML = source.innerHTML;
-          source.innerHTML = "";
+          if (!result) return;
+          const html = source && source.innerHTML ? source.innerHTML.trim() : "";
+          if (html && !/v56-spinner/.test(html)) result.innerHTML = html;
+          else result.replaceChildren();
+          if (source) source.replaceChildren();
+          // O cálculo foi validado pelo motor: apenas recupera sua apresentação, sem inventar preços.
+          const calc = state.calculated || {};
+          const low = Number(calc.low), high = Number(calc.high);
+          const avg = Number(calc.total);
+          if (low > 0 && high >= low && !result.textContent.includes("Mão de obra — baixa")) {
+            const section = document.createElement("section");
+            section.className = "v56-estimate fechou-r2-price-breakdown";
+            const heading = document.createElement("b");
+            heading.textContent = "Faixa estimada de mão de obra na região";
+            section.appendChild(heading);
+            const currency = (v) => new Intl.NumberFormat("pt-BR", {style:"currency",currency:"BRL"}).format(v);
+            [["Mão de obra — baixa",low],["Mão de obra — média",avg>0?avg:(low+high)/2],["Mão de obra — alta",high]].forEach(([label,value])=>{
+              const line=document.createElement("div");line.className="total";
+              const title=document.createElement("span");title.textContent=label;
+              const number=document.createElement("b");number.textContent=currency(value);
+              line.append(title,number);section.appendChild(line);
+            });
+            result.prepend(section);
+          }
+          if (!result.textContent.trim()) {
+            const message=document.createElement("div");
+            message.className="v56-estimate";message.textContent="A análise não retornou os valores necessários. Tente analisar novamente; nenhum preço foi preenchido automaticamente.";
+            result.appendChild(message);
+          }
           result.querySelectorAll("*").forEach((el) => {
             if (el.children.length === 0 && el.textContent)
               el.textContent = textFix(el.textContent)
-                .replace(
-                  "Faixa preliminar para a região",
-                  "Faixa estimada de preço na região"
-                )
-                .replace(
-                  "Análise de preço concluída. Confira a faixa estimada antes de publicar.",
-                  "Análise de preço concluída. Confira a faixa, ajuste o desconto e publique o pedido."
-                )
-                .replace(
-                  "Você pode publicar o pedido mesmo assim.",
-                  "A publicação só será liberada após a análise de preço regional."
-                );
+                .replace("Faixa preliminar para a região", "Faixa estimada de preço na região")
+                .replace("Análise de preço concluída. Confira a faixa estimada antes de publicar.", "Análise de preço concluída. Confira a faixa, ajuste o desconto e publique o pedido.")
+                .replace("Você pode publicar o pedido mesmo assim.", "A publicação só será liberada após a análise de preço regional.");
           });
         }
-        function showAIDiagnostic(error, stage) {
+                function showAIDiagnostic(error, stage) {
           console.error("FECHOU análise", stage || "Análise regional", error);
           const old = document.getElementById("ew-ai-diagnostic");
           old?.remove();
@@ -13910,6 +13926,28 @@ function renderServiceRecord(o, archive = false) {
               }
               toastSafe("Não há faixa regional confiável para publicar. Complete as informações e tente novamente.");
               return;
+            }
+            if (state.includeMaterialsEstimate) {
+              const mat = state.materialsEstimateData && typeof state.materialsEstimateData === "object" ? state.materialsEstimateData : {};
+              const n = (value) => {
+                if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : NaN;
+                const str=String(value||"").replace(/R\\$|BRL|\\s/gi,"").replace(/[^0-9,.-]/g,"");
+                const decimal=str.includes(",") && str.includes(".") ? str.replace(/\\./g,"").replace(",",".") : str.replace(",",".");
+                const result=Number(decimal);return Number.isFinite(result)&&result>0?result:NaN;
+              };
+              const amount=[mat.average,mat.avg,mat.mean,mat.total,mat.min,mat.low,mat.max,mat.high,mat.estimated_average,mat.estimatedAverage].some(v=>Number.isFinite(n(v)));
+              if (!amount) {
+                state.priceAnalysisDone = false; state.priceAnalysisAt = "";
+                const action = q("#v58-final-actions");if(action)action.style.display="none";
+                const discount = q("#v58-discount-control");if(discount)discount.style.display="none";
+                if (result) {
+                  const warn=document.createElement("div");warn.className="v56-estimate";
+                  warn.setAttribute("role","status");warn.textContent="A mão de obra foi calculada, mas faltou o valor da estimativa de materiais solicitado. A análise não está completa: tente novamente antes de publicar.";
+                  result.append(warn);
+                }
+                toastSafe("Estimativa de materiais não retornada. Refaça a análise antes de publicar.");
+                return;
+              }
             }
             state.priceAnalysisDone = true;
             state.priceAnalysisAt = new Date().toISOString();
@@ -15713,7 +15751,7 @@ function renderServiceRecord(o, archive = false) {
                   ? "Hoje"
                   : "Normal";
               html +=
-                '<div class="v56-estimate v56-accordion labor-accordion"><details><summary class="v56-accordion-summary">Faixa estimada de mão de obra na região</summary><div class="v56-accordion-content"><div style="display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin-top:10px"><div class="total"><span>Mão de obra — baixa</span><b>' +
+                '<div class="v56-estimate v56-accordion labor-accordion"><details open><summary class="v56-accordion-summary">Faixa estimada de mão de obra na região</summary><div class="v56-accordion-content"><div style="display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin-top:10px"><div class="total"><span>Mão de obra — baixa</span><b>' +
                 fmt(low) +
                 '</b></div><div class="total"><span>Mão de obra — média</span><b>' +
                 fmt(avg) +
@@ -15754,7 +15792,7 @@ function renderServiceRecord(o, archive = false) {
               const mp = materialEstimate || {};
               const mPick = (...vals) => {
                 for (const v of vals) {
-                  const n = Number(v);
+                  const n = pick(v);
                   if (Number.isFinite(n) && n > 0) return n;
                 }
                 return NaN;
@@ -15794,7 +15832,7 @@ function renderServiceRecord(o, archive = false) {
                 ? mp.breakdown
                 : [];
               html +=
-                '<div class="v56-estimate v56-accordion materials-accordion"><details><summary class="v56-accordion-summary">Estimativa de materiais (separada)</summary><div class="v56-accordion-content">';
+                '<div class="v56-estimate v56-accordion materials-accordion"><details open><summary class="v56-accordion-summary">Estimativa de materiais (separada)</summary><div class="v56-accordion-content">';
               if (Number.isFinite(mAvg)) {
                 html +=
                   '<div class="total"><span>Materiais — estimativa média</span><b>' +
@@ -27783,7 +27821,7 @@ body #app .fechou-profile-progress>div:first-child b {
                 )
                 .join("")
             : '<div class="empty"><h3>Nenhuma movimentação ainda</h3><p>Pagamentos, reembolsos e repasses confirmados aparecerão aqui após a confirmação pelo prestador de pagamento.</p></div>';
-          return `<section class="v134-wallet"><section class="v240-wallet-hero" aria-label="Resumo da carteira"><div class="v240-wallet-hero-head"><span class="v240-wallet-kicker">FECHOU <i>·</i> CARTEIRA E EXTRATO</span><button type="button" class="v240-wallet-mark" data-r19-wallet-help aria-label="Entender os valores da carteira" aria-expanded="false">◈</button></div><div class="v240-wallet-label">${pro ? "Disponível para solicitar repasse" : "Pagamentos registrados"}</div><div class="v240-wallet-value">${walletDisplay(pro ? payoutReadyToRequestRows.reduce((sum, r) => sum + Number(r.amount || 0), 0) : clientPaid)}</div><div class="v240-wallet-foot"><span class="v240-wallet-dot"></span>${pro ? "Valores liberados que ainda não possuem solicitação ativa" : "Total dos pagamentos vinculados às suas contratações"}</div><details class="v240-wallet-explainer"><summary>Como este valor funciona</summary><p>${pro ? "Este valor mostra o que já foi liberado para solicitar repasse; ainda não significa dinheiro recebido na sua conta. Os pagamentos em “Pendente de conclusão do serviço” continuam reservados e ainda não estão disponíveis para você. A liberação depende da execução do serviço, da aprovação do cliente e das verificações da contratação. Depois, solicite o repasse: ele só aparece como transferido após a confirmação do meio de pagamento." : "Este total reúne os pagamentos confirmados dos seus serviços. Enquanto o valor estiver em “Guardado na carteira”, ele ainda não foi repassado ao profissional. Se precisar cancelar, abra o serviço e solicite o cancelamento e o reembolso. A solicitação será analisada conforme o contrato e a execução do serviço. A devolução aparece aqui após a confirmação do meio de pagamento."}</p></details></section><div class="v134-wallet-stats v176-wallet-stats ${pro ?"v178-pro-wallet-stats" : "v178-client-wallet-stats"}">${pro ? `<div class="v134-wallet-stat"><span>Pendente de conclusão do serviço</span><b>${walletDisplay(Math.max(0, awaitingPayout))}</b></div><div class="v134-wallet-stat"><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div class="v134-wallet-stat"><span>Em análise / transferência</span><b>${walletDisplay(activePayoutRequests.reduce((sum, r) => sum + Number(r.amount || r.requested_amount || 0), 0))}</b></div><div class="v134-wallet-stat"><span>Transferidos</span><b>${walletDisplay(released)}</b></div>` : `<div class="v134-wallet-stat"><span>Guardado na carteira</span><b class="fechou-green">${walletDisplay(Math.max(0, held))}</b></div><div class="v134-wallet-stat"><span>Reembolsos</span><b>${walletDisplay(refund)}</b></div><div class="v134-wallet-stat"><span>Movimentações</span><b>${walletBusy || walletLoadError ? "—" : rows.length}</b></div><div class="v134-wallet-stat"><span>Reembolsos em análise</span><b>${walletDisplay(walletRefundRequests.length ? walletRefundRequests.filter((r) => ["reserved","submitted","pending","in_progress","bank_slip_action_required","unknown","review_required","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum,r) => sum + Number(r.provider_summary?.pending_value ?? r.amount ?? 0),0) : rows.filter((r) => r.entry_type === "refund" && ["refund_pending","pending","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum, r) => sum + Number(r.amount || 0), 0))}</b></div>`}</div>${walletChartMarkup}${!pro ? `<section class="v169-wallet-client-summary"><div><span>Total de pagamentos confirmados</span><b>${walletDisplay(clientPaid)}</b></div><div><span>Reembolsos solicitados ou concluídos</span><b>${walletDisplay(refund)}</b></div></section><section class="panel v173-refund-panel"><div><h2>Reembolsos dos serviços</h2><p class="muted">Acompanhe solicitações enviadas ao Asaas. Um pedido só aparece como reembolsado quando o provedor confirma a devolução.</p></div>${walletBusy ? '<p class="muted" role="status">Carregando solicitações de reembolso…</p>' : walletRefundRequests.length ? walletRefundRequests.map((r)=>{const labels={reserved:"Reserva registrada",submitted:"Solicitação enviada",pending:"Aguardando processamento",in_progress:"Em processamento pelo Asaas",bank_slip_action_required:"Aguardando dados bancários do cliente",unknown:"Resultado inconclusivo — conciliação necessária",done:"Reembolso confirmado",partial:"Reembolso parcial confirmado",failed:"Estorno não concluído",cancelled:"Solicitação cancelada",review_required:"Em análise financeira"};return `<article class="v134-ledger-row"><div class="v134-ledger-symbol">↩</div><div class="v134-ledger-info"><b>${esc134(r.service || "Serviço")} · #${esc134(String(r.order_id||"").slice(0,8))}</b><small>${esc134(r.billing_type||"Pagamento")} · ${esc134(r.created_at?new Date(r.created_at).toLocaleString("pt-BR", { timeZone: window.FECHOU_DISPLAY_TZ || "America/Sao_Paulo" }):"Data não informada")}</small><span class="v134-status">${esc134(labels[String(r.status||"").toLowerCase()]||prettyStatus(r.status))}</span>${r.reason?`<small>Motivo: ${esc134(r.reason)}</small>`:""}${r.request_url?`<small><a href="${esc134(r.request_url)}" target="_blank" rel="noopener noreferrer">Preencher dados para reembolso no Asaas</a></small>`:""}${r.receipt_url?`<small><a href="${esc134(r.receipt_url)}" target="_blank" rel="noopener noreferrer">Ver comprovante do reembolso</a></small>`:""}</div><b>${money134((Number(r.provider_summary?.refunded_value||0)+Number(r.provider_summary?.pending_value||0))||r.amount)}</b></article>`;}).join("") : (walletRefundError ? '<p class="notice" role="alert">Não foi possível carregar as solicitações de reembolso. Atualize a carteira para consultar novamente.</p>' : '<p class="muted">Nenhuma solicitação de reembolso registrada.</p>')}</section>` : `<details class="v178-pro-wallet-details"><summary>Resumo complementar de valores <span aria-hidden="true">⌄</span></summary><div class="v178-pro-wallet-details-body"><section class="v169-wallet-pro-summary"><div><span>Aguardando liberação</span><b>${walletDisplay(awaitingPayout)}</b></div><div><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div><span>Disponível para saque</span><b>${money134(0)}</b><small>Não há saldo de saque individual confirmado nesta carteira.</small></div></section></div></details>`}<details class="v134-wallet-flow v134-wallet-collapse"><summary class="v134-wallet-collapse-head"><span class="v134-wallet-flow-title"><span>Acompanhamento dos valores</span><small>Etapas da movimentação</small></span></summary><div class="v134-wallet-collapse-body"><div class="v134-wallet-flow-steps"><div class="v134-wallet-flow-step"><i>1</i><b>Pagamento</b><small>Registro confirmado</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>2</i><b>Conclusão</b><small>Serviço e evidências</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>3</i><b>Liberação</b><small>Após validação</small></div></div><p>Os valores apresentados correspondem aos lançamentos registrados no extrato. A liberação ou o reembolso depende da confirmação da conclusão, de eventual análise e do processamento pelo meio de pagamento.</p></div></details>${
+          return `<section class="v134-wallet"><section class="v240-wallet-hero" aria-label="Resumo da carteira"><div class="v240-wallet-hero-head"><span class="v240-wallet-kicker">FECHOU <i>·</i> CARTEIRA E EXTRATO</span><button type="button" class="v240-wallet-mark" data-r19-wallet-help aria-label="Entender os valores da carteira" aria-expanded="false">◈</button></div><div class="v240-wallet-label">${pro ? "Disponível para solicitar repasse" : "Pagamentos registrados"}</div><div class="v240-wallet-value">${walletDisplay(pro ? payoutReadyToRequestRows.reduce((sum, r) => sum + Number(r.amount || 0), 0) : clientPaid)}</div><div class="v240-wallet-foot"><span class="v240-wallet-dot"></span>${pro ? "Valores liberados que ainda não possuem solicitação ativa" : "Total dos pagamentos vinculados às suas contratações"}</div><details class="v240-wallet-explainer"><summary>Como este valor funciona</summary><p>${pro ? "Este valor mostra o que já foi liberado para solicitar repasse; ainda não significa dinheiro recebido na sua conta. Os pagamentos em “Pendente de conclusão do serviço” continuam reservados e ainda não estão disponíveis para você. A liberação depende da execução do serviço, da aprovação do cliente e das verificações da contratação. Depois, solicite o repasse: ele só aparece como transferido após a confirmação do meio de pagamento." : "Este total reúne os pagamentos confirmados dos seus serviços. Enquanto o valor estiver em “Guardado na carteira”, ele ainda não foi repassado ao profissional. Se precisar cancelar, abra o serviço e solicite o cancelamento e o reembolso. A solicitação será analisada conforme o contrato e a execução do serviço. A devolução aparece aqui após a confirmação do meio de pagamento."}</p></details></section><div class="v134-wallet-stats v176-wallet-stats ${pro ?"v178-pro-wallet-stats" : "v178-client-wallet-stats"}">${pro ? `<div class="v134-wallet-stat"><span>Pendente de conclusão do serviço</span><b>${walletDisplay(Math.max(0, awaitingPayout))}</b></div><div class="v134-wallet-stat"><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div class="v134-wallet-stat"><span>Em análise / transferência</span><b>${walletDisplay(activePayoutRequests.reduce((sum, r) => sum + Number(r.amount || r.requested_amount || 0), 0))}</b></div><div class="v134-wallet-stat"><span>Transferidos</span><b>${walletDisplay(released)}</b></div>` : `<div class="v134-wallet-stat"><span>Guardado na carteira</span><b class="fechou-green">${walletDisplay(Math.max(0, held))}</b></div><div class="v134-wallet-stat"><span>Reembolsos</span><b>${walletDisplay(refund)}</b></div><div class="v134-wallet-stat"><span>Movimentações</span><b>${walletBusy || walletLoadError ? "—" : rows.length}</b></div><div class="v134-wallet-stat"><span>Reembolsos em análise</span><b>${walletDisplay(walletRefundRequests.length ? walletRefundRequests.filter((r) => ["reserved","submitted","pending","in_progress","bank_slip_action_required","unknown","review_required","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum,r) => sum + Number(r.provider_summary?.pending_value ?? r.amount ?? 0),0) : rows.filter((r) => r.entry_type === "refund" && ["refund_pending","pending","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum, r) => sum + Number(r.amount || 0), 0))}</b></div>`}</div>${walletChartMarkup}${!pro ? `<section class="v169-wallet-client-summary"><div><span>Total de pagamentos confirmados</span><b>${walletDisplay(clientPaid)}</b></div><div><span>Reembolsos solicitados ou concluídos</span><b>${walletDisplay(refund)}</b></div></section><section class="panel v173-refund-panel"><div><h2>Reembolsos dos serviços</h2><p class="muted">Acompanhe solicitações enviadas ao Asaas. Um pedido só aparece como reembolsado quando o provedor confirma a devolução.</p></div>${walletBusy ? '<p class="muted" role="status">Carregando solicitações de reembolso…</p>' : walletRefundRequests.length ? walletRefundRequests.map((r)=>{const labels={reserved:"Reserva registrada",submitted:"Solicitação enviada",pending:"Aguardando processamento",in_progress:"Em processamento pelo Asaas",bank_slip_action_required:"Aguardando dados bancários do cliente",unknown:"Resultado inconclusivo — conciliação necessária",done:"Reembolso confirmado",partial:"Reembolso parcial confirmado",failed:"Estorno não concluído",cancelled:"Solicitação cancelada",review_required:"Em análise financeira"};return `<article class="fechou-r2-refund-item"><div class="fechou-r2-refund-main"><b>${esc134(r.service || "Serviço")} · #${esc134(String(r.order_id||"").slice(0,8))}</b><small>${esc134(r.billing_type||"Pagamento")} · ${esc134(r.created_at?new Date(r.created_at).toLocaleString("pt-BR", { timeZone: window.FECHOU_DISPLAY_TZ || "America/Sao_Paulo" }):"Data não informada")}</small><span class="fechou-r2-refund-status">${esc134(labels[String(r.status||"").toLowerCase()]||prettyStatus(r.status))}</span>${r.reason?`<small>Motivo: ${esc134(r.reason)}</small>`:""}${r.request_url?`<small><a href="${esc134(r.request_url)}" target="_blank" rel="noopener noreferrer">Preencher dados para reembolso no Asaas</a></small>`:""}${r.receipt_url?`<small><a href="${esc134(r.receipt_url)}" target="_blank" rel="noopener noreferrer">Ver comprovante do reembolso</a></small>`:""}</div><div class="fechou-r2-refund-total"><b>${money134((Number(r.provider_summary?.refunded_value||0)+Number(r.provider_summary?.pending_value||0))||r.amount)}</b></div>${["done","refunded","partial","partially_refunded"].includes(String(r.status||"").toLowerCase()) ? '<p class="fechou-r2-refund-guidance">Estorno confirmado pelo Asaas. Em pagamentos com cartão, o crédito pode levar algum tempo para aparecer na fatura, conforme o banco emissor.</p>' : ""}</article>`;}).join("") : (walletRefundError ? '<p class="notice" role="alert">Não foi possível carregar as solicitações de reembolso. Atualize a carteira para consultar novamente.</p>' : '<p class="muted">Nenhuma solicitação de reembolso registrada.</p>')}</section>` : `<details class="v178-pro-wallet-details"><summary>Resumo complementar de valores <span aria-hidden="true">⌄</span></summary><div class="v178-pro-wallet-details-body"><section class="v169-wallet-pro-summary"><div><span>Aguardando liberação</span><b>${walletDisplay(awaitingPayout)}</b></div><div><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div><span>Disponível para saque</span><b>${money134(0)}</b><small>Não há saldo de saque individual confirmado nesta carteira.</small></div></section></div></details>`}<details class="v134-wallet-flow v134-wallet-collapse"><summary class="v134-wallet-collapse-head"><span class="v134-wallet-flow-title"><span>Acompanhamento dos valores</span><small>Etapas da movimentação</small></span></summary><div class="v134-wallet-collapse-body"><div class="v134-wallet-flow-steps"><div class="v134-wallet-flow-step"><i>1</i><b>Pagamento</b><small>Registro confirmado</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>2</i><b>Conclusão</b><small>Serviço e evidências</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>3</i><b>Liberação</b><small>Após validação</small></div></div><p>Os valores apresentados correspondem aos lançamentos registrados no extrato. A liberação ou o reembolso depende da confirmação da conclusão, de eventual análise e do processamento pelo meio de pagamento.</p></div></details>${
             pro
               ? `<section class="panel"><div class="row between"><div><h2>Recebimento por Pix</h2><p class="muted">Cadastre a chave Pix que receberá os repasses dos serviços, quando a transferência estiver autorizada e processada.</p></div><button type="button" class="btn secondary" data-v134-open-pix>${
                   payoutFormOpen ? "Fechar" : (pixProfile ? "Alterar chave Pix" : "Configurar chave Pix")
@@ -44164,8 +44202,7 @@ html body #app .v335-history-item .v335-status-chip.is-no:not(#x){background:#ef
 html body #app .v173-refund-panel:not(#x){background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;margin:0!important;max-width:100%!important;box-sizing:border-box!important}
 html body #app .v173-refund-panel:not(#x)>div>h2{display:none!important}
 html body #app .v173-refund-panel:not(#x)>div>p{font-size:12px!important;margin:0 0 6px!important;padding:10px 14px 0!important}
-html body #app .v173-refund-panel:not(#x) .v134-ledger-row:not(.v335-history-item){display:grid!important;grid-template-columns:30px minmax(0,1fr) max-content!important;gap:8px!important;align-items:start!important;padding:12px 8px!important}
-html body #app .v173-refund-panel:not(#x) .v134-ledger-row>b{white-space:nowrap}
+/* A apresentação antiga com 3 colunas dos reembolsos foi removida: o renderer atual usa fechou-r2-refund-item. */
 </style>
 <script id="fechou-fix-r11-js">
 /* R11 — 7.2: mensagens técnicas (servidor, banco, API, RLS...) viram texto simples para o usuário */
@@ -44455,6 +44492,84 @@ html body #app button:focus-visible,html body .fechou-pop button:focus-visible,h
 #app button.btn.secondary.fechou-r21-apple-auth:focus-visible{outline:2px solid #f3ad49!important;outline-offset:2px!important}
 #app button.btn.secondary.fechou-r21-apple-auth:disabled{opacity:.58!important;cursor:wait!important}
 #app button.btn.secondary.fechou-r21-apple-auth svg{display:block!important;width:19px!important;height:19px!important;flex:none!important}
+</style>
+<!-- FECHOU CORREÇÃO 02: controles, faixa de preços, carteira -->
+<style id="fechou-correcao-02-css">
+/* Campos: mesmo sinal visual do campo de descrição do serviço, sem criar camadas sobre o formulário */
+#app .field :is(input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea),
+#v121ChatOverlay :is(textarea,input[type="text"],input:not([type])) {
+ box-sizing:border-box!important;min-width:0!important;width:100%;
+ border:1.5px solid #426990!important;border-radius:13px!important;
+ background-color:#0c1828!important;color:#eef5ff!important;
+ box-shadow:inset 0 0 0 1px rgba(104,157,211,.13)!important;
+ transition:border-color .16s ease,box-shadow .16s ease,background-color .16s ease;
+}
+#app .field :is(input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea):focus,
+#app .field :is(input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea):focus-visible,
+#v121ChatOverlay :is(textarea,input[type="text"],input:not([type])):focus,
+#v121ChatOverlay :is(textarea,input[type="text"],input:not([type])):focus-visible {
+ outline:none!important;border-color:#f5a348!important;background-color:#0c192b!important;
+ box-shadow:0 0 0 3px rgba(241,153,56,.23),0 0 18px rgba(241,153,56,.20),inset 0 0 0 1px rgba(248,181,93,.32)!important;
+}
+#app .field select:not([multiple]) {
+ appearance:none;-webkit-appearance:none;cursor:pointer;
+ min-height:46px!important;padding:11px 43px 11px 13px!important;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23a6c7ef' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")!important;
+ background-repeat:no-repeat!important;background-position:right 14px center!important;background-size:18px!important;
+}
+#app .field select:not([multiple]):disabled {cursor:not-allowed;opacity:.58}
+#app .field input::placeholder,#app .field textarea::placeholder,#v121ChatOverlay textarea::placeholder {
+ color:#a6bbd0!important;opacity:1;
+}
+#app .field :is(input,textarea,select):focus-visible,#v121ChatOverlay :is(textarea,input):focus-visible {outline-offset:1px}
+/* Refund widget rebuilt as a single, readable full-width row; no icons or narrow 3-column grid */
+html body #app .v173-refund-panel .fechou-r2-refund-item {
+ display:block!important;box-sizing:border-box;width:100%!important;min-width:0!important;
+ padding:14px 12px!important;margin:8px 0!important;border-radius:12px;
+ border:1px solid #344f68!important;background:#102336!important;
+ color:#eaf3fd!important;white-space:normal!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-main {
+ display:block!important;width:100%!important;min-width:0!important;
+ white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-main>b {
+ display:block!important;width:100%!important;min-width:0!important;
+ font-size:14px!important;line-height:1.45!important;color:#fff!important;
+ white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-main>small {
+ display:block!important;max-width:100%!important;margin:5px 0!important;
+ font-size:12px!important;line-height:1.55!important;overflow-wrap:break-word!important;
+ white-space:normal!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-status {
+ display:inline-block!important;max-width:100%!important;margin:7px 0!important;
+ padding:6px 9px!important;background:#253e56!important;border:1px solid #476178!important;
+ border-radius:9px!important;color:#ffe0ad!important;font-size:12px!important;font-weight:700!important;
+ line-height:1.35!important;white-space:normal!important;overflow-wrap:break-word!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-total {
+ display:flex!important;width:100%!important;min-width:0!important;gap:8px!important;
+ justify-content:space-between!important;align-items:center!important;margin-top:10px!important;
+ padding-top:10px!important;border-top:1px solid #395069!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-total::before {
+ content:"Valor do reembolso";color:#b5c6d8;font-size:12px;line-height:1.4;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-total>b {
+ display:block!important;flex:0 0 auto!important;color:#f2f7ff!important;
+ font-size:15px!important;line-height:1.4!important;white-space:nowrap!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-guidance {
+ display:block!important;margin:10px 0 0!important;color:#b8c8d8!important;font-size:12px!important;
+ line-height:1.5!important;white-space:normal!important;overflow-wrap:break-word!important;
+}
+#app #v58-price-result .fechou-r2-price-breakdown .total {
+ display:flex;gap:9px;align-items:center;justify-content:space-between;
+ padding:8px 0;flex-wrap:wrap;line-height:1.4;
+}
+#app #v58-price-result .fechou-r2-price-breakdown .total>b {color:#fff;font-size:14px;white-space:nowrap}
 </style>
 <script id="fechou-r21-apple-oauth">
 (function(){
