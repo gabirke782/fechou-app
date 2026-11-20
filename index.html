@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-fechou-revision="R32-2026-11-18-retirada-fiscal-visual" data-fechou-build="R48-CORE-CONSOLIDADO-20261119" data-fechou-version="1.0.17" lang="pt-BR">
+<html data-fechou-correction="06-isolada" data-fechou-revision="R32-2026-11-18-retirada-fiscal-visual" data-fechou-build="R48-CORE-CONSOLIDADO-20261119" data-fechou-version="1.0.17" lang="pt-BR">
 <head>
 <!-- R47: warm TLS/DNS connections while HTML/CSS is parsed. Preserve exact SDK version. -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -4877,6 +4877,10 @@ function renderServiceRecord(o, archive = false) {
               )}" placeholder="Ex.: João da Silva">`,
               true
             )}${field(
+              "Tipo de profissional",
+              `<select data-input="proType" aria-label="Tipo de profissional"><option value="Pessoa física" ${state.proType !== "Empresa" ? "selected" : ""}>Pessoa física</option><option value="Empresa" ${state.proType === "Empresa" ? "selected" : ""}>Empresa</option></select>`,
+              true
+            )}${field(
               "Quais profissões/áreas você atende?",
               `<div class="form">${Object.keys(CATS)
                 .map(
@@ -6129,6 +6133,7 @@ function renderServiceRecord(o, archive = false) {
             proCourses: ["root", "proCourses"],
             proDescription: ["root", "proDescription"],
             proName: ["root", "proName"],
+            proType: ["root", "proType"],
             proRate: ["root", "proRate"],
           };
           if (map[k]) {
@@ -7456,6 +7461,7 @@ function renderServiceRecord(o, archive = false) {
             } catch (e) {}
             if (ewRoleUi(data.role) === "Profissional") {
               state.proName = data.full_name || "";
+              state.proType = extra.type === "Empresa" ? "Empresa" : "Pessoa física";
               state.proPhone = data.phone || "";
               state.proCity = extra.city || state.proCity;
               state.proDescription = extra.description || state.proDescription;
@@ -7645,9 +7651,16 @@ function renderServiceRecord(o, archive = false) {
           }
           if (profile) {
             // Login válido com perfil existente: sair da tela de autenticação e abrir o painel correspondente.
-            const destination = "home";
-            toast("Login realizado. Bem-vindo ao aplicativo.");
+            const destination = state.currentRole === "Profissional" ? "professionaljobs" : "home";
+            state.page = destination;
+            state.authMode = "login";
+            document.getElementById("exylonWelcome")?.classList.remove("show");
             go(destination);
+            if (state.page !== destination || document.querySelector('#app [data-act="authLogin"]')) {
+              state.page = destination;
+              render();
+            }
+            toast("Login realizado. Bem-vindo ao aplicativo.");
             return;
           }
           // A conta pode existir no Auth sem ainda ter uma linha na tabela profiles.
@@ -7736,6 +7749,7 @@ function renderServiceRecord(o, archive = false) {
             uiRole === "Profissional"
               ? {
                   city: state.proCity || "",
+                  type: state.proType === "Empresa" ? "Empresa" : "Pessoa física",
                   description: state.proDescription || "",
                   experience: state.proExperience || "",
                   courses: state.proCourses || "",
@@ -8037,7 +8051,7 @@ function renderServiceRecord(o, archive = false) {
               await ewLoadProfile(data.session.user, false);
               await window.ewSyncOrders();
               if (state.currentRole) {
-                state.page = "home";
+                state.page = state.currentRole === "Profissional" ? "professionaljobs" : "home";
                 try {
                   document
                     .getElementById("exylonWelcome")
@@ -14025,28 +14039,44 @@ function renderServiceRecord(o, archive = false) {
           updateDiscountUI();
         }
         function copyAnalysis(source, result) {
-          if (!source || !result) return;
-          // Render the AI-generated regional analysis only once; preserve the AI logic itself.
-          result.innerHTML = source.innerHTML;
-          source.innerHTML = "";
+          if (!result) return;
+          const html = source && source.innerHTML ? source.innerHTML.trim() : "";
+          if (html && !/v56-spinner/.test(html)) result.innerHTML = html;
+          else result.replaceChildren();
+          if (source) source.replaceChildren();
+          // O cálculo foi validado pelo motor: apenas recupera sua apresentação, sem inventar preços.
+          const calc = state.calculated || {};
+          const low = Number(calc.low), high = Number(calc.high);
+          const avg = Number(calc.total);
+          if (low > 0 && high >= low && !result.textContent.includes("Mão de obra — baixa")) {
+            const section = document.createElement("section");
+            section.className = "v56-estimate fechou-r2-price-breakdown";
+            const heading = document.createElement("b");
+            heading.textContent = "Faixa estimada de mão de obra na região";
+            section.appendChild(heading);
+            const currency = (v) => new Intl.NumberFormat("pt-BR", {style:"currency",currency:"BRL"}).format(v);
+            [["Mão de obra — baixa",low],["Mão de obra — média",avg>0?avg:(low+high)/2],["Mão de obra — alta",high]].forEach(([label,value])=>{
+              const line=document.createElement("div");line.className="total";
+              const title=document.createElement("span");title.textContent=label;
+              const number=document.createElement("b");number.textContent=currency(value);
+              line.append(title,number);section.appendChild(line);
+            });
+            result.prepend(section);
+          }
+          if (!result.textContent.trim()) {
+            const message=document.createElement("div");
+            message.className="v56-estimate";message.textContent="A análise não retornou os valores necessários. Tente analisar novamente; nenhum preço foi preenchido automaticamente.";
+            result.appendChild(message);
+          }
           result.querySelectorAll("*").forEach((el) => {
             if (el.children.length === 0 && el.textContent)
               el.textContent = textFix(el.textContent)
-                .replace(
-                  "Faixa preliminar para a região",
-                  "Faixa estimada de preço na região"
-                )
-                .replace(
-                  "Análise de preço concluída. Confira a faixa estimada antes de publicar.",
-                  "Análise de preço concluída. Confira a faixa, ajuste o desconto e publique o pedido."
-                )
-                .replace(
-                  "Você pode publicar o pedido mesmo assim.",
-                  "A publicação só será liberada após a análise de preço regional."
-                );
+                .replace("Faixa preliminar para a região", "Faixa estimada de preço na região")
+                .replace("Análise de preço concluída. Confira a faixa estimada antes de publicar.", "Análise de preço concluída. Confira a faixa, ajuste o desconto e publique o pedido.")
+                .replace("Você pode publicar o pedido mesmo assim.", "A publicação só será liberada após a análise de preço regional.");
           });
         }
-        function showAIDiagnostic(error, stage) {
+                function showAIDiagnostic(error, stage) {
           console.error("FECHOU análise", stage || "Análise regional", error);
           const old = document.getElementById("ew-ai-diagnostic");
           old?.remove();
@@ -14155,6 +14185,28 @@ function renderServiceRecord(o, archive = false) {
               }
               toastSafe("Não há faixa regional confiável para publicar. Complete as informações e tente novamente.");
               return;
+            }
+            if (state.includeMaterialsEstimate) {
+              const mat = state.materialsEstimateData && typeof state.materialsEstimateData === "object" ? state.materialsEstimateData : {};
+              const n = (value) => {
+                if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : NaN;
+                const str=String(value||"").replace(/R\$|BRL|\s/gi,"").replace(/[^0-9,.-]/g,"");
+                const decimal=str.includes(",") && str.includes(".") ? str.replace(/\./g,"").replace(",",".") : str.replace(",",".");
+                const result=Number(decimal);return Number.isFinite(result)&&result>0?result:NaN;
+              };
+              const amount=[mat.average,mat.avg,mat.mean,mat.total,mat.min,mat.low,mat.max,mat.high,mat.estimated_average,mat.estimatedAverage].some(v=>Number.isFinite(n(v)));
+              if (!amount) {
+                state.priceAnalysisDone = false; state.priceAnalysisAt = "";
+                const action = q("#v58-final-actions");if(action)action.style.display="none";
+                const discount = q("#v58-discount-control");if(discount)discount.style.display="none";
+                if (result) {
+                  const warn=document.createElement("div");warn.className="v56-estimate";
+                  warn.setAttribute("role","status");warn.textContent="A mão de obra foi calculada, mas faltou o valor da estimativa de materiais solicitado. A análise não está completa: tente novamente antes de publicar.";
+                  result.append(warn);
+                }
+                toastSafe("Estimativa de materiais não retornada. Refaça a análise antes de publicar.");
+                return;
+              }
             }
             state.priceAnalysisDone = true;
             state.priceAnalysisAt = new Date().toISOString();
@@ -15923,7 +15975,7 @@ function renderServiceRecord(o, archive = false) {
                   ? "Hoje"
                   : "Normal";
               html +=
-                '<div class="v56-estimate v56-accordion labor-accordion"><details><summary class="v56-accordion-summary">Faixa estimada de mão de obra na região</summary><div class="v56-accordion-content"><div style="display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin-top:10px"><div class="total"><span>Mão de obra — baixa</span><b>' +
+                '<div class="v56-estimate v56-accordion labor-accordion"><details open><summary class="v56-accordion-summary">Faixa estimada de mão de obra na região</summary><div class="v56-accordion-content"><div style="display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin-top:10px"><div class="total"><span>Mão de obra — baixa</span><b>' +
                 fmt(low) +
                 '</b></div><div class="total"><span>Mão de obra — média</span><b>' +
                 fmt(avg) +
@@ -15964,7 +16016,7 @@ function renderServiceRecord(o, archive = false) {
               const mp = materialEstimate || {};
               const mPick = (...vals) => {
                 for (const v of vals) {
-                  const n = Number(v);
+                  const n = pick(v);
                   if (Number.isFinite(n) && n > 0) return n;
                 }
                 return NaN;
@@ -16004,7 +16056,7 @@ function renderServiceRecord(o, archive = false) {
                 ? mp.breakdown
                 : [];
               html +=
-                '<div class="v56-estimate v56-accordion materials-accordion"><details><summary class="v56-accordion-summary">Estimativa de materiais (separada)</summary><div class="v56-accordion-content">';
+                '<div class="v56-estimate v56-accordion materials-accordion"><details open><summary class="v56-accordion-summary">Estimativa de materiais (separada)</summary><div class="v56-accordion-content">';
               if (Number.isFinite(mAvg)) {
                 html +=
                   '<div class="total"><span>Materiais — estimativa média</span><b>' +
@@ -22941,7 +22993,9 @@ function renderServiceRecord(o, archive = false) {
                 );
               if (pe) console.warn("Perfil ausente após login", pe);
             }
-            state.page = "home";
+            state.page = state.currentRole === "Profissional" ? "professionaljobs" : "home";
+            state.authMode = "login";
+            document.getElementById("exylonWelcome")?.classList.remove("show");
             render();
             safeToast("Login realizado com sucesso. Bem-vindo à nossa rede!");
           } catch (err) {
@@ -24130,6 +24184,37 @@ function renderServiceRecord(o, archive = false) {
             })();
           });
         }
+        // Correção 04: cliente decide sobre contrato OPCIONAL solicitado na proposta direta.
+        document.addEventListener("click", async function(event) {
+          const button = event.target?.closest?.("[data-qa4-optional-contract]");
+          if (!button || !button.closest("#v121ChatOverlay")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          if (button.disabled) return;
+          const orderId = String(button.closest("#v121ChatOverlay")?.dataset?.orderId || "");
+          const answer = button.dataset.qa4OptionalContract === "accept";
+          if (!orderId) return safeToast("Não foi possível identificar a contratação.");
+          button.disabled = true;
+          const original = button.textContent;
+          button.textContent = "Registrando resposta…";
+          try {
+            const db = await window.fechouEnsureSupabaseClient();
+            const { data, error } = await db.rpc("fechou_qa4_respond_optional_contract", {
+              p_order_id: orderId, p_accept: answer
+            });
+            if (error) throw error;
+            if (!data?.ok) throw new Error("A resposta não foi confirmada.");
+            await window.ewSyncOrders?.();
+            await window.__fechouOpenChatByOrder?.(orderId);
+            safeToast(answer ? "Contrato autorizado. O profissional foi notificado." : "Contrato recusado. O profissional foi notificado e o serviço pode continuar sem contrato.");
+          } catch (error) {
+            button.disabled = false;
+            button.textContent = original;
+            safeToast(String(error?.message || "Não foi possível registrar a resposta."));
+          }
+        }, true);
+
         function renderChatOverlay() {
           const old = $("#v121ChatOverlay");
           if (!chatOrderId) { old?.remove(); return; }
@@ -24198,12 +24283,19 @@ function renderServiceRecord(o, archive = false) {
           );
           const directRequested = q?.metadata?.generate_contract === true || q?.metadata?.contract_requested === true || q?.metadata?.generate_contract === "yes";
           const directAgreed = modeOf(o) === "direct" && o.metadata?.payment_mode_agreed === "direct";
+          const optionalContractStatus = String(o.metadata?.optional_direct_contract_status || "").toLowerCase();
+          const optionalContractAccepted = optionalContractStatus === "accepted";
+          const directContractVisible = directAgreed && directRequested &&
+            optionalContractStatus !== "declined";
+          const contractEnabled = modeOf(o) !== "direct" || hasContract || directContractVisible;
+          if (!contractEnabled) contractDrawerOpen = false;
           const canGenerate = !client && !!q && String(q.professional_id) === currentUserId && String(selectedId || "") === String(q.id) && !hasContract &&
-            (modeOf(o) === "contract_prepaid" || (directAgreed && directRequested));
+            (modeOf(o) === "contract_prepaid" || (directAgreed && directRequested && optionalContractAccepted));
           const clientSignedNow = (typeof window.fechouClientSigned === "function") ? window.fechouClientSigned(o) : !!(o.contract?.client_signed_at || o.contract?.client_accepted_at);
           const professionalSignedNow = (typeof window.fechouProfessionalSigned === "function") ? window.fechouProfessionalSigned(o) : !!(o.contract?.professional_signed_at || (modeOf(o) !== "contract_prepaid" && o.contract?.professional_accepted_at));
           const accepted = (typeof window.fechouBothSigned === "function") ? window.fechouBothSigned(o) : !!(clientSignedNow && professionalSignedNow);
           const currentPartySigned = client ? clientSignedNow : professionalSignedNow;
+          const fullySignedForDisplay = accepted || window.__fechouIsContractSigned?.(o.id) === true;
           const peerData = client ? (state.v121PartyData?.professional || {}) : (state.v121PartyData?.client || {});
           const otherName = client ? (q?.name || "Profissional") : (peerData.full_name || o.client_name || o.metadata?.client_name || "Cliente");
           const peerLastSeen = peerData.last_seen_at || peerData.lastSeenAt || peerData.last_active_at || peerData.lastActiveAt || null;
@@ -24259,8 +24351,8 @@ function renderServiceRecord(o, archive = false) {
             </div><button class="fc-primary-action" type="button" data-v121-generate-contract>Enviar contrato no chat</button></section>`;
           } else if (hasContract) {
             const prepaidMode = modeOf(o)==="contract_prepaid";
-            const statusMsg = accepted
-              ? "Contrato assinado pelas duas partes."
+            const statusMsg = fullySignedForDisplay
+              ? "Contrato assinado pelas duas partes. Consulte o PDF oficial da Clicksign."
               : currentPartySigned
                 ? (client ? "Sua assinatura foi registrada. Aguardando a assinatura do profissional." : "Sua assinatura foi registrada. Aguardando a assinatura do cliente.")
                 : clientSignedNow
@@ -24268,12 +24360,13 @@ function renderServiceRecord(o, archive = false) {
                   : professionalSignedNow
                     ? "O profissional já assinou. Aguardando a assinatura do cliente."
                     : (prepaidMode ? "Leia o documento e assine com a Clicksign. O aceite interno não substitui a assinatura eletrônica." : "Leia o documento antes de confirmar seu aceite.");
-            const showSign = prepaidMode ? !currentPartySigned : !currentPartySigned && !accepted;
+            const showSign = !fullySignedForDisplay && (prepaidMode ? !currentPartySigned : !currentPartySigned && !accepted);
             const signLabel = prepaidMode ? "Assinar com Clicksign" : "Ler contrato completo e aceitar";
-            const remindBtn = (!client && prepaidMode && !clientSignedNow) ? `<button class="fc-secondary-action" type="button" data-fechou-remind-client>Lembrar cliente</button>` : "";
-            const resendBtn = (prepaidMode && !currentPartySigned) ? `<button class="fc-secondary-action" type="button" data-fechou-resend-sign>Reenviar código de assinatura</button>` : "";
+            const remindBtn = (!fullySignedForDisplay && !client && prepaidMode && !clientSignedNow) ? `<button class="fc-secondary-action" type="button" data-fechou-remind-client>Lembrar cliente</button>` : "";
+            const resendBtn = (!fullySignedForDisplay && prepaidMode && !currentPartySigned) ? `<button class="fc-secondary-action" type="button" data-fechou-resend-sign>Reenviar código de assinatura</button>` : "";
             const payBtn = (client && accepted && prepaidMode && !["approved","received","confirmed","paid"].includes(String(o.payment_status || "").toLowerCase())) ? `<button class="fc-primary-action" type="button" data-v134-pay-contract="${esc121(o.id)}">Pagar serviço pelo aplicativo</button>` : "";
-            contractContent = `<section class="fc-contract-card"><h3>Contrato da contratação</h3><p>${statusMsg}</p><div class="fc-contract-actions">${showSign ? `<button class="fc-primary-action" type="button" data-v121-accept-contract>${signLabel}</button>` : ""}${resendBtn}${remindBtn}<button class="fc-secondary-action" type="button" data-v121-print-contract>Baixar/Imprimir PDF</button>${payBtn}</div></section>`;
+            const signedActions = `<button class="fc-primary-action" type="button" data-fechou-signed-pdf="open">Abrir PDF oficial</button><button class="fc-secondary-action" type="button" data-fechou-signed-pdf="download">Baixar PDF</button><button class="fc-secondary-action" type="button" data-fechou-signed-pdf="print">Imprimir PDF</button>`;
+            contractContent = `<section class="fc-contract-card"><h3>Contrato da contratação</h3><p>${statusMsg}</p><div class="fc-contract-actions">${fullySignedForDisplay && prepaidMode ? signedActions : `${showSign ? `<button class="fc-primary-action" type="button" data-v121-accept-contract>${signLabel}</button>` : ""}${resendBtn}${remindBtn}<button class="fc-secondary-action" type="button" data-v121-print-contract>Baixar/Imprimir PDF</button>`}${payBtn}</div></section>`;
           } else if (directAgreed && client) {
             contractContent = `<section class="fc-contract-card"><h3>Pagamento direto entre as partes</h3><p>Esta contratação utiliza pagamento combinado diretamente entre cliente e profissional. O FECHOU não gera cobrança nem exige assinatura Clicksign nesta modalidade.</p>${directRequested ? `<p>Uma solicitação de formalização já foi registrada anteriormente; consulte o histórico da contratação.</p>` : ""}<button class="fc-secondary-action" type="button" data-v222-release-professional="${esc121(o.id)}">Retirar profissional</button></section>`;
           } else if (directAgreed && !client && directRequested) {
@@ -24334,14 +24427,14 @@ function renderServiceRecord(o, archive = false) {
             <div class="fc-chat-scroll">
               <div class="fc-chat-thread" id="v121ChatMessages" aria-live="polite">${renderedMessages}</div>
               <section class="v134-evidence fc-evidence" ${photosDrawerOpen ? "" : "hidden"}><button type="button" class="fc-photo-close" data-fc-photos-close aria-label="Fechar fotos do serviço">×</button><button type="button" class="v148-fold-head fc-evidence-head" aria-expanded="false"><span><b>Fotos do serviço</b><small>Antes · durante · depois</small></span><span>⌄</span></button><div class="v148-fold-body" hidden><p>Registre pelo menos uma foto em cada etapa (Antes, Durante e Depois). Você pode anexar até cinco por etapa.</p><div class="v134-evidence-actions"><button type="button" data-v134-evidence-button="before">＋ Antes</button><button type="button" data-v134-evidence-button="during">＋ Durante</button><button type="button" data-v134-evidence-button="after">＋ Depois</button><input type="file" accept="image/*" capture="environment" multiple hidden data-v134-evidence-input="1"></div><div class="v134-evidence-grid"></div></div></section>
-              <section class="fc-contract-drawer ${contractDrawerOpen ?"open" : ""}" id="fc-chat-contract-drawer" ${contractDrawerOpen ? "" : "hidden"}><div class="fc-contract-drawer-head"><strong>Contrato e condições</strong><button type="button" data-fc-contract-close aria-label="Fechar painel de contrato">×</button></div><div class="v149-stage-slot">${contractContent}</div></section>
+              <section class="fc-contract-drawer ${contractEnabled && contractDrawerOpen ?"open" : ""}" id="fc-chat-contract-drawer" ${contractEnabled && contractDrawerOpen ? "" : "hidden"}><div class="fc-contract-drawer-head"><strong>Contrato e condições</strong><button type="button" data-fc-contract-close aria-label="Fechar painel de contrato">×</button></div><div class="v149-stage-slot">${contractContent}</div></section>
               <section class="v185-payment-negotiation-slot" aria-label="Negociação de pagamento"></section>
             </div>
             <div class="fc-chat-action-bridge" hidden aria-hidden="true">${waitingClient && client ? `<button type="button" class="btn" data-v134-service-action="approve" data-order-id="${esc121(o.id)}">Aprovar serviço</button><button type="button" class="btn secondary" data-v134-service-action="contest" data-order-id="${esc121(o.id)}">Contestar</button>` : (serviceAction ? `<button type="button" data-v134-service-action="${serviceAction}" data-order-id="${esc121(o.id)}">${esc121(serviceLabel)}</button>` : "")}</div>
             <div class="fc-chat-tools" aria-label="Ferramentas da conversa">
               <button type="button" class="fc-chat-tools-toggle" data-fc-tools-toggle aria-expanded="${expanded}" title="Recolher ou expandir ferramentas" aria-label="${expanded ? "Recolher" : "Expandir"} ferramentas"><span>${expanded ? "⌃" : "⌄"}</span></button>
               <div class="fc-chat-tools-grid ${expanded ?"" : "collapsed"}">
-                <button type="button" data-fc-tool="contract"><span aria-hidden="true">${window.fechouChatIcon("contract")}</span>Contrato</button>
+                <button type="button" data-fc-tool="contract" ${contractEnabled ? "" : "disabled aria-disabled=\"true\" title=\"Sem contrato nesta contratação\" style=\"opacity:.32;cursor:not-allowed\""}><span aria-hidden="true">${window.fechouChatIcon("contract")}</span>Contrato</button>
                 <button type="button" data-fc-tool="service" class="fc-tool-service" ${serviceAction ? "" : "disabled"}><span aria-hidden="true">${window.fechouChatIcon(serviceAction || "start")}</span>${esc121(serviceLabel)}</button>
                 <button type="button" data-fc-tool="attach"><span aria-hidden="true">${window.fechouChatIcon("attach")}</span>Anexar arquivo</button>
                 <button type="button" data-fc-tool="attachments"><span aria-hidden="true">${window.fechouChatIcon("attachments")}</span>Ver anexos</button>
@@ -24357,6 +24450,102 @@ function renderServiceRecord(o, archive = false) {
 
           if (minimized) overlay.classList.add("fc-chat-minimized");
           if (old && sameConversation) {
+            // C05: reconciliar apenas áreas alteradas; não desmontar a janela inteira
+            // em notificações Realtime, atualização de contrato ou foco na conversa.
+            // Preserva assinatura Clicksign, textarea, rolagem e componentes de terceiros.
+            const liveWindow = old.querySelector(':scope > .fc-chat-window');
+            const draftWindow = overlay.querySelector(':scope > .fc-chat-window');
+            if (liveWindow && draftWindow) {
+              // Update root metadata without detaching its children.
+              for (const attr of Array.from(overlay.attributes)) {
+                if (old.getAttribute(attr.name) !== attr.value) old.setAttribute(attr.name, attr.value);
+              }
+              const syncText = (sel) => {
+                const from = draftWindow.querySelector(sel), to = liveWindow.querySelector(sel);
+                if (from && to && to.textContent !== from.textContent) to.textContent = from.textContent;
+              };
+              syncText('.fc-chat-heading h2');
+              syncText('.fc-chat-heading p');
+              syncText('.fc-chat-heading small');
+              syncText('.fc-chat-avatar');
+              const nowPresence = draftWindow.querySelector('.fc-chat-heading p');
+              const oldPresence = liveWindow.querySelector('.fc-chat-heading p');
+              if (nowPresence && oldPresence && oldPresence.className !== nowPresence.className) oldPresence.className = nowPresence.className;
+              const oldInbox = liveWindow.querySelector('#fcChatInbox'), newInbox = draftWindow.querySelector('#fcChatInbox');
+              if (oldInbox && newInbox) {
+                oldInbox.hidden = newInbox.hidden;
+                oldInbox.className = newInbox.className;
+                const oldRows = oldInbox.querySelector('#fcChatInboxRows'), newRows = newInbox.querySelector('#fcChatInboxRows');
+                if (oldRows && newRows && oldRows.innerHTML !== newRows.innerHTML) oldRows.innerHTML = newRows.innerHTML;
+                const oldCount=oldInbox.querySelector('.fc-inbox-heading span'), newCount=newInbox.querySelector('.fc-inbox-heading span');
+                if(oldCount && newCount && oldCount.textContent!==newCount.textContent) oldCount.textContent=newCount.textContent;
+                const oldTabs=oldInbox.querySelectorAll('[data-fc-inbox-filter]'), newTabs=newInbox.querySelectorAll('[data-fc-inbox-filter]');
+                oldTabs.forEach((tab,i)=>{if(newTabs[i] && tab.className!==newTabs[i].className) tab.className=newTabs[i].className;});
+              }
+              const oldMessages=liveWindow.querySelector('#v121ChatMessages'), newMessages=draftWindow.querySelector('#v121ChatMessages');
+              if (oldMessages && newMessages && oldMessages.innerHTML !== newMessages.innerHTML) {
+                // The empty-state helper owns the placeholder. Never oscillate between
+                // the base placeholder and the R335 placeholder on each refresh.
+                if (!(visibleMessages.length===0 && oldMessages.querySelector('.v335-chat-empty'))) {
+                  oldMessages.innerHTML = newMessages.innerHTML;
+                }
+              }
+              const oldDrawer=liveWindow.querySelector('#fc-chat-contract-drawer'), newDrawer=draftWindow.querySelector('#fc-chat-contract-drawer');
+              if(oldDrawer && newDrawer) {
+                oldDrawer.hidden=newDrawer.hidden;
+                oldDrawer.classList.toggle('open',newDrawer.classList.contains('open'));
+                const oldStage=oldDrawer.querySelector('.v149-stage-slot'), newStage=newDrawer.querySelector('.v149-stage-slot');
+                if(oldStage && newStage) {
+                  const sourceMarkup=newStage.innerHTML;
+                  if (oldStage.dataset.fechouContractMarkup!==sourceMarkup) {
+                    // Don't destroy a PDF viewer or a partially filled contract form.
+                    const activeForm=oldStage.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+                    const showingPdf=!!oldStage.querySelector('#fechou-contract-view-inline');
+                    if (!activeForm && !showingPdf) oldStage.innerHTML=sourceMarkup;
+                    oldStage.dataset.fechouContractMarkup=sourceMarkup;
+                  }
+                }
+              }
+              const oldEvidence=liveWindow.querySelector('section.fc-evidence'), newEvidence=draftWindow.querySelector('section.fc-evidence');
+              if(oldEvidence && newEvidence) {
+                if(oldEvidence.hidden!==newEvidence.hidden) oldEvidence.hidden=newEvidence.hidden;
+                if(!newEvidence.hidden && photosDrawerOpen) {
+                  const photosBody=oldEvidence.querySelector('.v148-fold-body');
+                  const photosHead=oldEvidence.querySelector('.v148-fold-head');
+                  if(photosBody) photosBody.hidden=false;
+                  if(photosHead) photosHead.setAttribute('aria-expanded','true');
+                }
+              }
+              const oldToggle=liveWindow.querySelector('[data-fc-tools-toggle]'), newToggle=draftWindow.querySelector('[data-fc-tools-toggle]');
+              const oldGrid=liveWindow.querySelector('.fc-chat-tools-grid'),newGrid=draftWindow.querySelector('.fc-chat-tools-grid');
+              if(oldToggle && newToggle) {
+                oldToggle.setAttribute('aria-expanded',newToggle.getAttribute('aria-expanded'));
+                oldToggle.setAttribute('aria-label',newToggle.getAttribute('aria-label'));
+              }
+              if(oldGrid && newGrid) oldGrid.classList.toggle('collapsed',newGrid.classList.contains('collapsed'));
+              const oldInboxToggle=liveWindow.querySelector('[data-fc-inbox-toggle]'), newInboxToggle=draftWindow.querySelector('[data-fc-inbox-toggle]');
+              if(oldInboxToggle && newInboxToggle) {
+                oldInboxToggle.classList.toggle('selected',newInboxToggle.classList.contains('selected'));
+                oldInboxToggle.setAttribute('aria-expanded',newInboxToggle.getAttribute('aria-expanded'));
+              }
+              const oldBridge=liveWindow.querySelector('.fc-chat-action-bridge'), newBridge=draftWindow.querySelector('.fc-chat-action-bridge');
+              if(oldBridge && newBridge && oldBridge.innerHTML!==newBridge.innerHTML) oldBridge.innerHTML=newBridge.innerHTML;
+              const oldService=liveWindow.querySelector('[data-fc-tool="service"]'), newService=draftWindow.querySelector('[data-fc-tool="service"]');
+              if(oldService && newService) {
+                if(oldService.innerHTML!==newService.innerHTML) oldService.innerHTML=newService.innerHTML;
+                oldService.disabled=newService.disabled;
+              }
+              const oldMinimized=liveWindow.querySelector('.fc-chat-minimized-bar span'), newMinimized=draftWindow.querySelector('.fc-chat-minimized-bar span');
+              if(oldMinimized && newMinimized && oldMinimized.textContent!==newMinimized.textContent) oldMinimized.textContent=newMinimized.textContent;
+              overlay=old;
+            } else {
+              // Unexpected legacy markup: fall back to the existing renderer below.
+              old.dataset.fechouC05ReconcileUnavailable='1';
+            }
+          }
+          if (old && sameConversation && !old.dataset.fechouC05ReconcileUnavailable) {
+            // Nothing else should replace children of an unchanged chat.
+          } else if (old && sameConversation) {
             // Reuse the mounted conversation root during same-chat refreshes.
             // Replacing the whole overlay detached the active dialog on every realtime update,
             // causing visible flashes, focus loss and scroll jumps.
@@ -24478,7 +24667,8 @@ function renderServiceRecord(o, archive = false) {
           // Revalida fotos em toda abertura, para refletir troca de avatar e renovar URL temporária.
           fechouChatPhotoCache.delete(String(o.id));
           state.activeOrderId = o.id;
-          state.v121ChatMessages = [];
+          // C05: não apagar a conversa já exibida antes de concluir o refresh assíncrono.
+          if (!sameConversation) state.v121ChatMessages = [];
           state.v121ChatDraft = sameConversation ? unsentDraft : "";
           state.v121ChatPendingKey = null;
           state.v121ChatPendingSignature = null;
@@ -24543,6 +24733,14 @@ function renderServiceRecord(o, archive = false) {
           if (!proposal?.id) throw new Error("Não foi possível identificar a proposta vinculada à conversa.");
           inboxFilter = archived.has(String(first.id)) ? "archived" : "all";
           await openChat(first.id, proposal.id, { showInbox: true });
+          return true;
+        };
+        window.__fechouShowChatContractPanel = function (orderId) {
+          if (!chatOrderId || String(chatOrderId)!==String(orderId||'')) return false;
+          photosDrawerOpen=false;
+          window.__fechouPhotosDrawerOpen=false;
+          contractDrawerOpen=true;
+          renderChatOverlay();
           return true;
         };
         window.__fechouOpenChatByOrder = async function (orderId) {
@@ -26099,7 +26297,21 @@ body #app .fechou-profile-progress>div:first-child b {
             const action = tool.dataset.fcTool;
             if (action === "contract") {
               photosDrawerOpen = false; window.__fechouPhotosDrawerOpen = false;
-              contractDrawerOpen = true; renderChatOverlay(); return;
+              contractDrawerOpen = true;
+              const activeContract = findOrder(chatOrderId);
+              if (activeContract && modeOf(activeContract)==='contract_prepaid' && !window.__fechouIsContractSigned?.(activeContract.id)) {
+                // Avoid displaying a stale "Assinar" button while provider verification is pending.
+                const checkingId=String(activeContract.id);
+                renderChatOverlay();
+                const drawer=document.querySelector('#fc-chat-contract-drawer .v149-stage-slot');
+                if(drawer) drawer.innerHTML='<section class="fc-contract-card"><h3>Contrato da contratação</h3><p>Consultando a assinatura na Clicksign…</p></section>';
+                try {
+                  const st=await window.ewApi('contracts/esign-status',{order_id:checkingId});
+                  if(st?.signature_status==='signed') window.__fechouMarkContractSigned?.(checkingId);
+                }catch(err){console.info('FECHOU: estado da Clicksign indisponível no momento.',err);}
+                if(String(chatOrderId)===checkingId && contractDrawerOpen) renderChatOverlay();
+              } else renderChatOverlay();
+              return;
             }
             if (action === "attach") {
               const hint = $("#v121ChatOverlay .fc-chat-attachment-hint");
@@ -28060,6 +28272,8 @@ body #app .fechou-profile-progress>div:first-child b {
           walletPayoutRequests = [],
           walletRefundRequests = [],
           walletOrderDetails = Object.create(null);
+        let walletSnapshotReady=false;
+        let walletLoadedOwner='';
         function prettyStatus(s) {
           const m = {
             held: "Em reserva / aguardando liberação",
@@ -28168,13 +28382,38 @@ body #app .fechou-profile-progress>div:first-child b {
           const pixStatusLabel = ({pending:"Aguardando conferência",verified:"Chave verificada",blocked:"Chave bloqueada"})[String(pixProfile?.status || "").toLowerCase()] || (pixProfile ? "Situação em conferência" : "Não cadastrada");
           const pixLast4 = String(pixProfile?.pix_key || "").slice(-4);
           const user = currentUser();
+          const seenCompletedRefunds = new Set();
           const rows = walletRows.filter(
             (r) => String(r.user_id) === String(user?.id || "")
-          );
+          ).filter((r) => {
+            // A mesma confirmação recebida por dois caminhos não conta duas vezes no extrato.
+            // Apenas reembolsos integrais com mesma cobrança e valor são consolidados na apresentação.
+            if (r.entry_type !== "refund" || String(r.status).toLowerCase() !== "refunded" || !r.order_id || !r.provider_reference) return true;
+            const k = String(r.order_id) + ":" + String(r.provider_reference) + ":" + Number(r.amount || 0).toFixed(2);
+            if (seenCompletedRefunds.has(k)) return false;
+            seenCompletedRefunds.add(k);return true;
+          });
+          // Valor exibido a partir do histórico já deduplicado; evita somar o mesmo estorno
+          // confirmado duas vezes quando a API antiga ainda retornar registros repetidos.
+          const refundVisibleAmount = (request) => {
+            const status=String(request.status||"").toLowerCase();
+            const provider=request.provider_summary||{};
+            const expected=Number(provider.refunded_value||0)+Number(provider.pending_value||0);
+            const amount=expected>0?expected:Number(request.amount||0);
+            if (!["done","refunded"].includes(status)) return amount;
+            const confirmed=rows.filter(x=>String(x.order_id||"")===String(request.order_id||"") &&
+              x.entry_type==="refund" && String(x.status||"").toLowerCase()==="refunded")
+              .reduce((sum,x)=>sum+Math.max(0,Number(x.amount)||0),0);
+            return confirmed>0 && amount>confirmed ? confirmed : amount;
+          };
           const held = rows
             .filter(
-              (r) =>
-                ["held"].includes(String(r.status || "").toLowerCase()) && ["service_payment", "payout"].includes(String(r.entry_type || ""))
+              (r) => {
+                if(String(r.status||'').toLowerCase()!=='held'||!["service_payment","payout"].includes(String(r.entry_type||'')))return false;
+                if(pro||r.entry_type!=='service_payment')return true;
+                const o=walletOrderDetails[String(r.order_id||'')];
+                return !(o && (o.released_at || ['released','paid','completed','transferred'].includes(String(o.payout_status||'').toLowerCase())));
+              }
             )
             .reduce((a, r) => a + (Number(r.amount) || 0), 0);
           const released = rows
@@ -28187,11 +28426,7 @@ body #app .fechou-profile-progress>div:first-child b {
           const refund = walletRefundRequests.length
             ? walletRefundRequests
                 .filter((r) => !["failed", "cancelled"].includes(String(r.status || "").toLowerCase()))
-                .reduce((a, r) => {
-                  const provider = r.provider_summary && typeof r.provider_summary === "object" ? r.provider_summary : {};
-                  const tracked = Number(provider.refunded_value || 0) + Number(provider.pending_value || 0);
-                  return a + (tracked > 0 ? tracked : Number(r.amount || 0));
-                }, 0)
+                .reduce((a, r) => a + refundVisibleAmount(r), 0)
             : rows
                 .filter((r) => ["refunded", "partially_refunded", "refund_pending"].includes(String(r.status || "").toLowerCase()) && r.entry_type === "refund")
                 .reduce((a, r) => a + Number(r.amount || 0), 0);
@@ -28224,8 +28459,9 @@ body #app .fechou-profile-progress>div:first-child b {
           });
           const walletChartMax=Math.max(1,...walletMonths.map(m=>m.value));
           const walletChartTotal=walletMonths.reduce((sum,m)=>sum+m.value,0);
-          const walletDisplay = amount => (walletBusy || walletLoadError) ? "—" : money134(amount);
-          const walletChartMarkup = walletBusy
+          const initialLoad=walletBusy&&!walletSnapshotReady;
+          const walletDisplay = amount => (initialLoad || walletLoadError) ? "—" : money134(amount);
+          const walletChartMarkup = initialLoad
             ? '<section class="v233-wallet-chart panel" role="status" aria-live="polite"><p>Carregando o resumo financeiro confirmado…</p></section>'
             : walletLoadError
             ? '<section class="v233-wallet-chart panel" role="alert"><p>Resumo indisponível até a carteira ser atualizada.</p></section>'
@@ -28233,12 +28469,23 @@ body #app .fechou-profile-progress>div:first-child b {
             <div class="v233-wallet-section-head"><div><span class="v233-wallet-kicker">VISÃO GERAL · ${walletYear}</span><h2>${pro?"Ganhos registrados":"Pagamentos dos serviços"}</h2><p class="muted">Deslize para consultar os 12 meses</p></div><div class="v233-wallet-period-total"><small>Total no ano</small><b>${money134(walletChartTotal)}</b></div></div>
             <div class="v233-wallet-carousel" role="group" aria-label="Carrossel mensal"><div class="v233-wallet-chart-bars">${walletMonths.map((m,i)=>`<div class="v233-wallet-month" data-wallet-month="${m.key}" aria-label="${m.fullLabel}: ${money134(m.value)}"><div class="v233-wallet-bar-track"><i style="height:${m.value?Math.max(5,Math.round(m.value/walletChartMax*100)):3}%" title="${money134(m.value)}"></i></div><b>${m.fullLabel}</b><small>${m.value?money134(m.value):"R$ 0,00"}</small></div>`).join("")}</div></div>
             <p class="v233-wallet-chart-note">${pro?"Ganhos e repasses são contabilizados conforme os lançamentos financeiros confirmados. Valores pendentes não representam saldo liberado.":"Pagamentos e reembolsos são refletidos conforme os lançamentos confirmados na carteira."}</p></section>`;
-          const ledger = walletBusy
+          const walletTransitions=!pro?Object.values(walletOrderDetails).filter(o=>
+            (o.released_at||['released','release_ready','transfer_pending','paid','completed','transferred'].includes(String(o.payout_status||'').toLowerCase()))
+            && rows.some(r=>r.entry_type==='service_payment'&&String(r.order_id||'')===String(o.id))
+          ).sort((a,b)=>String(b.released_at||'').localeCompare(String(a.released_at||''))).map(o=>{
+            const payout=String(o.payout_status||'').toLowerCase();
+            const transferred=!!o.payout_transfer_id&&['paid','completed','transferred'].includes(payout);
+            const value=Number(o.professional_net||0);
+            const title=transferred?'Pagamento enviado ao profissional': 'Pagamento liberado ao profissional — repasse pendente';
+            const dt=o.released_at?new Date(o.released_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'Repasse em acompanhamento';
+            return `<div class="v134-ledger-row r6-wallet-transition" data-v134-ledger-order="${esc134(o.id)}"><div class="v134-ledger-symbol">↗</div><div class="v134-ledger-info"><b>${title}</b><small>${esc134(dt)} · Serviço ${esc134(String(o.id).slice(0,8))}</small><span class="v134-status">${transferred?'Transferência confirmada':'Aguardando confirmação do repasse'}</span><small>Andamento vinculado à contratação, não é uma nova cobrança.</small></div>${value>0?`<b>${money134(value)}</b>`:''}</div>`;
+          }).join(''):'';
+          const ledger = initialLoad
             ? '<div class="notice" role="status" aria-live="polite">Carregando os lançamentos financeiros confirmados…</div>'
             : walletLoadError
             ? '<div class="notice" role="alert">Não foi possível consultar o extrato. Toque em Atualizar para tentar novamente; nenhum saldo foi presumido.</div>'
             : rows.length
-            ? rows
+            ? walletTransitions + rows
                 .map(
                   (r) =>
                     `<div class="v134-ledger-row" data-v134-ledger-order="${esc134(r.order_id || "")}"><div class="v134-ledger-symbol">${
@@ -28268,11 +28515,11 @@ body #app .fechou-profile-progress>div:first-child b {
                       r.order_id
                         ? " · Serviço " + esc134(String(r.order_id).slice(0, 8))
                         : ""
-                    }</small>${pro && r.entry_type === "payout" && ["held","pending"].includes(String(r.status || "").toLowerCase()) ? '<span class="v134-status v322-pro-pending">Pendente de conclusão do serviço</span>' : !pro && r.entry_type === "service_payment" && String(r.status || "").toLowerCase() === "held" ? '<span class="v134-status v322-client-stored">Armazenado</span>' : `<span class="v134-status">${esc134(prettyStatus(r.status))}</span>`}${r29WalletLedgerAction(r, pro)}</div><b>${money134(r.amount)}</b></div>`
+                    }</small>${pro && r.entry_type === "payout" && ["held","pending"].includes(String(r.status || "").toLowerCase()) ? '<span class="v134-status v322-pro-pending">Pendente de conclusão do serviço</span>' : !pro && r.entry_type === "service_payment" && String(r.status || "").toLowerCase() === "held" ? (()=>{const o=walletOrderDetails[String(r.order_id||'')];const payout=String(o?.payout_status||'').toLowerCase();return o?.released_at||['released','release_ready','transfer_pending','paid','completed','transferred'].includes(payout)?'<span class="v134-status">Valor liberado · repasse em acompanhamento</span>':'<span class="v134-status v322-client-stored">Armazenado</span>'})() : `<span class="v134-status">${esc134(prettyStatus(r.status))}</span>`}${r29WalletLedgerAction(r, pro)}</div><b>${money134(r.amount)}</b></div>`
                 )
                 .join("")
             : '<div class="empty"><h3>Nenhuma movimentação ainda</h3><p>Pagamentos, reembolsos e repasses confirmados aparecerão aqui após a confirmação pelo prestador de pagamento.</p></div>';
-          return `<section class="v134-wallet"><section class="v240-wallet-hero" aria-label="Resumo da carteira"><div class="v240-wallet-hero-head"><span class="v240-wallet-kicker">FECHOU <i>·</i> CARTEIRA E EXTRATO</span><button type="button" class="v240-wallet-mark" data-r19-wallet-help aria-label="Entender os valores da carteira" aria-expanded="false">◈</button></div><div class="v240-wallet-label">${pro ? "Disponível para solicitar repasse" : "Pagamentos registrados"}</div><div class="v240-wallet-value">${walletDisplay(pro ? payoutReadyToRequestRows.reduce((sum, r) => sum + Number(r.amount || 0), 0) : clientPaid)}</div><div class="v240-wallet-foot"><span class="v240-wallet-dot"></span>${pro ? "Valores liberados que ainda não possuem solicitação ativa" : "Total dos pagamentos vinculados às suas contratações"}</div><details class="v240-wallet-explainer"><summary>Como este valor funciona</summary><p>${pro ? "Este valor mostra o que já foi liberado para solicitar repasse; ainda não significa dinheiro recebido na sua conta. Os pagamentos em “Pendente de conclusão do serviço” continuam reservados e ainda não estão disponíveis para você. A liberação depende da execução do serviço, da aprovação do cliente e das verificações da contratação. Depois, solicite o repasse: ele só aparece como transferido após a confirmação do meio de pagamento." : "Este total reúne os pagamentos confirmados dos seus serviços. Enquanto o valor estiver em “Guardado na carteira”, ele ainda não foi repassado ao profissional. Se precisar cancelar, abra o serviço e solicite o cancelamento e o reembolso. A solicitação será analisada conforme o contrato e a execução do serviço. A devolução aparece aqui após a confirmação do meio de pagamento."}</p></details></section><div class="v134-wallet-stats v176-wallet-stats ${pro ?"v178-pro-wallet-stats" : "v178-client-wallet-stats"}">${pro ? `<div class="v134-wallet-stat"><span>Pendente de conclusão do serviço</span><b>${walletDisplay(Math.max(0, awaitingPayout))}</b></div><div class="v134-wallet-stat"><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div class="v134-wallet-stat"><span>Em análise / transferência</span><b>${walletDisplay(activePayoutRequests.reduce((sum, r) => sum + Number(r.amount || r.requested_amount || 0), 0))}</b></div><div class="v134-wallet-stat"><span>Transferidos</span><b>${walletDisplay(released)}</b></div>` : `<div class="v134-wallet-stat r29-client-held-stat"><span>Guardado na carteira</span><b class="fechou-green">${walletDisplay(Math.max(0, held))}</b><button class="r29-wallet-jump" type="button" data-r29-open-refund-ledger aria-label="Abrir extrato para solicitar reembolso">Solicitar reembolso</button></div><div class="v134-wallet-stat"><span>Reembolsos</span><b>${walletDisplay(refund)}</b></div><div class="v134-wallet-stat"><span>Movimentações</span><b>${walletBusy || walletLoadError ? "—" : rows.length}</b></div><div class="v134-wallet-stat"><span>Reembolsos em análise</span><b>${walletDisplay(walletRefundRequests.length ? walletRefundRequests.filter((r) => ["reserved","submitted","pending","in_progress","bank_slip_action_required","unknown","review_required","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum,r) => sum + Number(r.provider_summary?.pending_value ?? r.amount ?? 0),0) : rows.filter((r) => r.entry_type === "refund" && ["refund_pending","pending","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum, r) => sum + Number(r.amount || 0), 0))}</b></div>`}</div>${walletChartMarkup}${!pro ? `<section class="v169-wallet-client-summary"><div><span>Total de pagamentos confirmados</span><b>${walletDisplay(clientPaid)}</b></div><div><span>Reembolsos solicitados ou concluídos</span><b>${walletDisplay(refund)}</b></div></section><section class="panel v173-refund-panel"><div><h2>Reembolsos dos serviços</h2><p class="muted">Acompanhe solicitações enviadas ao Asaas. Um pedido só aparece como reembolsado quando o provedor confirma a devolução.</p></div>${walletBusy ? '<p class="muted" role="status">Carregando solicitações de reembolso…</p>' : walletRefundRequests.length ? walletRefundRequests.map((r)=>{const labels={reserved:"Reserva registrada",submitted:"Solicitação enviada",pending:"Aguardando processamento",in_progress:"Em processamento pelo Asaas",bank_slip_action_required:"Aguardando dados bancários do cliente",unknown:"Resultado inconclusivo — conciliação necessária",done:"Reembolso confirmado",partial:"Reembolso parcial confirmado",failed:"Estorno não concluído",cancelled:"Solicitação cancelada",review_required:"Em análise financeira"};const billingLabels={PIX:"Pix",BOLETO:"Boleto bancário",CREDIT_CARD:"Cartão de crédito",DEBIT_CARD:"Cartão de débito"};const billingLabel=billingLabels[String(r.billing_type||"").trim().toUpperCase()]||"Forma de pagamento não informada";return `<article class="v134-ledger-row v43-refund-row"><div class="v134-ledger-symbol" aria-hidden="true">↩</div><div class="v134-ledger-info"><div class="v43-refund-heading"><b>${esc134(r.service || "Serviço")} · #${esc134(String(r.order_id||"").slice(0,8))}</b><strong class="v43-refund-amount">${money134((Number(r.provider_summary?.refunded_value||0)+Number(r.provider_summary?.pending_value||0))||r.amount)}</strong></div><small>${esc134(billingLabel)} · ${esc134(r.created_at?new Date(r.created_at).toLocaleString("pt-BR", { timeZone: window.FECHOU_DISPLAY_TZ || "America/Sao_Paulo" }):"Data não informada")}</small><span class="v134-status">${esc134(labels[String(r.status||"").toLowerCase()]||prettyStatus(r.status))}</span>${r.reason?`<small>Motivo: ${esc134(r.reason)}</small>`:""}${r.request_url?`<small><a href="${esc134(r.request_url)}" target="_blank" rel="noopener noreferrer">Preencher dados para reembolso no Asaas</a></small>`:""}${r.receipt_url?`<small><a href="${esc134(r.receipt_url)}" target="_blank" rel="noopener noreferrer">Ver comprovante do reembolso</a></small>`:""}</div></article>`;}).join("") : (walletRefundError ? '<p class="notice" role="alert">Não foi possível carregar as solicitações de reembolso. Atualize a carteira para consultar novamente.</p>' : '<p class="muted">Nenhuma solicitação de reembolso registrada.</p>')}</section>` : `<details class="v178-pro-wallet-details"><summary>Resumo complementar de valores <span aria-hidden="true">⌄</span></summary><div class="v178-pro-wallet-details-body"><section class="v169-wallet-pro-summary"><div><span>Aguardando liberação</span><b>${walletDisplay(awaitingPayout)}</b></div><div><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div><span>Disponível para saque</span><b>${money134(0)}</b><small>Não há saldo de saque individual confirmado nesta carteira.</small></div></section></div></details>`}<details class="v134-wallet-flow v134-wallet-collapse"><summary class="v134-wallet-collapse-head"><span class="v134-wallet-flow-title"><span>Acompanhamento dos valores</span><small>Etapas da movimentação</small></span></summary><div class="v134-wallet-collapse-body"><div class="v134-wallet-flow-steps"><div class="v134-wallet-flow-step"><i>1</i><b>Pagamento</b><small>Registro confirmado</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>2</i><b>Conclusão</b><small>Serviço e evidências</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>3</i><b>Liberação</b><small>Após validação</small></div></div><p>Os valores apresentados correspondem aos lançamentos registrados no extrato. A liberação ou o reembolso depende da confirmação da conclusão, de eventual análise e do processamento pelo meio de pagamento.</p></div></details>${
+          return `<section class="v134-wallet"><section class="v240-wallet-hero" aria-label="Resumo da carteira"><div class="v240-wallet-hero-head"><span class="v240-wallet-kicker">FECHOU <i>·</i> CARTEIRA E EXTRATO</span><button type="button" class="v240-wallet-mark" data-r19-wallet-help aria-label="Entender os valores da carteira" aria-expanded="false">◈</button></div><div class="v240-wallet-label">${pro ? "Disponível para solicitar repasse" : "Pagamentos registrados"}</div><div class="v240-wallet-value">${walletDisplay(pro ? payoutReadyToRequestRows.reduce((sum, r) => sum + Number(r.amount || 0), 0) : clientPaid)}</div><div class="v240-wallet-foot"><span class="v240-wallet-dot"></span>${pro ? "Valores liberados que ainda não possuem solicitação ativa" : "Total dos pagamentos vinculados às suas contratações"}</div><details class="v240-wallet-explainer"><summary>Como este valor funciona</summary><p>${pro ? "Este valor mostra o que já foi liberado para solicitar repasse; ainda não significa dinheiro recebido na sua conta. Os pagamentos em “Pendente de conclusão do serviço” continuam reservados e ainda não estão disponíveis para você. A liberação depende da execução do serviço, da aprovação do cliente e das verificações da contratação. Depois, solicite o repasse: ele só aparece como transferido após a confirmação do meio de pagamento." : "Este total reúne os pagamentos confirmados dos seus serviços. Enquanto o valor estiver em “Guardado na carteira”, ele ainda não foi repassado ao profissional. Se precisar cancelar, abra o serviço e solicite o cancelamento e o reembolso. A solicitação será analisada conforme o contrato e a execução do serviço. A devolução aparece aqui após a confirmação do meio de pagamento."}</p></details></section><div class="v134-wallet-stats v176-wallet-stats ${pro ?"v178-pro-wallet-stats" : "v178-client-wallet-stats"}">${pro ? `<div class="v134-wallet-stat"><span>Pendente de conclusão do serviço</span><b>${walletDisplay(Math.max(0, awaitingPayout))}</b></div><div class="v134-wallet-stat"><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div class="v134-wallet-stat"><span>Em análise / transferência</span><b>${walletDisplay(activePayoutRequests.reduce((sum, r) => sum + Number(r.amount || r.requested_amount || 0), 0))}</b></div><div class="v134-wallet-stat"><span>Transferidos</span><b>${walletDisplay(released)}</b></div>` : `<div class="v134-wallet-stat r29-client-held-stat"><span>Guardado na carteira</span><b class="fechou-green">${walletDisplay(Math.max(0, held))}</b><button class="r29-wallet-jump" type="button" data-r29-open-refund-ledger aria-label="Abrir extrato para solicitar reembolso">Solicitar reembolso</button></div><div class="v134-wallet-stat"><span>Reembolsos</span><b>${walletDisplay(refund)}</b></div><div class="v134-wallet-stat"><span>Movimentações</span><b>${initialLoad || walletLoadError ? "—" : rows.length + (!pro ? (walletTransitions.match(/class="v134-ledger-row/g)||[]).length : 0)}</b></div><div class="v134-wallet-stat"><span>Reembolsos em análise</span><b>${walletDisplay(walletRefundRequests.length ? walletRefundRequests.filter((r) => ["reserved","submitted","pending","in_progress","bank_slip_action_required","unknown","review_required","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum,r) => sum + Number(r.provider_summary?.pending_value ?? r.amount ?? 0),0) : rows.filter((r) => r.entry_type === "refund" && ["refund_pending","pending","requested","requested_review","under_review"].includes(String(r.status || "").toLowerCase())).reduce((sum, r) => sum + Number(r.amount || 0), 0))}</b></div>`}</div>${walletChartMarkup}${!pro ? `<section class="v169-wallet-client-summary"><div><span>Total de pagamentos confirmados</span><b>${walletDisplay(clientPaid)}</b></div><div><span>Reembolsos solicitados ou concluídos</span><b>${walletDisplay(refund)}</b></div></section><section class="panel v173-refund-panel"><div><h2>Reembolsos dos serviços</h2><p class="muted">Acompanhe solicitações enviadas ao Asaas. Um pedido só aparece como reembolsado quando o provedor confirma a devolução.</p></div>${initialLoad ? '<p class="muted" role="status">Carregando solicitações de reembolso…</p>' : walletRefundRequests.length ? walletRefundRequests.map((r)=>{const labels={reserved:"Reserva registrada",submitted:"Solicitação enviada",pending:"Aguardando processamento",in_progress:"Em processamento pelo Asaas",bank_slip_action_required:"Aguardando dados bancários do cliente",unknown:"Resultado inconclusivo — conciliação necessária",done:"Estorno confirmado pelo Asaas",refunded:"Estorno confirmado pelo Asaas",partial:"Estorno parcial confirmado pelo Asaas",failed:"Estorno não concluído",cancelled:"Solicitação cancelada",review_required:"Em análise financeira"};const billingLabels={PIX:"Pix",BOLETO:"Boleto bancário",CREDIT_CARD:"Cartão de crédito",DEBIT_CARD:"Cartão de débito"};const billingLabel=billingLabels[String(r.billing_type||"").trim().toUpperCase()]||"Forma de pagamento não informada";return `<article class="v134-ledger-row v43-refund-row"><div class="v134-ledger-symbol" aria-hidden="true">↩</div><div class="v134-ledger-info"><div class="v43-refund-heading"><b>${esc134(r.service || "Serviço")} · #${esc134(String(r.order_id||"").slice(0,8))}</b><strong class="v43-refund-amount">${money134(refundVisibleAmount(r))}</strong></div><small>${esc134(billingLabel)} · ${esc134(r.created_at?new Date(r.created_at).toLocaleString("pt-BR", { timeZone: window.FECHOU_DISPLAY_TZ || "America/Sao_Paulo" }):"Data não informada")}</small><span class="v134-status">${esc134(labels[String(r.status||"").toLowerCase()]||prettyStatus(r.status))}</span>${r.reason?`<small>Motivo: ${esc134(r.reason)}</small>`:""}${r.request_url?`<small><a href="${esc134(r.request_url)}" target="_blank" rel="noopener noreferrer">Preencher dados para reembolso no Asaas</a></small>`:""}${r.receipt_url?`<small><a href="${esc134(r.receipt_url)}" target="_blank" rel="noopener noreferrer">Ver comprovante do reembolso</a></small>`:""}</div></article>`;}).join("") : (walletRefundError ? '<p class="notice" role="alert">Não foi possível carregar as solicitações de reembolso. Atualize a carteira para consultar novamente.</p>' : '<p class="muted">Nenhuma solicitação de reembolso registrada.</p>')}</section>` : `<details class="v178-pro-wallet-details"><summary>Resumo complementar de valores <span aria-hidden="true">⌄</span></summary><div class="v178-pro-wallet-details-body"><section class="v169-wallet-pro-summary"><div><span>Aguardando liberação</span><b>${walletDisplay(awaitingPayout)}</b></div><div><span>Liberado para solicitar repasse</span><b>${walletDisplay(releaseReadyTotal)}</b></div><div><span>Disponível para saque</span><b>${money134(0)}</b><small>Não há saldo de saque individual confirmado nesta carteira.</small></div></section></div></details>`}<details class="v134-wallet-flow v134-wallet-collapse"><summary class="v134-wallet-collapse-head"><span class="v134-wallet-flow-title"><span>Acompanhamento dos valores</span><small>Etapas da movimentação</small></span></summary><div class="v134-wallet-collapse-body"><div class="v134-wallet-flow-steps"><div class="v134-wallet-flow-step"><i>1</i><b>Pagamento</b><small>Registro confirmado</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>2</i><b>Conclusão</b><small>Serviço e evidências</small></div><span class="v134-wallet-flow-connector"></span><div class="v134-wallet-flow-step"><i>3</i><b>Liberação</b><small>Após validação</small></div></div><p>Os valores apresentados correspondem aos lançamentos registrados no extrato. A liberação ou o reembolso depende da confirmação da conclusão, de eventual análise e do processamento pelo meio de pagamento.</p></div></details>${
             pro
               ? `<section class="panel"><div class="row between"><div><h2>Recebimento por Pix</h2><p class="muted">Cadastre a chave Pix que receberá os repasses dos serviços, quando a transferência estiver autorizada e processada.</p></div><button type="button" class="btn secondary" data-v134-open-pix>${
                   payoutFormOpen ? "Fechar" : (pixProfile ? "Alterar chave Pix" : "Configurar chave Pix")
@@ -28280,7 +28527,7 @@ body #app .fechou-profile-progress>div:first-child b {
                   payoutFormOpen
                     ? `<form id="v134PixForm" class="form"><div class="field"><label for="v134PixType">Tipo de chave Pix</label><select id="v134PixType" required><option value="CPF">CPF</option><option value="CNPJ">CNPJ</option><option value="EMAIL">E-mail</option><option value="PHONE">Telefone</option><option value="EVP">Chave aleatória</option></select></div><div class="field"><label for="v134PixKey">Chave Pix</label><input id="v134PixKey" maxlength="200" autocomplete="off" required placeholder="Informe sua chave Pix"></div><label class="check"><input type="checkbox" id="v134PixConfirm" required><span>Confirmo que esta chave me pertence e autorizo o uso para recebimento de valores referentes aos meus serviços na rede.</span></label><button class="btn" type="submit">Salvar chave de recebimento</button></form>`
                     : ""
-                }<div class="v169-payout-request-box"><div><b>Solicitar repasse</b><p>Peça a conferência administrativa. O Pix só será enviado após análise, conferência da chave e autorização do administrador.</p></div><button class="btn" type="button" data-v169-request-payout ${payoutReadyToRequestRows.length && String(window.__v134PixProfile?.status || "").toLowerCase()==="verified" ? "" : "disabled"}>Solicitar análise do repasse</button><small>${String(window.__v134PixProfile?.status || "").toLowerCase()==="verified" ? (payoutReadyToRequestRows.length ? `${payoutReadyToRequestRows.length} repasse(s) autorizado(s) aguardando solicitação.` : (releaseReadyRows.length ? "Todos os repasses autorizados já possuem solicitação registrada." : "Não há repasses autorizados aguardando solicitação.")) : (String(window.__v134PixProfile?.status || "").toLowerCase()==="pending" ? "Chave cadastrada e aguardando conferência de titularidade. A solicitação será liberada após a verificação." : "Cadastre uma chave Pix válida e aguarde a conferência antes de solicitar o repasse.")}</small></div><details class="v178-payout-history"><summary>Histórico de solicitações (${walletBusy ? "carregando…" : uniqueWalletPayoutRequests().length})</summary><div class="v169-payout-requests"><h3>Solicitações de repasse</h3>${walletBusy ? '<p class="muted" role="status">Carregando histórico de repasses…</p>' : walletPayoutError ? '<p class="notice" role="alert">Não foi possível carregar o histórico de repasses. Atualize a carteira para consultar novamente.</p>' : uniqueWalletPayoutRequests().length ? uniqueWalletPayoutRequests().slice().reverse().map((r)=>{const last=r.latest_transfer||null;return `<article class="v134-ledger-row"><div class="v134-ledger-symbol">↗</div><div class="v134-ledger-info"><b>Solicitação ${esc134(String(r.id||"").slice(0,8))}</b><small>Serviço ${esc134(String(r.order_id||"").slice(0,8))} · ${esc134(r.created_at?new Date(r.created_at).toLocaleString("pt-BR", { timeZone: window.FECHOU_DISPLAY_TZ || "America/Sao_Paulo" }):"Data não informada")}</small><span class="v134-status">${esc134(({requested_review:"Aguardando análise",under_review:"Em análise",transfer_pending:"Transferência em processamento",paid:"Pix confirmado",rejected:"Não aprovado"})[r.status]||prettyStatus(r.status))}</span>${last && ["failed","rejected","blocked"].includes(String(last.status||"").toLowerCase()) ? '<small>Repasse não confirmado. Tentativa encerrada; uma nova transferência exige análise administrativa.</small>' : ''}${last?`<small>Tentativa ${esc134(last.attempt_number)} · ${esc134(payoutTransferLabel(last))}${last.fail_reason?` · ${esc134(last.fail_reason)}`:""}</small>${last.transaction_receipt_url?`<small><a href="${esc134(last.transaction_receipt_url)}" target="_blank" rel="noopener noreferrer">Ver comprovante de transferência</a></small>`:""}`:""}</div><b>${money134(r.amount)}</b></article>`;}).join("") : '<p class="muted">Nenhuma solicitação registrada.</p>'}</div></details></section>`
+                }<div class="v169-payout-request-box"><div><b>Solicitar repasse</b><p>Peça a conferência administrativa. O Pix só será enviado após análise, conferência da chave e autorização do administrador.</p></div><button class="btn" type="button" data-v169-request-payout ${payoutReadyToRequestRows.length && String(window.__v134PixProfile?.status || "").toLowerCase()==="verified" ? "" : "disabled"}>Solicitar análise do repasse</button><small>${String(window.__v134PixProfile?.status || "").toLowerCase()==="verified" ? (payoutReadyToRequestRows.length ? `${payoutReadyToRequestRows.length} repasse(s) autorizado(s) aguardando solicitação.` : (releaseReadyRows.length ? "Todos os repasses autorizados já possuem solicitação registrada." : "Não há repasses autorizados aguardando solicitação.")) : (String(window.__v134PixProfile?.status || "").toLowerCase()==="pending" ? "Chave cadastrada e aguardando conferência de titularidade. A solicitação será liberada após a verificação." : "Cadastre uma chave Pix válida e aguarde a conferência antes de solicitar o repasse.")}</small></div><details class="v178-payout-history"><summary>Histórico de solicitações (${initialLoad ? "carregando…" : uniqueWalletPayoutRequests().length})</summary><div class="v169-payout-requests"><h3>Solicitações de repasse</h3>${initialLoad ? '<p class="muted" role="status">Carregando histórico de repasses…</p>' : walletPayoutError ? '<p class="notice" role="alert">Não foi possível carregar o histórico de repasses. Atualize a carteira para consultar novamente.</p>' : uniqueWalletPayoutRequests().length ? uniqueWalletPayoutRequests().slice().reverse().map((r)=>{const last=r.latest_transfer||null;return `<article class="v134-ledger-row"><div class="v134-ledger-symbol">↗</div><div class="v134-ledger-info"><b>Solicitação ${esc134(String(r.id||"").slice(0,8))}</b><small>Serviço ${esc134(String(r.order_id||"").slice(0,8))} · ${esc134(r.created_at?new Date(r.created_at).toLocaleString("pt-BR", { timeZone: window.FECHOU_DISPLAY_TZ || "America/Sao_Paulo" }):"Data não informada")}</small><span class="v134-status">${esc134(({requested_review:"Aguardando análise",under_review:"Em análise",transfer_pending:"Transferência em processamento",paid:"Pix confirmado",rejected:"Não aprovado"})[r.status]||prettyStatus(r.status))}</span>${last && ["failed","rejected","blocked"].includes(String(last.status||"").toLowerCase()) ? '<small>Repasse não confirmado. Tentativa encerrada; uma nova transferência exige análise administrativa.</small>' : ''}${last?`<small>Tentativa ${esc134(last.attempt_number)} · ${esc134(payoutTransferLabel(last))}${last.fail_reason?` · ${esc134(last.fail_reason)}`:""}</small>${last.transaction_receipt_url?`<small><a href="${esc134(last.transaction_receipt_url)}" target="_blank" rel="noopener noreferrer">Ver comprovante de transferência</a></small>`:""}`:""}</div><b>${money134(r.amount)}</b></article>`;}).join("") : '<p class="muted">Nenhuma solicitação registrada.</p>'}</div></details></section>`
               : ""
           }<details class="panel v134-wallet-ledger-panel v134-wallet-collapse"><summary class="v134-wallet-collapse-head"><span class="v134-wallet-ledger-heading"><b>Extrato de movimentações</b><small>Veja cada movimentação, sua data e a situação atual.</small></span></summary><div class="v134-wallet-collapse-body"><div class="v134-wallet-ledger-actions"><button class="btn secondary" type="button" data-v134-refresh-wallet>Atualizar</button></div>${ledger}<div class="v134-helper"><b>Como funciona:</b> pagamento recebido não significa que já foi repassado. A liberação depende da conclusão confirmada, de eventual revisão e da liquidação efetiva da transferência pelo prestador de pagamento. Se houver disputa, o saldo permanece em análise até decisão registrada.</div></div></details>${
             supportAdminEnabled
@@ -28357,19 +28604,30 @@ body #app .fechou-profile-progress>div:first-child b {
           }<div class="actions"><button class="btn secondary" type="button" data-v134-wallet-back>Voltar ao aplicativo</button></div></section>`;
         }
         let walletLoadPromise = null;
+        let walletLoadingOwner='';
         let walletViewOpen = false;
         async function loadWallet() {
-          if (walletLoadPromise) return walletLoadPromise;
+          const requestOwner=String(currentUser()?.id||'');
+          if(walletLoadPromise && walletLoadingOwner===requestOwner)return walletLoadPromise;
+          // Outra conta deve iniciar uma consulta própria; não compartilhar a promise anterior.
+          walletLoadingOwner=requestOwner;
           walletBusy = true;
           walletLoadError = "";
           walletRefundError = "";
           walletPayoutError = "";
           walletLoadPromise = (async () => {
+          const ownerAtStart=String(currentUser()?.id||'');
           try {
             const db = getDb();
             const user = currentUser();
             if (!db || !user)
               throw new Error("Entre na sua conta para consultar a carteira.");
+            if(walletLoadedOwner!==String(user.id)){
+              walletLoadedOwner=String(user.id);
+              walletSnapshotReady=false;
+              walletRows=[];walletOrderDetails=Object.create(null);
+              walletRefundRequests=[];walletPayoutRequests=[];
+            }
             const { data, error } = await db
               .from("fechou_wallet_ledger")
               .select("*")
@@ -28377,6 +28635,7 @@ body #app .fechou-profile-progress>div:first-child b {
               .order("created_at", { ascending: false })
               .limit(300);
             if (error) throw error;
+            if(String(currentUser()?.id||'')!==ownerAtStart)return;
             walletRows = data || [];
             walletOrderDetails = Object.create(null);
             if (state.currentRole !== "Profissional") {
@@ -28384,7 +28643,7 @@ body #app .fechou-profile-progress>div:first-child b {
               if (ids.length) {
                 for (let pos=0;pos<ids.length;pos+=70) {
                   const { data: owned, error: ownedError } = await db.from("orders")
-                    .select("id,client_id,selected_proposal_id,professional_id,service_state,status,payment_status,contract_accepted,service_started_at,cancellation_requested_at")
+                    .select("id,client_id,selected_proposal_id,professional_id,service_state,status,payment_status,contract_accepted,service_started_at,cancellation_requested_at,payout_status,payout_transfer_id,released_at,professional_net,completed_at,refund_status")
                     .eq("client_id",user.id).in("id",ids.slice(pos,pos+70));
                   if (ownedError) { console.warn("Status da contratação indisponível na carteira", ownedError); break; }
                   (owned || []).forEach(order => { walletOrderDetails[String(order.id)] = order; });
@@ -28395,6 +28654,7 @@ body #app .fechou-profile-progress>div:first-child b {
             if (state.currentRole !== "Profissional") {
               try {
                 const refundState = await callApi("wallet/refund-requests", {});
+                if(String(currentUser()?.id||'')!==ownerAtStart)return;
                 walletRefundRequests = refundState.requests || [];
               } catch (refundError) {
                 walletRefundError = String(refundError?.message || refundError || "Falha ao consultar reembolsos.");
@@ -28406,6 +28666,7 @@ body #app .fechou-profile-progress>div:first-child b {
               .select("pix_key_type, pix_key, status")
               .eq("user_id", user.id)
               .maybeSingle();
+            if(String(currentUser()?.id||'')!==ownerAtStart)return;
             if (!pe && pp) {
               window.__v134PixProfile = pp;
             } else if (!pp) {
@@ -28413,27 +28674,30 @@ body #app .fechou-profile-progress>div:first-child b {
             }
             walletPayoutRequests = [];
             if (state.currentRole === "Profissional") {
-              try { const payoutState = await callApi("wallet/payout-requests", {}); walletPayoutRequests = payoutState.requests || []; } catch (requestError) { walletPayoutError = String(requestError?.message || requestError || "Falha ao consultar repasses."); console.warn("Solicitações de repasse não carregadas:", requestError); }
+              try { const payoutState = await callApi("wallet/payout-requests", {}); if(String(currentUser()?.id||'')!==ownerAtStart)return; walletPayoutRequests = payoutState.requests || []; } catch (requestError) { walletPayoutError = String(requestError?.message || requestError || "Falha ao consultar repasses."); console.warn("Solicitações de repasse não carregadas:", requestError); }
             }
+            if(String(currentUser()?.id||'')!==ownerAtStart)return;
+            walletSnapshotReady=true;
             // As filas e decisões são operadas exclusivamente pelo aplicativo separado PAINEL ADMINISTRATIVO.
             supportAdminEnabled = false;
             supportRows = [];
             payoutReviewRows = [];
             adminPayoutRequestRows = [];
           } catch (e) {
+            if(String(currentUser()?.id||'')!==ownerAtStart)return;
             console.warn("Carteira FECHOU:", e);
-            walletLoadError = String(e?.message || e || "Falha ao consultar a carteira.");
-            walletRows = [];
-            walletRefundRequests = [];
+            walletLoadError = walletSnapshotReady ? '' : String(e?.message || e || "Falha ao consultar a carteira.");
+            if(!walletSnapshotReady){walletRows = []; walletRefundRequests = [];}
             toast134(
               "Não foi possível atualizar o extrato da carteira. Confira a conexão e tente novamente. Os dados não foram alterados."
             );
           } finally {
-            walletBusy = false;
+            if(walletLoadingOwner===ownerAtStart)walletBusy=false;
           }
           })();
-          return walletLoadPromise.finally(() => {
-            if (walletLoadPromise) walletLoadPromise = null;
+          const myLoad=walletLoadPromise;
+          return myLoad.finally(() => {
+            if(walletLoadPromise===myLoad)walletLoadPromise=null;
           });
         }
         function refreshWalletView() {
@@ -28445,14 +28709,16 @@ body #app .fechou-profile-progress>div:first-child b {
         }
         window.__fechouRefreshWalletNow = refreshWalletView;
 
-        document.addEventListener("visibilitychange", function () {
-          if (document.hidden || !state.__v134Wallet) return;
-          if (typeof refreshWalletView === "function") refreshWalletView();
-        });
-        window.addEventListener("pageshow", function () {
-          if (!state.__v134Wallet) return;
-          if (typeof refreshWalletView === "function") refreshWalletView();
-        });
+        let walletResumeAtV6=0;
+        const refreshWalletOnResumeV6=()=>{
+          if(!state.__v134Wallet||document.hidden)return;
+          const now=Date.now();
+          if(now-walletResumeAtV6<2500)return;
+          walletResumeAtV6=now;
+          refreshWalletView();
+        };
+        document.addEventListener('visibilitychange',refreshWalletOnResumeV6);
+        window.addEventListener('pageshow',refreshWalletOnResumeV6);
         // R48 — unico posicionador de botoes, no proprio motor da carteira.
         function arrangeWalletActions(root){
           if(!root)return;
@@ -29045,117 +29311,77 @@ body #app .fechou-profile-progress>div:first-child b {
             console.warn("Evidências de serviço não carregadas:", e);
           }
         }
-        window.__fechouReloadActiveEvidence = async (orderId) => {
-          const ov = document.getElementById("v121ChatOverlay");
-          if (!ov || String(ov.dataset.orderId || "") !== String(orderId || "")) return;
-          if (!ov.querySelector(".v134-evidence:not([hidden])")) return;
-          await loadEvidence(ov);
+        let r6EvidenceRefreshTimer=null;
+        let r6SavingEvidence=false;
+        window.__fechouReloadActiveEvidence = (orderId) => {
+          if(r6SavingEvidence)return;
+          if(r6EvidenceRefreshTimer) clearTimeout(r6EvidenceRefreshTimer);
+          r6EvidenceRefreshTimer=setTimeout(()=>{
+            r6EvidenceRefreshTimer=null;
+            const ov=document.getElementById('v121ChatOverlay');
+            if(!ov||String(ov.dataset.orderId||'')!==String(orderId||''))return;
+            if(!ov.querySelector('.v134-evidence:not([hidden])'))return;
+            loadEvidence(ov).catch(e=>console.warn('Falha ao atualizar fotos',e));
+          },160);
         };
+        // R6: envia evidências em paralelo e consulta o limite apenas uma vez.
         async function persistEvidence(input) {
-          const files = Array.from(input.files || []);
-          if (!files.length) return;
-          const overlay = $("#v121ChatOverlay");
-          const orderId = String(overlay?.dataset?.orderId || "");
-          const phase = String(input.dataset.v134EvidencePhase || "during");
-          const db = getDb(),
-            user = currentUser();
-          if (db && user && orderId) {
-            try { await window.fechouEnsureCompactSupabaseSession?.(db); }
-            catch(e) { input.value=""; return toast134(String(e?.message||e)); }
-          }
-          if (!db || !user || !orderId)
-            return toast134(
-              "Abra uma conversa válida antes de registrar evidências."
-            );
-          if (!["before","during","after"].includes(phase)) return toast134("Etapa de evidência inválida.");
-          let phaseCount = 0;
-          let savedCount = 0;
-          for (const file of files) {
-            try {
-              const {data: phaseRows, error: phaseCountError} = await db.from("fechou_service_evidence").select("phase").eq("order_id", orderId).eq("phase", phase).limit(5);
-              if (phaseCountError) throw phaseCountError;
-              phaseCount = (phaseRows || []).length;
-            } catch (countError) {
-              console.error("Falha ao consultar o limite de evidências:", countError);
-              input.value = "";
-              return toast134("Não foi possível verificar o limite de fotos desta etapa. Tente novamente.");
+          const files=Array.from(input.files||[]);
+          if(!files.length||input.disabled)return;
+          const overlay=$("#v121ChatOverlay");
+          const orderId=String(overlay?.dataset?.orderId||"");
+          const phase=String(input.dataset.v134EvidencePhase||"during");
+          const db=getDb(),user=currentUser();
+          if(!db||!user||!orderId)return toast134('Abra uma conversa válida antes de registrar evidências.');
+          if(!['before','during','after'].includes(phase))return toast134('Etapa inválida.');
+          const phaseLabel={before:'Antes',during:'Durante',after:'Depois'}[phase];
+          input.disabled=true;
+          r6SavingEvidence=true;
+          try {
+            await window.fechouEnsureCompactSupabaseSession?.(db);
+            const countResp=await db.from('fechou_service_evidence').select('id').eq('order_id',orderId).eq('phase',phase).limit(5);
+            if(countResp.error)throw countResp.error;
+            const existing=(countResp.data||[]).length;
+            const capacity=Math.max(0,5-existing);
+            if(!capacity)throw new Error('Limite de cinco fotos atingido em '+phaseLabel+'.');
+            const selected=[];
+            for(const file of files.slice(0,capacity)){
+              const type=String(file.type||'').toLowerCase();
+              const extension=/\.(?:jpg|jpeg|png|webp|gif|heic|heif)$/i.test(String(file.name||''));
+              if(!(type.startsWith('image/')||(!type||type==='application/octet-stream')&&extension))
+                throw new Error('Envie fotos; documentos e vídeos devem ir nos anexos do chat.');
+              if(file.size>20*1024*1024)throw new Error('Cada foto pode ter no máximo 20 MB.');
+              selected.push(file);
             }
-            if (phaseCount >= 5) {
-              toast134(`Limite de cinco fotos atingido em ${{before:"Antes",during:"Durante",after:"Depois"}[phase]}.`);
-              break;
+            const order=(state.orders||[]).find(o=>String(o.id)===orderId);
+            const tasks=selected.map(async(file)=>{
+              const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,8)||'jpg';
+              const path=`${user.id}/${orderId}/evidence/${phase}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+              const mime=String(file.type||'').toLowerCase();
+              const contentType=mime.startsWith('image/')?mime:({heic:'image/heic',heif:'image/heif',png:'image/png',webp:'image/webp',gif:'image/gif'}[ext.toLowerCase()]||'image/jpeg');
+              const bucket=db.storage.from('eworkers-service-evidence');
+              const up=await bucket.upload(path,file,{upsert:false,contentType,cacheControl:'3600'});
+              if(up.error)throw up.error;
+              const row={order_id:orderId,contract_id:order?.contract?.id||null,uploader_id:user.id,phase,storage_path:path,file_name:file.name,mime_type:contentType,file_size:file.size,notes:''};
+              const ins=await db.from('fechou_service_evidence').insert(row);
+              if(ins.error){await bucket.remove([path]).catch(()=>{});throw ins.error;}
+              return path;
+            });
+            // Até cinco fotos; todas sobem sem esperar a anterior terminar.
+            const result=await Promise.allSettled(tasks);
+            const saved=result.filter(x=>x.status==='fulfilled').length;
+            if(saved) {
+              await loadEvidence(overlay);
+              toast134(`${saved} foto(s) arquivada(s). ${Math.min(5,existing+saved)} de 5 nesta etapa.`);
             }
-            const imageMime = String(file.type || "").toLowerCase();
-            const imageExt = /\.(?:jpg|jpeg|png|webp|gif|heic|heif)$/i.test(String(file.name || ""));
-            const isImageFile = imageMime.startsWith("image/") || ((!imageMime || imageMime === "application/octet-stream") && imageExt);
-            if (!isImageFile) {
-              toast134(
-                "A galeria de evidências aceita fotos. Para vídeos ou documentos, use o anexo normal do chat."
-              );
-              continue;
-            }
-            if (file.size > 20 * 1024 * 1024) {
-              toast134("Cada foto pode ter no máximo 20 MB.");
-              continue;
-            }
-            try {
-              const ext =
-                (file.name.split(".").pop() || "jpg")
-                  .replace(/[^a-z0-9]/gi, "")
-                  .slice(0, 8) || "jpg";
-              const path = `${
-                user.id
-              }/${orderId}/evidence/${phase}/${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2)}.${ext}`;
-              const { error: upErr } = await db.storage
-                .from("eworkers-service-evidence")
-                .upload(path, file, {
-                  upsert: false,
-                  contentType: imageMime.startsWith("image/") ? imageMime : ({heic:"image/heic",heif:"image/heif",png:"image/png",webp:"image/webp",gif:"image/gif"}[String(file.name||"").split(".").pop().toLowerCase()] || "image/jpeg"),
-                  cacheControl: "3600",
-                });
-              if (upErr) throw upErr;
-              const order = (state.orders || []).find(
-                (o) => String(o.id) === orderId
-              );
-              const row = {
-                order_id: orderId,
-                contract_id: order?.contract?.id || null,
-                uploader_id: user.id,
-                phase,
-                storage_path: path,
-                file_name: file.name,
-                mime_type: file.type || "image/jpeg",
-                file_size: file.size,
-                notes: "",
-              };
-              const { error: insErr } = await db
-                .from("fechou_service_evidence")
-                .insert(row);
-              if (insErr) {
-                await db.storage
-                  .from("eworkers-service-evidence")
-                  .remove([path])
-                  .catch(() => {});
-                throw insErr;
-              }
-              phaseCount++;
-              savedCount++;
-            } catch (e) {
-              console.error("Evidência FECHOU:", e);
-              toast134(
-                e?.code === "23514" || /Limite de cinco fotos/.test(String(e?.message || ""))
-                  ? `Limite de cinco fotos atingido em ${{before:"Antes",during:"Durante",after:"Depois"}[phase]}.`
-                  : (/header size|431/i.test(String(e?.message||''))
-                    ? "A sessão de login ficou grande demais para o Storage. Atualize o FECHOU e entre novamente, depois reenvie a foto."
-                    : "Uma foto não foi arquivada: " + String(e?.message||"verifique sua conexão e permissões").slice(0,220))
-              );
-            }
-          }
-          input.value = "";
-          await loadEvidence(overlay);
-          if (savedCount) toast134(`${savedCount} foto(s) arquivada(s). ${phaseCount} de 5 nesta etapa.`);
+            const failures=result.filter(x=>x.status==='rejected');
+            if(failures.length)toast134('Falha em '+failures.length+' foto(s): '+String(failures[0].reason?.message||'verifique sua conexão').slice(0,180));
+          }catch(e){
+            console.warn('Fotos do serviço FECHOU:',e);
+            toast134(String(e?.message||'Não foi possível registrar as fotos.'));
+          }finally{input.value='';input.disabled=false;r6SavingEvidence=false;}
         }
+
         async function loadPaymentNegotiation(overlay) {
           const orderId = String(overlay?.dataset?.orderId || "");
           const order = (state.orders || []).find(x => String(x.id) === orderId);
@@ -29239,6 +29465,7 @@ body #app .fechou-profile-progress>div:first-child b {
             else win.appendChild(evidence);
           }
           setupChatCompactPanels(overlay);
+          qa4EvidenceButtons(overlay, qa4EvidenceCounts.get(String(overlay.dataset.orderId || "")) || { before:0, during:0, after:0 });
           loadEvidence(overlay);
           loadPaymentNegotiation(overlay);
           addServiceActions(overlay);
@@ -29263,6 +29490,7 @@ body #app .fechou-profile-progress>div:first-child b {
           function (ev) {
             const b = ev.target.closest("[data-v134-evidence-button]");
             if (b) {
+              if (b.disabled) { ev.preventDefault(); return; }
               const host = b.closest(".v134-evidence");
               const input = host?.querySelector("[data-v134-evidence-input]");
               if (input) {
@@ -29381,14 +29609,25 @@ body #app .fechou-profile-progress>div:first-child b {
           const overlay = $("#v121ChatOverlay");
           const orderId = String(button.dataset.orderId || overlay?.dataset?.orderId || "");
           const action = button.dataset.v134ServiceAction;
-          if (action === "already_completed") {
-            if (!overlay) return;
+          // CORREÇÃO 01: a finalização é irreversível por este botão, mesmo com DOM desatualizado.
+          const currentOrder = (state.orders || []).find((x) => String(x.id) === String(orderId));
+          const currentServiceState = String(currentOrder?.service_state || currentOrder?.metadata?.service_state || "").toLowerCase();
+          const finalizedStates = ["awaiting_customer_confirmation", "completed", "complete", "done", "service_completed"];
+          if (action === "already_completed" || (action === "start" && finalizedStates.includes(currentServiceState))) {
+            if (typeof window.fechouOpenActionSheetV335 === "function") {
+              window.fechouOpenActionSheetV335("already_completed", {order: currentOrder, orderId});
+              return true;
+            }
+            if (!overlay) return false;
             overlay.querySelector(".v322-service-info")?.remove();
             const info = document.createElement("div");
             info.className = "v322-service-info";
             info.setAttribute("role", "dialog");
             info.setAttribute("aria-modal", "true");
-            info.innerHTML = '<div><b>Serviço já finalizado</b><p>O registro de conclusão já foi enviado. Agora ele aguarda a aprovação ou a contestação do cliente. A finalização não será enviada novamente.</p><button type="button">Entendi</button></div>';
+            const approved = ["completed", "complete", "done", "service_completed"].includes(currentServiceState);
+            info.innerHTML = approved
+              ? '<div><b>Serviço concluído</b><p>O serviço já foi aprovado pelo cliente e não pode ser iniciado novamente.</p><button type="button">Entendi</button></div>'
+              : '<div><b>Serviço finalizado — aguardando cliente</b><p>A conclusão já foi enviada. O cliente pode aprovar ou contestar; não é necessário iniciar ou finalizar novamente.</p><button type="button">Entendi</button></div>';
             info.querySelector("button").addEventListener("click", () => info.remove());
             overlay.appendChild(info);
             return true;
@@ -32239,7 +32478,18 @@ const esc=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":
 const currentPhoto=()=>state.currentRole==="Profissional"?(state.proPhotoData||state.proPhoto||""):(state.clientProfile?.photoData||state.clientProfile?.photo||"");
 const currentName=()=>state.currentRole==="Profissional"?(state.proName||"Profissional"):(state.clientProfile?.name||"Cliente FECHOU");
 const profileData=()=>state.currentRole==="Profissional"?{name:currentName(),role:"Profissional",category:(state.professionalCategories||[]).join(" · ")||state.proCategory||"Serviços profissionais",city:state.proCity||"Região não informada",rating:Number(state.proRating||0),reviews:Number(state.proReviews||0),description:state.proDescription||"Este profissional ainda não adicionou uma apresentação pública.",experience:state.proExperience||"",courses:state.proCourses||"",services:state.professionalServices||[]}:{name:currentName(),role:"Cliente",category:state.clientProfile?.type||"Cliente",city:state.clientProfile?.city||"Região não informada",rating:Number(state.clientProfile?.rating||0),reviews:Number(state.clientProfile?.reviews||0),description:state.clientProfile?.description||"Perfil de cliente do aplicativo.",experience:"",services:[]};
-function goProfile(){state.__fechouViewingForeignProfile=false;state.__fechouEditingProfile=false;state.selectedProfile=profileData();state.page="profileview";if(typeof render==="function")render();}
+function goProfile(){
+  // A aba do perfil já aberto não deve remontar nem piscar o layout legado.
+  if(state.page==="profileview"&&!state.__fechouEditingProfile&&!state.__fechouViewingForeignProfile&&$("#app .fechou-profile-social")){
+    footerFix();
+    return;
+  }
+  state.__fechouViewingForeignProfile=false;
+  state.__fechouEditingProfile=false;
+  state.selectedProfile=profileData();
+  state.page="profileview";
+  if(typeof render==="function")render();
+}
 function footerFix(){
   const app = $("#app");
   if (!app || !state.currentRole) return;
@@ -32407,7 +32657,16 @@ function removeExposedPageMarkers(){
   });
  }finally{window.__fechouCleaningMarkers=false;}
 }
-const oldRender=window.render;if(typeof oldRender==="function"&&!oldRender.__fechouV143User){const wrapped=function(){const r=oldRender.apply(this,arguments);setTimeout(post,0);return r};wrapped.__fechouV143User=true;window.render=wrapped;}
+const oldRender=window.render;if(typeof oldRender==="function"&&!oldRender.__fechouV143User){
+  const wrapped=function(){
+    const r=oldRender.apply(this,arguments);
+    // Aplicar a tela vigente antes do próximo paint; não expor um frame legado.
+    post();
+    return r;
+  };
+  wrapped.__fechouV143User=true;
+  window.render=wrapped;
+}
 document.addEventListener('click',e=>{
  const item=e.target.closest('.bottom-nav [data-page]');
  if(!item)return;
@@ -32602,12 +32861,18 @@ body #app .fechou-profile-expand{ border-radius:7px !important; }
   const chat = document.getElementById("v121ChatOverlay");
   if (!chat) throw new Error("Abra a conversa do serviço para consultar o contrato assinado.");
   document.getElementById("fechou-contract-view-modal")?.remove();
-  const existing = document.getElementById("fechou-contract-view-inline");
+  // Show the contract in the existing chat drawer, never before the chat header.
+  window.__fechouMarkContractSigned?.(String(orderId || chat.dataset.orderId || ''));
+  window.__fechouShowChatContractPanel?.(String(orderId || chat.dataset.orderId || ''));
+  const drawer = chat.querySelector('#fc-chat-contract-drawer');
+  const host = drawer?.querySelector('.v149-stage-slot');
+  if (!host) throw new Error('Não foi possível abrir o painel de contrato nesta conversa.');
+  const existing = host.querySelector('#fechou-contract-view-inline');
   const card = existing || document.createElement("section");
   card.id = "fechou-contract-view-inline";
   card.className = "fc-contract-card";
   card.setAttribute("aria-label", "Contrato oficial assinado");
-  card.style.cssText = "margin:12px 0;padding:14px;border:1px solid #3e5e7b;border-radius:12px;background:#172638;color:#edf4fa;display:grid;gap:10px;min-width:0";
+  card.style.cssText = "margin:0;padding:14px;border:1px solid #3e5e7b;border-radius:12px;background:#172638;color:#edf4fa;display:grid;gap:10px;min-width:0;width:100%;max-width:100%;box-sizing:border-box";
   card.replaceChildren();
   const title = document.createElement("strong");
   title.textContent = "Contrato assinado · PDF oficial da Clicksign";
@@ -32615,20 +32880,57 @@ body #app .fechou-profile-expand{ border-radius:7px !important; }
   detail.style.cssText = "margin:0;color:#c5d4e1;font-size:12px;line-height:1.5";
   detail.textContent = "Documento original confirmado pelo provedor" + (orderId ? " · Pedido " + String(orderId).slice(0,8) : "") + ". Use o visualizador nativo do navegador para imprimir.";
   const actions = document.createElement("nav");
-  actions.style.cssText = "display:flex;flex-wrap:wrap;gap:8px";
-  const link = (label,href)=>{const a=document.createElement("a");a.className="btn secondary";a.href=href;a.target="_blank";a.rel="noopener noreferrer";a.textContent=label;a.style.cssText="display:inline-flex;align-items:center;justify-content:center;min-height:42px;flex:1 1 120px;padding:8px 11px;text-align:center;border:1px solid #517398;border-radius:9px;background:#20547b;color:#fff;text-decoration:none";return a};
+  actions.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-width:0";
+  const link = (label,href)=>{const a=document.createElement("a");a.className="btn secondary";a.href=href;a.target="_blank";a.rel="noopener noreferrer";a.textContent=label;a.style.cssText="display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:0;width:100%;padding:8px 7px;text-align:center;border:1px solid #517398;border-radius:9px;background:#20547b;color:#fff;text-decoration:none;font-size:12px;box-sizing:border-box";return a};
   const downloadUrl = new URL(url.href);
   downloadUrl.searchParams.set("download", "Contrato-FECHOU-assinado.pdf");
-  actions.append(link("Abrir PDF oficial",url.href),link("Baixar PDF",downloadUrl.href),link("Imprimir PDF",url.href));
+  const printLink = link("Imprimir PDF",url.href);
+  printLink.style.gridColumn="1 / -1";
+  printLink.title="Abre o PDF oficial no visualizador do Chrome, onde é possível imprimir";
+  actions.append(link("Abrir PDF oficial",url.href),link("Baixar PDF",downloadUrl.href),printLink);
   card.append(title,detail,actions);
-  if (!existing) {
-    const host=chat.querySelector(".fc-contract-drawer, .fc-chat-tools, .fc-chat-window") || chat;
-    host.prepend(card);
-  }
-  card.scrollIntoView({behavior:"smooth",block:"center"});
+  // Replace only the contents of the contract stage. All other chat sections stay mounted.
+  if (!existing) host.replaceChildren(card);
+  host.scrollTop=0;
   return {sha256:String(sha256||""),close:()=>card.remove()};
  }
+  // C05: view-only provider status. Does NOT approve any operation on the backend.
+  const verifiedPdfOrders = new Set();
+  window.__fechouMarkContractSigned = (orderId) => { if(String(orderId||'')) verifiedPdfOrders.add(String(orderId)); };
+  window.__fechouIsContractSigned = (orderId) => verifiedPdfOrders.has(String(orderId||''));
   window.__fechouOpenSignedContractViewer = openSignedContractViewer;
+  document.addEventListener('click',async (ev)=>{
+    const button=ev.target.closest('#v121ChatOverlay [data-fechou-signed-pdf]');
+    if(!button)return;
+    ev.preventDefault();ev.stopPropagation();ev.stopImmediatePropagation();
+    if(button.disabled)return;
+    const action=String(button.dataset.fechouSignedPdf||'open');
+    const o=currentOrder();if(!o?.id)return;
+    // A blank tab is reserved synchronously, to avoid Android popup blocking
+    // after the authenticated provider lookup finishes.
+    let tab=null;
+    if(action==='print'||action==='open'||action==='download') {
+      try {tab=window.open('about:blank','_blank');}catch(_){}
+    }
+    button.disabled=true;
+    try {
+      const status=await ewApi('contracts/esign-status',{order_id:String(o.id)});
+      if(status?.signature_status!=='signed')throw new Error('A Clicksign ainda não confirmou as duas assinaturas.');
+      const file=await ewApi('contracts/esign-download',{order_id:String(o.id)});
+      const raw=file?.url||file?.documents?.[0]?.url;
+      if(!raw)throw new Error('O PDF oficial ainda não está disponível.');
+      const url=new URL(raw,location.href);
+      if(url.protocol!=='https:'||!/(^|\.)supabase\.co$/i.test(url.hostname)||url.username||url.password)throw new Error('O servidor não disponibilizou um PDF oficial seguro.');
+      window.__fechouMarkContractSigned?.(String(o.id));
+      if(action==='download') url.searchParams.set('download','Contrato-FECHOU-assinado.pdf');
+      if(tab && !tab.closed) tab.location.replace(url.href);
+      else {
+        // Some browsers block blank tabs; an explicit link remains available in the drawer.
+        openSignedContractViewer(raw,String(o.id),file?.documents?.[0]?.sha256||status.document_sha256);
+      }
+    }catch(err){try{tab?.close()}catch(_){}safeToast(String(err?.message||err));}
+    finally{if(button.isConnected)button.disabled=false;}
+  },true);
  async function downloadContract(){
   const o=currentOrder();
   if(o?.id){
@@ -39730,9 +40032,9 @@ body.fechou-guest-public-only .wrap > footer.footer {
    return null;
  }
  function distance(a,b){const R=6371000,rad=x=>x*Math.PI/180,dLat=rad(b.lat-a.lat),dLon=rad(b.lon-a.lon),x=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
- function notify(message,orderId,kind){
+ function notify(message,orderId,kind,phase){
    if((window.__fechouV178GetState?.()||{}).currentRole!=='Profissional')return;
-   const overlay=document.querySelector('#v121ChatOverlay'),box=document.createElement('div');box.className='v322-reminder';box.setAttribute('role','status');box.setAttribute('aria-live','polite');
+   const overlay=document.querySelector('#v121ChatOverlay'),box=document.createElement('div');box.className='v322-reminder';box.dataset.orderId=String(orderId);box.dataset.phase=String(phase||'');box.setAttribute('role','status');box.setAttribute('aria-live','polite');
    box.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 13px;margin:10px;border:1px solid #42678c;border-radius:12px;background:#132438;color:#eef6ff;font-size:13px;line-height:1.45;z-index:99999';
    const text=document.createElement('span');text.textContent=message;text.style.flex='1 1 190px';box.append(text);
    const open=document.createElement('button');open.type='button';open.textContent='Abrir conversa';open.style.cssText='border:1px solid #6c9bc9;border-radius:8px;background:#1b4264;color:#fff;padding:7px 10px;font-weight:700';open.addEventListener('click',async()=>{try{await window.__fechouOpenChatByOrder?.(String(orderId));box.remove()}catch(error){if(typeof window.safeToast==='function')window.safeToast(String(error?.message||'Não foi possível abrir a conversa.'))}});
@@ -39751,6 +40053,28 @@ body.fechou-guest-public-only .wrap > footer.footer {
    // A captura de GPS não deve abrir um segundo popup nem interromper a ação.
    request();
  });
+ async function notifyMissing(orderId, kind) {
+   try {
+     const latest = await (window.FECHOU_QA4_EVIDENCE?.refresh?.(orderId) || window.FECHOU_VALIDATE_EVIDENCE?.(orderId));
+     if (!latest) return;
+     const next = ['before','during','after'].find(phase => Number(latest[phase] || 0) < 1);
+     if (!next || (kind === 'arrival' && next !== 'before')) return;
+     const phaseLabel = {before:'Antes',during:'Durante',after:'Depois'}[next];
+     const message = kind === 'hourly'
+       ? 'Você ainda está executando este serviço? Registre a foto de ' + phaseLabel + ' no chat.'
+       : 'Registre a foto de ' + phaseLabel + ' no chat antes de finalizar o serviço.';
+     notify(message, orderId, kind, next);
+   } catch (error) {
+     console.warn('Lembrete suspenso: fotos não sincronizadas.', error);
+   }
+ }
+ window.addEventListener('fechou:qa4-evidence', (event) => {
+   const id = String(event.detail?.orderId || '');
+   const counts = event.detail?.counts;
+   const box = document.getElementById('fechou-v322-reminder-global');
+   if (!box || !counts || !id || box.dataset.orderId !== id) return;
+   if (Number(counts[box.dataset.phase] || 0) > 0) box.remove();
+ });
  function stopWatch(id){const key=String(id);if(watches.has(key)){try{navigator.geolocation.clearWatch(watches.get(key))}catch(_){}watches.delete(key)}}
  function startArrivalWatch(id){
    const key=String(id);if(watches.has(key)||!navigator.geolocation||!window.isSecureContext)return;
@@ -39760,7 +40084,7 @@ body.fechou-guest-public-only .wrap > footer.footer {
      try{localStorage.setItem(storageKey(key),JSON.stringify({...JSON.parse(localStorage.getItem(storageKey(key))||'{}'),arrival_tracking_unavailable:true,arrival_tracking_unavailable_at:new Date().toISOString()}))}catch(_){}
      return;
    }
-   let hits=0;const watch=navigator.geolocation.watchPosition(pos=>{const accuracy=Number(pos.coords.accuracy);if(!Number.isFinite(accuracy)||accuracy>100){hits=0;return}const d=distance({lat:pos.coords.latitude,lon:pos.coords.longitude},target);if(d<=150){hits++;if(hits>=2){stopWatch(key);notify(labels.arrival,key,'arrival');try{localStorage.setItem(storageKey(key),JSON.stringify({...JSON.parse(localStorage.getItem(storageKey(key))||'{}'),arrival_notified_at:new Date().toISOString()}))}catch(_){}}}else hits=0},()=>{}, {enableHighAccuracy:true,maximumAge:10000,timeout:20000});watches.set(key,watch);
+   let hits=0;const watch=navigator.geolocation.watchPosition(pos=>{const accuracy=Number(pos.coords.accuracy);if(!Number.isFinite(accuracy)||accuracy>100){hits=0;return}const d=distance({lat:pos.coords.latitude,lon:pos.coords.longitude},target);if(d<=150){hits++;if(hits>=2){stopWatch(key);notifyMissing(key,'arrival');try{localStorage.setItem(storageKey(key),JSON.stringify({...JSON.parse(localStorage.getItem(storageKey(key))||'{}'),arrival_notified_at:new Date().toISOString()}))}catch(_){}}}else hits=0},()=>{}, {enableHighAccuracy:true,maximumAge:10000,timeout:20000});watches.set(key,watch);
  }
  function clear(id){const key=String(id);if(timers.has(key)){clearInterval(timers.get(key));timers.delete(key)}stopWatch(key)}
  function resume(order){
@@ -39769,12 +40093,12 @@ body.fechou-guest-public-only .wrap > footer.footer {
    if(timers.has(id))return;
    let data={};try{data=JSON.parse(localStorage.getItem(storageKey(id))||'{}')}catch(_){}
    if(!data.started_at){data.started_at=new Date().toISOString();try{localStorage.setItem(storageKey(id),JSON.stringify(data))}catch(_){}}
-   const tick=()=>{const fresh=getOrder(id),current=String(fresh?.service_state||fresh?.metadata?.service_state||'').toLowerCase();if(current&&current!=='in_progress'){clear(id);return}let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey(id))||'{}')}catch(_){}const last=Date.parse(saved.last_hourly_at||saved.started_at||data.started_at||'');if(!last||Date.now()-last>=60*60*1000){if(document.visibilityState==='visible'){notify(labels.hourly,id,'hourly');saved.last_hourly_at=new Date().toISOString();try{localStorage.setItem(storageKey(id),JSON.stringify(saved))}catch(_){}}}};
+   const tick=()=>{const fresh=getOrder(id),current=String(fresh?.service_state||fresh?.metadata?.service_state||'').toLowerCase();if(current&&current!=='in_progress'){clear(id);return}let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey(id))||'{}')}catch(_){}const last=Date.parse(saved.last_hourly_at||saved.started_at||data.started_at||'');if(!last||Date.now()-last>=60*60*1000){if(document.visibilityState==='visible'){notifyMissing(id,'hourly');saved.last_hourly_at=new Date().toISOString();try{localStorage.setItem(storageKey(id),JSON.stringify(saved))}catch(_){}}}};
    tick();const timer=setInterval(tick,60*1000);timers.set(id,timer);
  }
  window.FECHOU_V322_REMINDERS={
    started(id){const key=String(id);let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey(key))||'{}')}catch(_){};saved.started_at=new Date().toISOString();try{localStorage.setItem(storageKey(key),JSON.stringify(saved))}catch(_){};resume({id:key,service_state:'in_progress'})},
-   resume,finishing(id){Promise.resolve(window.FECHOU_VALIDATE_EVIDENCE?.(id,'complete')).then((counts)=>{const missing=!counts||counts.before<1||counts.during<1||counts.after<1;if(missing)notify(labels.finish,id,'finish')}).catch(()=>{})},finished(id){clear(id);try{localStorage.removeItem(storageKey(id))}catch(_){}},clear
+   resume,finishing(id){notifyMissing(id,'finish')},finished(id){clear(id);try{localStorage.removeItem(storageKey(id))}catch(_){}},clear
  };
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;getOrders().filter(o=>String(o.service_state||o.metadata?.service_state||'').toLowerCase()==='in_progress').forEach(resume)});
  window.addEventListener('beforeunload',()=>{for(const id of watches.keys())stopWatch(id)});
@@ -42128,6 +42452,17 @@ button, .btn, [role="button"], a.btn, summary{
 #fechou-v335-event-modal .v335-review-dialog{gap:10px}
 #fechou-v335-event-modal .v335-review-dialog textarea{min-height:92px;max-height:160px;resize:vertical}
 #fechou-v335-event-modal .v335-review-dialog [data-v335-review-submit]:disabled{opacity:.7;cursor:wait}
+/* CORREÇÃO 01 — informação de serviço finalizado (identidade laranja compacta). */
+#fechou-v335-event-modal .v335-event-dialog.v335-waiting-client-info{
+  width:min(390px,100%);gap:10px;padding:18px 16px 14px;
+  background:linear-gradient(160deg,#1b2937,#111d2a);border-color:#ab6d2d;
+  box-shadow:0 22px 60px #0009;
+}
+#fechou-v335-event-modal .v335-waiting-client-info h2{color:#ffc17b;font-size:18px;line-height:1.3}
+#fechou-v335-event-modal .v335-waiting-client-info p{font-size:14px;line-height:1.55;color:#ecf0f4}
+#fechou-v335-event-modal .v335-waiting-client-info .v335-event-icon{width:48px;height:48px;background:#854b15;color:#fff;font-size:23px}
+#fechou-v335-event-modal .v335-waiting-client-info .v335-info-ack{background:#b96c1f!important;color:#fff!important;min-height:44px;font-size:14px}
+#fechou-v335-event-modal .v335-waiting-client-info .v335-event-close-link{font-size:13px;min-height:30px}
 </style>
 <script id="fechou-v335-events-js">
 window.fechouNativeBtnClassV335 = function (name) {
@@ -42159,9 +42494,13 @@ window.fechouNativeBtnClassV335 = function (name) {
     catch (_) { return ''; }
   }
   function role() {
-    const r = String(appState().currentRole || appState().role || '').toLowerCase();
-    if (r.includes('prof')) return 'pro';
-    return 'client';
+    const st = appState();
+    const id = String(st.supabaseUser?.id || st.user?.id || '');
+    const verified = id && String(st.__fechouVerifiedRoleUserId || '') === id && st.profile;
+    if (!verified) return 'unknown';
+    const r = String(st.profile.role || '').toLowerCase();
+    if (r === 'professional' || r === 'profissional') return 'pro';
+    return r === 'client' || r === 'cliente' ? 'client' : 'unknown';
   }
   function isDirect(o) {
     const mode = String(o?.payment_mode || o?.mode || o?.metadata?.payment_mode || (typeof window.modeOf === 'function' ? window.modeOf(o) : '') || '').toLowerCase();
@@ -42283,45 +42622,28 @@ window.fechouNativeBtnClassV335 = function (name) {
     return sync;
   }
   async function uploadActionPhotos(orderId, files, kind, notes) {
-    const selected = Array.from(files || []).filter((f) => String(f.type || '').startsWith('image/')).slice(0, 5);
-    if (!selected.length) return { saved: 0, paths: [] };
-    if (selected.some((f) => f.size > 20 * 1024 * 1024)) throw new Error('Cada foto pode ter no máximo 20 MB.');
-    const db = dbClient();
-    const userId = currentUserId();
-    if (!db?.storage || !userId || !orderId) throw new Error('Não foi possível enviar as fotos agora. Abra o chat e tente novamente.');
+    const selected=Array.from(files||[]).filter(f=>String(f.type||'').startsWith('image/')).slice(0,5);
+    if(!selected.length) return {saved:0,paths:[]};
+    if(selected.some(f=>f.size>20*1024*1024)) throw new Error('Cada foto pode ter no máximo 20 MB.');
+    const db=dbClient(),userId=currentUserId();
+    if(!db?.storage || !userId || !orderId) throw new Error('Entre na conta para enviar fotos.');
     await window.fechouEnsureCompactSupabaseSession?.(db);
-    const phase = ({ contest: 'contest', contest_reply: 'contest_reply', cancel: 'cancel', finish_extra: 'finish_extra' }[kind] || 'contest_reply');
-    const saved = [];
-    let constraintBlocked = false;
-    for (const file of selected) {
-      const ext = (file.name.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'jpg';
-      const path = userId + '/' + orderId + '/evidence/' + phase + '/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
-      let usedBucket = 'eworkers-service-evidence';
-      let usedPath = path;
-      const up = await db.storage.from('eworkers-service-evidence').upload(path, file, { upsert: false, contentType: file.type || 'image/jpeg', cacheControl: '3600' });
-      if (up.error) {
-        usedBucket = 'eworkers-chat';
-        usedPath = userId + '/' + orderId + '/chat/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
-        const up2 = await db.storage.from('eworkers-chat').upload(usedPath, file, { upsert: false, contentType: file.type || 'image/jpeg', cacheControl: '3600' });
-        if (up2.error) throw new Error(up2.error.message || 'Uma foto não pôde ser enviada.');
-      }
-      const row = { order_id: String(orderId), contract_id: findOrder(orderId)?.contract?.id || null, uploader_id: userId, phase, storage_path: usedPath, file_name: file.name, mime_type: file.type || 'image/jpeg', file_size: file.size, notes: notes || kind };
-      if (usedBucket === 'eworkers-service-evidence') {
-        const ins = await db.from('fechou_service_evidence').insert(row);
-        if (ins.error) {
-          if (ins.error.code === '23514' || /phase|check constraint/i.test(String(ins.error.message || ''))) constraintBlocked = true;
-          console.warn('FECHOU: foto enviada ao Storage, mas a tabela de evidências não aceitou a fase ' + phase, ins.error);
-        }
-      }
-      saved.push({ bucket: usedBucket, path: usedPath, name: file.name, mime: file.type || 'image/jpeg' });
-    }
-    try {
-      const api = apiFn();
-      if (api && kind === 'contest_reply') await api('service/contest-reply', { order_id: String(orderId), message: notes || '', photos: saved });
-    } catch (err) {
-      console.info('FECHOU: endpoint service/contest-reply indisponível; fotos ficaram no Storage.', err);
-    }
-    return { saved: saved.length, paths: saved, constraintBlocked };
+    const phase=({contest:'contest',contest_reply:'contest_reply',cancel:'cancel',finish_extra:'finish_extra'})[kind]||'contest';
+    // Mesma estratégia rápida das fotos de contestação, sem perder as validações do servidor.
+    const result=await Promise.allSettled(selected.map(async(file)=>{
+      const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,8)||'jpg';
+      const path=userId+'/'+orderId+'/evidence/'+phase+'/'+Date.now()+'_'+Math.random().toString(36).slice(2)+'.'+ext;
+      const bucket=db.storage.from('eworkers-service-evidence');
+      const uploaded=await bucket.upload(path,file,{upsert:false,contentType:file.type||'image/jpeg',cacheControl:'3600'});
+      if(uploaded.error) throw uploaded.error;
+      const row={order_id:String(orderId),contract_id:findOrder(orderId)?.contract?.id||null,uploader_id:userId,phase,storage_path:path,file_name:file.name,mime_type:file.type||'image/jpeg',file_size:file.size,notes:notes||kind};
+      const stored=await db.from('fechou_service_evidence').insert(row);
+      if(stored.error){await bucket.remove([path]).catch(()=>{});throw stored.error;}
+      return {storage_path:path};
+    }));
+    const failed=result.find(x=>x.status==='rejected');
+    if(failed) throw new Error('Uma foto não foi registrada: '+String(failed.reason?.message||failed.reason||'Erro de armazenamento'));
+    return {saved:result.length,paths:result.map(x=>x.value)};
   }
 
   function escapeHtml(s) {
@@ -42371,7 +42693,7 @@ window.fechouNativeBtnClassV335 = function (name) {
     contract_both_signed: { icon: '✓', tone: 'is-ok', title: 'Contrato assinado', body: () => 'As duas assinaturas foram confirmadas no documento atual.', action: 'Abrir chat', go: 'chat' },
     payment_confirmed: { icon: 'R$', tone: 'is-ok', title: 'Pagamento confirmado', body: (e) => e.direct ? 'A contratação está confirmada.' : 'O pagamento foi confirmado.', action: (e) => e.direct ? 'Abrir chat' : 'Ver carteira', go: (e) => e.direct ? 'chat' : 'wallet' },
     wallet_reserved: { icon: 'R$', tone: 'is-ok', title: 'Valor reservado', body: () => 'O valor foi reservado na sua carteira.', action: 'Ver carteira', go: 'wallet' },
-    service_started: { icon: '▶', tone: '', title: 'Serviço iniciado', body: (e) => 'O serviço' + (e.service ? ' ' + e.service : '') + ' foi iniciado.', action: 'Abrir chat', go: 'chat' },
+    service_started: { icon: '✓', tone: 'is-ok', title: 'Serviço iniciado', body: (e) => 'O serviço' + (e.service ? ' ' + e.service : '') + ' foi iniciado.', action: 'Abrir chat', go: 'chat' },
     photos_registered: { icon: '📷', tone: '', title: 'Fotos registradas', body: (e) => 'Novas fotos foram registradas' + (e.service ? ' em ' + e.service : ' no serviço') + '.', action: 'Ver fotos', go: 'photos' },
     service_finished: {
       icon: '✓', tone: 'is-warn', title: 'Serviço finalizado',
@@ -42533,12 +42855,14 @@ window.fechouNativeBtnClassV335 = function (name) {
           const confirmed = await window.__fechouRunServiceAction(btn);
           if (confirmed !== true && confirmed?.ok !== true)
             throw new Error('A aprovação não foi confirmada. Confira o aviso anterior e tente novamente.');
+          dismissStaleServiceFinished(orderId);
           return confirmed;
         } finally { btn.remove(); }
       }
       if (!api) throw new Error('Não foi possível confirmar a aprovação agora.');
       const r = await api('service/approve-completion', { order_id: orderId });
       if (r?.ok !== true) throw new Error(r?.error || 'A aprovação não foi confirmada pelo servidor.');
+      dismissStaleServiceFinished(orderId);
       try { await window.ewSyncOrders?.(); } catch (_) {}
       return r;
     }
@@ -42550,6 +42874,8 @@ window.fechouNativeBtnClassV335 = function (name) {
       const payload = { order_id: orderId, reason };
       if (ctx.photoUpload?.paths?.length) payload.photos = ctx.photoUpload.paths;
       const r = await api('service/contest-completion', payload);
+      if(r?.ok !== true) throw new Error(r?.error || 'O servidor não confirmou a contestação.');
+      dismissStaleServiceFinished(orderId);
       try { await window.ewSyncOrders?.(); } catch (_) {}
       try { window.renderV121ChatOverlay?.(); } catch (_) {}
       return r;
@@ -42558,14 +42884,10 @@ window.fechouNativeBtnClassV335 = function (name) {
       const reason = String(ctx.reason || '').trim();
       if (reason.length < 8) throw new Error('Descreva a resposta com pelo menos 8 caracteres.');
       ctx.photoUpload = await uploadActionPhotos(orderId, ctx.photos || [], 'contest_reply', reason);
-      const api2 = apiFn();
-      if (api2) {
-        try { return await api2('service/contest-reply', { order_id: orderId, message: reason, photos: ctx.photoUpload?.paths || [] }); }
-        catch (err) {
-          if (!/404|not found|not implemented|unknown action|não exist/i.test(String(err?.message || err || ''))) throw err;
-        }
-      }
-      return { message: 'Resposta registrada com ' + (ctx.photoUpload?.saved || 0) + ' foto(s).', pending_backend: true };
+      if (!api) throw new Error('Serviço de respostas indisponível.');
+      const r=await api('service/contest-reply',{order_id:orderId,message:reason,photos:ctx.photoUpload?.paths||[]});
+      if(r?.ok!==true) throw new Error(r?.error||'A resposta não foi confirmada pelo servidor.');
+      return r;
     }
     if (kind === 'start') {
       if (typeof window.__fechouRunServiceAction === 'function') {
@@ -42657,7 +42979,13 @@ window.fechouNativeBtnClassV335 = function (name) {
     ctx.order = o;
     ctx.direct = direct;
     showing = true;
-    if (kind === 'approve') renderApproveConfirm(ctx);
+    // CORREÇÃO 01: bloquear a janela de iniciar quando o serviço já foi finalizado.
+    const serviceStatus = String(o?.service_state || o?.metadata?.service_state || '').toLowerCase();
+    if (kind === 'start' && ['awaiting_customer_confirmation', 'completed', 'complete', 'done', 'service_completed'].includes(serviceStatus)) {
+      kind = 'already_completed';
+    }
+    if (kind === 'already_completed') renderAlreadyCompletedInfo(ctx);
+    else if (kind === 'approve') renderApproveConfirm(ctx);
     else if (kind === 'review') renderReviewForm(ctx);
     else if (kind === 'contest') renderContestForm(ctx);
     else if (kind === 'contest_reply') renderContestReplyForm(ctx);
@@ -42714,6 +43042,33 @@ window.fechouNativeBtnClassV335 = function (name) {
     }
   }
 
+  // R6: a ação do chat oferece as MESMAS escolhas do aviso de conclusão.
+  async function renderDecisionSheet(ctx) {
+    const o = findOrder(ctx.orderId) || ctx.order;
+    if (role() !== 'client' || !o || String(o.client_id || '') !== uid()) {
+      toast('Somente o cliente titular desta contratação pode aprovar ou contestar.');
+      closeOverlay(); return;
+    }
+    const stateNow = String(o.service_state || o.metadata?.service_state || '').toLowerCase();
+    if (stateNow !== 'awaiting_customer_confirmation' || !await canShowServiceFinished({orderId:ctx.orderId})) {
+      toast('Esta contratação não está mais aguardando uma decisão. Atualize o chat.');
+      closeOverlay(); return;
+    }
+    const ov = mountOverlay(`<section class="v335-event-dialog">
+      <div class="v335-event-icon is-warn" aria-hidden="true">✓</div>
+      <h2 id="v335-event-title">Serviço finalizado</h2>
+      <p>O profissional finalizou o serviço. Escolha uma ação: aprovar o serviço ou abrir uma contestação.</p>
+      ${summaryDl([{label:'Serviço',value:serviceName(o)},{label:'Profissional',value:proName(o)}])}
+      <div class="v335-event-actions">
+        <button type="button" class="btn v335-btn-ok" data-r6-decision="approve">Aprovar serviço</button>
+        <button type="button" class="btn danger v335-btn-danger" data-r6-decision="contest">Contestar serviço</button>
+        <button type="button" class="v335-event-close-link" data-v335-kind="close">Fechar</button>
+      </div>
+    </section>`, true);
+    bindCommon(ov, ctx);
+    ov.querySelector('[data-r6-decision="approve"]').addEventListener('click', () => renderApproveConfirm(ctx));
+    ov.querySelector('[data-r6-decision="contest"]').addEventListener('click', () => renderContestForm(ctx));
+  }
   function renderApproveConfirm(ctx) {
     const o = ctx.order;
     const rows = [
@@ -42746,6 +43101,13 @@ window.fechouNativeBtnClassV335 = function (name) {
   // R43: avaliação real e recuperável após o cliente aprovar a conclusão.
   // A aprovação financeira é preservada; o registro da avaliação usa o endpoint
   // autenticado service/submit-review e não depende de um botão inexistente no chat.
+  async function alreadyReviewed(orderId) {
+    const db=dbClient(),userId=uid();
+    if(!db?.from||!userId||!orderId) throw new Error('Não foi possível conferir a avaliação.');
+    const {data,error}=await db.from('service_reviews').select('id').eq('order_id',orderId).eq('reviewer_id',userId).limit(1);
+    if(error) throw error;
+    return Boolean(data?.length);
+  }
   function renderReviewForm(ctx) {
     ctx = ctx || {};
     const orderId = String(ctx.orderId || ctx.order?.id || '');
@@ -42776,6 +43138,20 @@ window.fechouNativeBtnClassV335 = function (name) {
     </section>`, true);
     let rating = Number(ctx.reviewRating) || 0;
     let saving = false;
+    // Evita exibir avaliação reutilizável antes de validar o registro persistido.
+    alreadyReviewed(orderId).then(exists=>{
+      if(!ov.isConnected)return;
+      if(exists){
+        ov.querySelector('[data-v335-review-submit]').disabled=true;
+        ov.querySelector('[data-v335-review-submit]').textContent='Avaliação já registrada';
+        ov.querySelector('.v335-review-stars').setAttribute('aria-disabled','true');
+        ov.querySelectorAll('[data-v335-review-star]').forEach(b=>b.disabled=true);
+        ov.querySelector('#v335-review-text').disabled=true;
+      }
+    }).catch(e=>{if(ov.isConnected){
+      ov.querySelector('[data-v335-review-submit]').disabled=true;
+      ov.querySelector('[data-v335-review-submit]').textContent='Não foi possível validar a avaliação';
+    }});
     const stars = Array.from(ov.querySelectorAll('[data-v335-review-star]'));
     const errBox = ov.querySelector('[data-v335-review-error]');
     const send = ov.querySelector('[data-v335-review-submit]');
@@ -42825,12 +43201,14 @@ window.fechouNativeBtnClassV335 = function (name) {
       send.textContent = 'Salvando avaliação…';
       errBox.hidden = true;
       try {
+        if(await alreadyReviewed(orderId)) throw new Error('Você já avaliou este profissional neste serviço.');
         const api = apiFn();
         if (!api) throw new Error('Serviço de avaliações indisponível. Reabra o chat e tente novamente.');
         const response = await api('service/submit-review', { order_id: orderId, rating, comment });
         if (response?.ok !== true || response?.review_saved !== true)
           throw new Error(response?.error || 'O servidor não confirmou o registro da avaliação.');
         if (o) o.review = { rating, comment };
+        window.__fechouReviewSavedV6?.(orderId);
         try { await window.ewSyncOrders?.(); }
         catch (e) { console.warn('Avaliação salva; atualização visual pendente.', e); }
         renderSimpleSuccess(ctx, 'Avaliação registrada',
@@ -42955,6 +43333,27 @@ window.fechouNativeBtnClassV335 = function (name) {
     ov.querySelector('[data-v335-kind="go-chat"]').addEventListener('click', () => { closeOverlay(false); openTarget(ctx, 'chat'); showNext(); });
   }
 
+  // CORREÇÃO 01: pop-up informativo sem chamadas ao backend nem opção de reiniciar.
+  function renderAlreadyCompletedInfo(ctx) {
+    const status = String(ctx.order?.service_state || ctx.order?.metadata?.service_state || '').toLowerCase();
+    const approved = ['completed', 'complete', 'done', 'service_completed'].includes(status);
+    const title = approved ? 'Serviço concluído' : 'Serviço finalizado — aguardando cliente';
+    const description = approved
+      ? `O serviço ${serviceName(ctx.order)} já foi concluído e aprovado pelo cliente. Não é possível iniciar ou finalizar novamente.`
+      : `O serviço ${serviceName(ctx.order)} já foi finalizado, e a conclusão foi enviada ao cliente. Agora aguardamos a aprovação ou uma eventual contestação. Você será informado quando houver uma atualização. Não é necessário iniciar nem finalizar novamente.`;
+    const ov = mountOverlay(`<section class="v335-event-dialog v335-waiting-client-info" role="dialog" aria-modal="true" aria-labelledby="v335-event-title">
+      <div class="v335-event-icon is-warn" aria-hidden="true">⏳</div>
+      <h2 id="v335-event-title">${escapeHtml(title)}</h2>
+      <p>${escapeHtml(description)}</p>
+      <div class="v335-event-actions">
+        <button type="button" class="btn v335-btn-primary v335-info-ack" data-v335-kind="acknowledge">Entendi</button>
+        <button type="button" class="v335-event-close-link" data-v335-kind="close">Fechar</button>
+      </div>
+    </section>`, false);
+    bindCommon(ov, ctx);
+    ov.querySelector('[data-v335-kind="acknowledge"]').addEventListener('click', () => closeOverlay());
+  }
+
   function renderStartConfirm(ctx) {
     const ov = mountOverlay(`<section class="v335-event-dialog">
       <div class="v335-event-icon" aria-hidden="true">▶</div>
@@ -42973,33 +43372,65 @@ window.fechouNativeBtnClassV335 = function (name) {
   }
 
   function renderCompleteConfirm(ctx) {
-    const flags = evidenceFlags(ctx.orderId);
-    const rows = [
-      { phase: 'before', label: 'Antes' },
-      { phase: 'during', label: 'Durante' },
-      { phase: 'after', label: 'Depois' }
-    ].map((x) => `<div class="v335-check ${flags[x.phase] ? 'is-ok' : 'is-missing'}">${flags[x.phase] ? '✓' : '!'} Foto de ${x.label}: ${flags[x.phase] ? 'registrada' : 'faltando'}</div>`).join('');
-    const missing = !flags.before || !flags.during || !flags.after;
-    const ov = mountOverlay(`<section class="v335-event-dialog">
-      <div class="v335-event-icon is-warn" aria-hidden="true">✓</div>
-      <h2 id="v335-event-title">Finalizar serviço</h2>
-      <p>Confira as fotos obrigatórias antes de enviar a conclusão ao cliente.</p>
-      ${rows}
-      ${missing ? '<p class="v335-error">Registre a foto que falta no chat do serviço antes de finalizar.</p>' : ''}
-      ${photoFieldHtml('v335-finish-photo', 'Fotos extras (até 5, opcional)')}
-      <p class="v335-error" id="v335-finish-err" hidden></p>
-      <div class="v335-event-actions">
-        <button type="button" class="btn v335-btn-primary" data-v335-kind="confirm-complete" ${missing ? 'disabled' : ''}>Confirmar finalização</button>
-        ${voltarHtml()}
-        <button type="button" class="v335-event-close-link" data-v335-kind="close">Fechar</button>
-      </div>
-    </section>`, true);
-    const getFinishPhotos = bindPhotoLimit(ov, 'v335-finish-photo', 5, ov.querySelector('#v335-finish-err'));
+    const phases = [{phase:"before",label:"Antes"},{phase:"during",label:"Durante"},{phase:"after",label:"Depois"}];
+    const rows = phases.map(x => '<div class="v335-check is-pending" data-qa4-check="' + x.phase + '">… Foto de ' + x.label + ': verificando</div>').join('');
+    const ov = mountOverlay('<section class="v335-event-dialog">' +
+      '<div class="v335-event-icon is-warn" aria-hidden="true">✓</div>' +
+      '<h2 id="v335-event-title">Finalizar serviço</h2>' +
+      '<p data-qa4-evidence-status aria-live="polite">Sincronizando as fotos registradas…</p>' +
+      rows +
+      photoFieldHtml('v335-finish-photo', 'Fotos extras (até 5, opcional)') +
+      '<p class="v335-error" id="v335-finish-err" hidden></p>' +
+      '<div class="v335-event-actions">' +
+      '<button type="button" class="btn v335-btn-primary" data-v335-kind="confirm-complete" disabled>Confirmar finalização</button>' +
+      voltarHtml() +
+      '</div></section>', true);
+    const errorBox = ov.querySelector('#v335-finish-err');
+    const confirmButton = ov.querySelector('[data-v335-kind="confirm-complete"]');
+    const status = ov.querySelector('[data-qa4-evidence-status]');
+    const getFinishPhotos = bindPhotoLimit(ov, 'v335-finish-photo', 5, errorBox);
     bindCommon(ov, ctx, null, () => closeOverlay());
-    ov.querySelector('[data-v335-kind="confirm-complete"]').addEventListener('click', () => {
+    let checking = null;
+    async function syncEvidence() {
+      if (checking) return checking;
+      checking = (async () => {
+        confirmButton.disabled = true;
+        status.textContent = 'Sincronizando as fotos registradas…';
+        try {
+          await window.FECHOU_QA4_EVIDENCE?.wait?.(ctx.orderId);
+          const counts = await (window.FECHOU_QA4_EVIDENCE?.refresh?.(ctx.orderId)
+            || window.FECHOU_VALIDATE_EVIDENCE?.(ctx.orderId));
+          if (!counts) throw new Error('Não foi possível confirmar as fotos salvas.');
+          if (!ov.isConnected) return false;
+          const missing = phases.filter(x => Number(counts[x.phase] || 0) < 1);
+          phases.forEach(x => {
+            const row = ov.querySelector('[data-qa4-check="' + x.phase + '"]');
+            const present = Number(counts[x.phase] || 0) >= 1;
+            if (!row) return;
+            row.className = 'v335-check ' + (present ? 'is-ok' : 'is-missing');
+            row.textContent = (present ? '✓ ' : '! ') + 'Foto de ' + x.label + ': ' + (present ? 'registrada' : 'faltando');
+          });
+          status.textContent = missing.length ? 'Registre no chat as fotos que faltam antes de finalizar.' : 'As três etapas estão registradas e sincronizadas.';
+          confirmButton.disabled = missing.length > 0;
+          errorBox.hidden = true;
+          return !missing.length;
+        } catch (e) {
+          if (!ov.isConnected) return false;
+          status.textContent = 'Não foi possível sincronizar as fotos. Volte ao chat e tente novamente.';
+          errorBox.textContent = String(e?.message || 'Erro ao consultar as fotos.');
+          errorBox.hidden = false;
+          confirmButton.disabled = true;
+          return false;
+        } finally { checking = null; }
+      })();
+      return checking;
+    }
+    confirmButton.addEventListener('click', async () => {
+      if (!await syncEvidence()) return;
       ctx.photos = getFinishPhotos();
       submitKind('complete', ctx, () => renderSimpleSuccess(ctx, 'Serviço finalizado', 'A conclusão foi enviada ao cliente para aprovação ou contestação.', 'Abrir chat', 'chat'));
     });
+    syncEvidence();
   }
 
   function renderPayoutConfirm(ctx) {
@@ -43109,7 +43540,7 @@ window.fechouNativeBtnClassV335 = function (name) {
     const btns = actions.map((a) => ({
       label: a.label,
       kind: a.kind,
-      className: a.kind === 'approve' ? 'v335-btn-ok' : (a.kind === 'contest' ? 'v335-btn-outline' : 'v335-btn-primary')
+      className: a.kind === 'approve' ? 'v335-btn-ok' : (a.kind === 'contest' ? 'danger v335-btn-danger' : 'v335-btn-primary')
     }));
     const ov = mountOverlay(`<section class="v335-event-dialog">
       <div class="v335-event-icon ${copy.tone || ''}" aria-hidden="true">${copy.icon || 'i'}</div>
@@ -43123,7 +43554,7 @@ window.fechouNativeBtnClassV335 = function (name) {
         if (kind === 'close') { closeOverlay(); return; }
         if (kind === 'approve' || kind === 'contest' || kind === 'contest_reply') {
           const ctx = { orderId: e.orderId, order: e.order || findOrder(e.orderId), direct: e.direct, fromEvent: e, fromCopy: copy };
-          window.fechouOpenActionSheetV335(kind, ctx);
+          window.fechouOpenActionSheetV335(kind === 'approve' ? 'approve_confirm' : kind, ctx);
           return;
         }
         const act = actions.find((a) => a.kind === kind) || actions.find((a) => a.label === btn.textContent);
@@ -43136,19 +43567,49 @@ window.fechouNativeBtnClassV335 = function (name) {
     if (!actions.length) setTimeout(() => { try { if (ov && ov.isConnected) closeOverlay(); } catch (_) {} }, 5000);
   }
 
+  function dismissStaleServiceFinished(orderId) {
+    const id=String(orderId||'');
+    for (let i=queue.length-1;i>=0;i--)
+      if(queue[i].e.type==='service_finished' && String(queue[i].e.orderId||'')===id) queue.splice(i,1);
+  }
+  async function canShowServiceFinished(entry) {
+    if (role() !== 'client') return false;
+    const id=String(entry?.orderId||'');
+    const db=dbClient();
+    const userId=uid();
+    if (!id || !userId || !db?.from) return false;
+    // Revalidar SEMPRE contra o backend: cache de notificações não comprova pendência.
+    const {data,error}=await db.from('orders')
+      .select('id,client_id,service_state,contest_submitted_at,completed_at')
+      .eq('id',id).eq('client_id',userId).maybeSingle();
+    if(error || !data) return false;
+    return String(data.service_state||'').toLowerCase()==='awaiting_customer_confirmation'
+      && !data.contest_submitted_at && !data.completed_at;
+  }
   function showNext() {
     if (showing) return;
     const next = queue.shift();
     if (!next) return;
     showing = true;
-    renderModal(next.e, next.copy);
+    if(next.e.type==='service_finished') {
+      canShowServiceFinished(next.e).then(ok=>{
+        if(!showing) return;
+        if(!ok){showing=false;showNext();return;}
+        renderModal(next.e,next.copy);
+      }).catch(()=>{showing=false;showNext();});
+    } else renderModal(next.e,next.copy);
   }
 
   window.fechouEmitEventV335 = function (raw) {
     if (!raw || !raw.type) return false;
     const spec = CATALOG[raw.type];
     if (!spec) return false;
+    const ownerByEvent={proposal_received:'client',proposal_accepted:'pro',proposal_rejected:'pro',wallet_reserved:'client',wallet_released:'pro',service_finished:'client',payout_requested:'pro',payout_sent:'pro',payout_rejected:'pro'};
+    if(ownerByEvent[raw.type] && role()!==ownerByEvent[raw.type]) return false;
     const o = raw.order || findOrder(raw.orderId);
+    const viewer=uid();
+    if(o && viewer && o.client_id && o.professional_id &&
+        String(o.client_id)!==viewer && String(o.professional_id)!==viewer) return false;
     const direct = raw.direct != null ? !!raw.direct : isDirect(o);
     if (direct && /wallet_reserved|wallet_released|payout_requested|payout_sent|payout_rejected/.test(raw.type)) return false;
     const e = { ...raw, direct, service: raw.service || serviceName(o), orderId: raw.orderId || o?.id || '', order: o };
@@ -43675,33 +44136,67 @@ window.fechouNativeBtnClassV335 = function (name) {
 
   function ensureContestTools(ov) {
     const o = findOrder(orderIdOf(ov));
-    if (!o || !waitingClient(o) || !isClient(o)) return;
-    const grid = ov.querySelector('.fc-chat-tools-grid');
-    if (!grid) return;
+    const grid=ov.querySelector('.fc-chat-tools-grid');
+    if(!grid)return;
+    if (!o || !waitingClient(o) || !isClient(o)) {
+      if(o && isClient(o)) grid.querySelector('[data-fc-tool="approve"]')?.remove();
+      return;
+    }
     const service = grid.querySelector('[data-fc-tool="service"],[data-fc-tool="approve"]');
-    if (service && !/Contestar/i.test(service.textContent || '')) {
-      service.innerHTML = '<span aria-hidden="true">'+window.fechouChatIcon('approve')+'</span>Aprovar serviço';
+    if (service && !/Aprovar \/ Contestar serviço/i.test(service.textContent || '')) {
+      service.innerHTML = '<span aria-hidden="true">'+window.fechouChatIcon('approve')+'</span>Aprovar / Contestar serviço';
       service.disabled = false;
       service.dataset.fcTool = 'approve';
     }
     // A contestação não duplica o botão de aprovação nesta grade.
   }
 
+  const reviewCacheV6=new Map();
+  function markReviewV6(orderId, reviewed) {
+    const id=String(stateOf().supabaseUser?.id||'')+':'+String(orderId||'');
+    reviewCacheV6.set(id,Boolean(reviewed));
+    const ov=overlay();
+    if(ov && orderIdOf(ov)===String(orderId||'')) ensureReviewTool(ov);
+  }
+  window.__fechouReviewSavedV6 = (id)=>markReviewV6(id,true);
   function ensureReviewTool(ov) {
-    if (!ov) return;
-    const grid = ov.querySelector('.fc-chat-tools-grid');
-    const o = findOrder(orderIdOf(ov));
-    if (!grid) return;
-    const current = grid.querySelector('[data-fc-tool="review"]');
-    const completed = serviceStateOf(o) === 'completed' || String(o?.status || '').toLowerCase() === 'serviço concluído';
-    if (!completed || !isClient(o)) { current?.remove(); return; }
-    if (current) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'fc-tool-review';
-    btn.dataset.fcTool = 'review';
-    btn.innerHTML = '<span aria-hidden="true">★</span> Avaliar profissional';
-    grid.appendChild(btn);
+    if(!ov) return;
+    const grid=ov.querySelector('.fc-chat-tools-grid');
+    const o=findOrder(orderIdOf(ov));
+    if(!grid) return;
+    let current=grid.querySelector('[data-fc-tool="review"]');
+    const completed=serviceStateOf(o)==='completed'||String(o?.status||'').toLowerCase()==='serviço concluído';
+    if(!completed||!isClient(o)){current?.remove();return;}
+    if(!current){
+      current=document.createElement('button');current.type='button';
+      current.className='fc-tool-review';current.dataset.fcTool='review';
+      current.innerHTML='<span aria-hidden="true">★</span> Avaliar profissional';
+      grid.appendChild(current);
+    }
+    const userId=String(stateOf().supabaseUser?.id||'');
+    const orderId=String(o.id||'');
+    const key=userId+':'+orderId;
+    const paint=(value)=>{
+      if(!current?.isConnected)return;
+      const done=value===true;
+      current.disabled=value!==false;
+      current.style.opacity=done?'0.40':value===null?'0.58':'1';
+      current.style.pointerEvents=done?'none':'';
+      current.title=done?'Avaliação já registrada':value===null?'Consultando avaliação...':'Avaliar profissional';
+      current.setAttribute('aria-disabled',String(value!==false));
+      current.innerHTML='<span aria-hidden="true">★</span> '+(done?'Profissional já avaliado':'Avaliar profissional');
+    };
+    if(reviewCacheV6.has(key)){paint(reviewCacheV6.get(key));return;}
+    paint(null);
+    const db=window.ewSupabase||window.__FECHOU_SUPABASE_CLIENT;
+    if(!db?.from||!userId){paint(null);return;}
+    reviewCacheV6.set(key,null);
+    db.from('service_reviews').select('id').eq('order_id',orderId).eq('reviewer_id',userId).limit(1)
+      .then(({data,error})=>{
+        if(error){reviewCacheV6.delete(key);paint(null);return;}
+        const exists=Boolean(data?.length);
+        reviewCacheV6.set(key,exists);paint(exists);
+      },()=>{reviewCacheV6.delete(key);paint(null);});
   }
 
   function closeAction(ov) {
@@ -43773,8 +44268,13 @@ window.fechouNativeBtnClassV335 = function (name) {
       const o = findOrder(orderIdOf(ov));
       let action = kind;
       if (kind === 'service') {
-        if (waitingClient(o) && isClient(o)) action = 'approve';
+        // CORREÇÃO 01: o botão da grade é genérico; seu destino depende do estado atual.
+        if (!o) {
+          action = ov.querySelector('.fc-chat-action-bridge [data-v134-service-action]')?.dataset.v134ServiceAction || '';
+          if (!action) { toast('Não foi possível consultar o status do serviço. Atualize a conversa.'); return; }
+        } else if (waitingClient(o)) action = isClient(o) ? 'approve' : 'already_completed';
         else if (serviceStateOf(o) === 'in_progress') action = 'complete';
+        else if (['completed', 'complete', 'done', 'service_completed'].includes(serviceStateOf(o))) action = 'already_completed';
         else action = 'start';
       }
       return openServiceSheet(action);
@@ -43858,11 +44358,19 @@ window.fechouNativeBtnClassV335 = function (name) {
     if (!thread) return;
     const msgs = thread.querySelectorAll('.fc-message, article.fc-message');
     if (chatLoading && !msgs.length) {
-      thread.innerHTML = '<div class="v335-chat-empty" role="status"><b>Carregando mensagens…</b><span>Estamos buscando a conversa desta contratação.</span></div>';
+      const loadingMarkup = '<div class="v335-chat-empty" role="status"><b>Carregando mensagens…</b><span>Estamos buscando a conversa desta contratação.</span></div>';
+      if (thread.innerHTML !== loadingMarkup) thread.innerHTML = loadingMarkup;
       return;
     }
     if (!msgs.length) {
-      thread.innerHTML = '<div class="v335-chat-empty"><b>Nenhuma mensagem por aqui</b><span>Se o profissional já enviou uma mensagem, atualize a conversa.</span><button type="button" data-v335-chat-retry>Tentar novamente</button></div>';
+      const order = findOrder(orderIdOf(ov));
+      const uid = String(stateOf()?.supabaseUser?.id || stateOf()?.user?.id || '');
+      const asProfessional = order && uid
+        ? String(order.client_id || '') !== uid
+        : /profissional|professional|^pro$/i.test(String(stateOf()?.currentRole || ''));
+      const peer = asProfessional ? 'cliente' : 'profissional';
+      const emptyMarkup = '<div class="v335-chat-empty"><b>Nenhuma mensagem por aqui</b><span>Se o ' + peer + ' já enviou uma mensagem, atualize a conversa.</span><button type="button" data-v335-chat-retry>Tentar novamente</button></div>';
+      if (thread.innerHTML !== emptyMarkup) thread.innerHTML = emptyMarkup;
       return;
     }
     // Do not scroll on every mutation, refresh or incoming notification.
@@ -45538,8 +46046,7 @@ html body #app .v335-history-item .v335-status-chip.is-no:not(#x){background:#ef
 html body #app .v173-refund-panel:not(#x){background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;margin:0!important;max-width:100%!important;box-sizing:border-box!important}
 html body #app .v173-refund-panel:not(#x)>div>h2{display:none!important}
 html body #app .v173-refund-panel:not(#x)>div>p{font-size:12px!important;margin:0 0 6px!important;padding:10px 14px 0!important}
-html body #app .v173-refund-panel:not(#x) .v134-ledger-row:not(.v335-history-item){display:grid!important;grid-template-columns:30px minmax(0,1fr) max-content!important;gap:8px!important;align-items:start!important;padding:12px 8px!important}
-html body #app .v173-refund-panel:not(#x) .v134-ledger-row>b{white-space:nowrap}
+/* A apresentação antiga com 3 colunas dos reembolsos foi removida: o renderer atual usa fechou-r2-refund-item. */
 </style>
 <script id="fechou-fix-r11-js">
 /* R11 — 7.2: mensagens técnicas (servidor, banco, API, RLS...) viram texto simples para o usuário */
@@ -45845,6 +46352,84 @@ html body #app button:focus-visible,html body .fechou-pop button:focus-visible,h
 #app button.btn.secondary.fechou-r21-apple-auth:focus-visible{outline:2px solid #f3ad49!important;outline-offset:2px!important}
 #app button.btn.secondary.fechou-r21-apple-auth:disabled{opacity:.58!important;cursor:wait!important}
 #app button.btn.secondary.fechou-r21-apple-auth svg{display:block!important;width:19px!important;height:19px!important;flex:none!important}
+</style>
+<!-- FECHOU CORREÇÃO 02: controles, faixa de preços, carteira -->
+<style id="fechou-correcao-02-css">
+/* Campos: mesmo sinal visual do campo de descrição do serviço, sem criar camadas sobre o formulário */
+#app :is(input[type="text"],input[type="email"],input[type="search"],input[type="password"],input[type="tel"],input[type="number"],input[type="date"],input:not([type]),select,textarea),
+#v121ChatOverlay :is(textarea,input[type="text"],input:not([type])) {
+ box-sizing:border-box!important;min-width:0!important;width:100%;
+ border:1.5px solid #426990!important;border-radius:13px!important;
+ background-color:#0c1828!important;color:#eef5ff!important;
+ box-shadow:inset 0 0 0 1px rgba(104,157,211,.13)!important;
+ transition:border-color .16s ease,box-shadow .16s ease,background-color .16s ease;
+}
+#app :is(input[type="text"],input[type="email"],input[type="search"],input[type="password"],input[type="tel"],input[type="number"],input[type="date"],input:not([type]),select,textarea):focus,
+#app :is(input[type="text"],input[type="email"],input[type="search"],input[type="password"],input[type="tel"],input[type="number"],input[type="date"],input:not([type]),select,textarea):focus-visible,
+#v121ChatOverlay :is(textarea,input[type="text"],input:not([type])):focus,
+#v121ChatOverlay :is(textarea,input[type="text"],input:not([type])):focus-visible {
+ outline:none!important;border-color:#f5a348!important;background-color:#0c192b!important;
+ box-shadow:0 0 0 3px rgba(241,153,56,.23),0 0 18px rgba(241,153,56,.20),inset 0 0 0 1px rgba(248,181,93,.32)!important;
+}
+#app .field select:not([multiple]) {
+ appearance:none;-webkit-appearance:none;cursor:pointer;
+ min-height:46px!important;padding:11px 43px 11px 13px!important;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23a6c7ef' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")!important;
+ background-repeat:no-repeat!important;background-position:right 14px center!important;background-size:18px!important;
+}
+#app .field select:not([multiple]):disabled {cursor:not-allowed;opacity:.58}
+#app .field input::placeholder,#app .field textarea::placeholder,#v121ChatOverlay textarea::placeholder {
+ color:#a6bbd0!important;opacity:1;
+}
+#app .field :is(input,textarea,select):focus-visible,#v121ChatOverlay :is(textarea,input):focus-visible {outline-offset:1px}
+/* Refund widget rebuilt as a single, readable full-width row; no icons or narrow 3-column grid */
+html body #app .v173-refund-panel .fechou-r2-refund-item {
+ display:block!important;box-sizing:border-box;width:100%!important;min-width:0!important;
+ padding:14px 12px!important;margin:8px 0!important;border-radius:12px;
+ border:1px solid #344f68!important;background:#102336!important;
+ color:#eaf3fd!important;white-space:normal!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-main {
+ display:block!important;width:100%!important;min-width:0!important;
+ white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-main>b {
+ display:block!important;width:100%!important;min-width:0!important;
+ font-size:14px!important;line-height:1.45!important;color:#fff!important;
+ white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-main>small {
+ display:block!important;max-width:100%!important;margin:5px 0!important;
+ font-size:12px!important;line-height:1.55!important;overflow-wrap:break-word!important;
+ white-space:normal!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-status {
+ display:inline-block!important;max-width:100%!important;margin:7px 0!important;
+ padding:6px 9px!important;background:#253e56!important;border:1px solid #476178!important;
+ border-radius:9px!important;color:#ffe0ad!important;font-size:12px!important;font-weight:700!important;
+ line-height:1.35!important;white-space:normal!important;overflow-wrap:break-word!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-total {
+ display:flex!important;width:100%!important;min-width:0!important;gap:8px!important;
+ justify-content:space-between!important;align-items:center!important;margin-top:10px!important;
+ padding-top:10px!important;border-top:1px solid #395069!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-total::before {
+ content:"Valor do reembolso";color:#b5c6d8;font-size:12px;line-height:1.4;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-total>b {
+ display:block!important;flex:0 0 auto!important;color:#f2f7ff!important;
+ font-size:15px!important;line-height:1.4!important;white-space:nowrap!important;
+}
+html body #app .v173-refund-panel .fechou-r2-refund-guidance {
+ display:block!important;margin:10px 0 0!important;color:#b8c8d8!important;font-size:12px!important;
+ line-height:1.5!important;white-space:normal!important;overflow-wrap:break-word!important;
+}
+#app #v58-price-result .fechou-r2-price-breakdown .total {
+ display:flex;gap:9px;align-items:center;justify-content:space-between;
+ padding:8px 0;flex-wrap:wrap;line-height:1.4;
+}
+#app #v58-price-result .fechou-r2-price-breakdown .total>b {color:#fff;font-size:14px;white-space:nowrap}
 </style>
 <script id="fechou-r21-apple-oauth">
 (function(){
@@ -46446,5 +47031,14 @@ html body #app .v173-refund-panel .v335-status-chip{
 html body #app .v173-refund-panel .v335-hist-amount{
   white-space:nowrap!important;
 }
+</style>
+
+<style id="fechou-r6-role-contest-wallet-styles">
+#fechou-v335-event-modal .btn.danger.v335-btn-danger,
+#fechou-v335-event-modal .v335-btn-danger{background:#9f292d!important;border-color:#e05455!important;color:#fff!important;}
+#fechou-v335-event-modal .v335-btn-danger:hover{background:#bb3338!important;}
+#v121ChatOverlay [data-fc-tool="review"]:disabled{opacity:.4!important;cursor:not-allowed!important;filter:grayscale(.7);}
+#v121ChatOverlay [data-fc-tool="approve"]{white-space:normal;line-height:1.25;}
+#v134WalletRoot .r6-wallet-transition{border-left:2px solid #e4a155;}
 </style>
 </html>
