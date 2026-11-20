@@ -39233,7 +39233,7 @@ body.fechou-guest-public-only .wrap > footer.footer {
  function distance(a,b){const R=6371000,rad=x=>x*Math.PI/180,dLat=rad(b.lat-a.lat),dLon=rad(b.lon-a.lon),x=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
  function notify(message,orderId,kind){
    if((window.__fechouV178GetState?.()||{}).currentRole!=='Profissional')return;
-   const overlay=document.querySelector('#v121ChatOverlay'),box=document.createElement('div');box.className='v322-reminder';box.setAttribute('role','status');box.setAttribute('aria-live','polite');
+   const overlay=document.querySelector('#v121ChatOverlay'),box=document.createElement('div');box.className='v322-reminder';box.dataset.orderId=String(orderId);box.setAttribute('role','status');box.setAttribute('aria-live','polite');
    box.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 13px;margin:10px;border:1px solid #42678c;border-radius:12px;background:#132438;color:#eef6ff;font-size:13px;line-height:1.45;z-index:99999';
    const text=document.createElement('span');text.textContent=message;text.style.flex='1 1 190px';box.append(text);
    const open=document.createElement('button');open.type='button';open.textContent='Abrir conversa';open.style.cssText='border:1px solid #6c9bc9;border-radius:8px;background:#1b4264;color:#fff;padding:7px 10px;font-weight:700';open.addEventListener('click',async()=>{try{await window.__fechouOpenChatByOrder?.(String(orderId));box.remove()}catch(error){if(typeof window.safeToast==='function')window.safeToast(String(error?.message||'Não foi possível abrir a conversa.'))}});
@@ -39252,6 +39252,28 @@ body.fechou-guest-public-only .wrap > footer.footer {
    // A captura de GPS não deve abrir um segundo popup nem interromper a ação.
    request();
  });
+ async function notifyMissing(orderId, kind) {
+   try {
+     const latest = await (window.FECHOU_QA4_EVIDENCE?.refresh?.(orderId) || window.FECHOU_VALIDATE_EVIDENCE?.(orderId));
+     if (!latest) return;
+     const next = ['before','during','after'].find(phase => Number(latest[phase] || 0) < 1);
+     if (!next || (kind === 'arrival' && next !== 'before')) return;
+     const phaseLabel = {before:'Antes',during:'Durante',after:'Depois'}[next];
+     const message = kind === 'hourly'
+       ? 'Você ainda está executando este serviço? Registre a foto de ' + phaseLabel + ' no chat.'
+       : 'Registre a foto de ' + phaseLabel + ' no chat antes de finalizar o serviço.';
+     notify(message, orderId, kind);
+   } catch (error) {
+     console.warn('Lembrete suspenso: fotos não sincronizadas.', error);
+   }
+ }
+ window.addEventListener('fechou:qa4-evidence', (event) => {
+   const id = String(event.detail?.orderId || '');
+   const counts = event.detail?.counts;
+   const box = document.getElementById('fechou-v322-reminder-global');
+   if (!box || !counts || !id || box.dataset.orderId !== id) return;
+   if (['before','during','after'].every(phase => Number(counts[phase] || 0) > 0)) box.remove();
+ });
  function stopWatch(id){const key=String(id);if(watches.has(key)){try{navigator.geolocation.clearWatch(watches.get(key))}catch(_){}watches.delete(key)}}
  function startArrivalWatch(id){
    const key=String(id);if(watches.has(key)||!navigator.geolocation||!window.isSecureContext)return;
@@ -39261,7 +39283,7 @@ body.fechou-guest-public-only .wrap > footer.footer {
      try{localStorage.setItem(storageKey(key),JSON.stringify({...JSON.parse(localStorage.getItem(storageKey(key))||'{}'),arrival_tracking_unavailable:true,arrival_tracking_unavailable_at:new Date().toISOString()}))}catch(_){}
      return;
    }
-   let hits=0;const watch=navigator.geolocation.watchPosition(pos=>{const accuracy=Number(pos.coords.accuracy);if(!Number.isFinite(accuracy)||accuracy>100){hits=0;return}const d=distance({lat:pos.coords.latitude,lon:pos.coords.longitude},target);if(d<=150){hits++;if(hits>=2){stopWatch(key);notify(labels.arrival,key,'arrival');try{localStorage.setItem(storageKey(key),JSON.stringify({...JSON.parse(localStorage.getItem(storageKey(key))||'{}'),arrival_notified_at:new Date().toISOString()}))}catch(_){}}}else hits=0},()=>{}, {enableHighAccuracy:true,maximumAge:10000,timeout:20000});watches.set(key,watch);
+   let hits=0;const watch=navigator.geolocation.watchPosition(pos=>{const accuracy=Number(pos.coords.accuracy);if(!Number.isFinite(accuracy)||accuracy>100){hits=0;return}const d=distance({lat:pos.coords.latitude,lon:pos.coords.longitude},target);if(d<=150){hits++;if(hits>=2){stopWatch(key);notifyMissing(key,'arrival');try{localStorage.setItem(storageKey(key),JSON.stringify({...JSON.parse(localStorage.getItem(storageKey(key))||'{}'),arrival_notified_at:new Date().toISOString()}))}catch(_){}}}else hits=0},()=>{}, {enableHighAccuracy:true,maximumAge:10000,timeout:20000});watches.set(key,watch);
  }
  function clear(id){const key=String(id);if(timers.has(key)){clearInterval(timers.get(key));timers.delete(key)}stopWatch(key)}
  function resume(order){
@@ -39270,12 +39292,12 @@ body.fechou-guest-public-only .wrap > footer.footer {
    if(timers.has(id))return;
    let data={};try{data=JSON.parse(localStorage.getItem(storageKey(id))||'{}')}catch(_){}
    if(!data.started_at){data.started_at=new Date().toISOString();try{localStorage.setItem(storageKey(id),JSON.stringify(data))}catch(_){}}
-   const tick=()=>{const fresh=getOrder(id),current=String(fresh?.service_state||fresh?.metadata?.service_state||'').toLowerCase();if(current&&current!=='in_progress'){clear(id);return}let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey(id))||'{}')}catch(_){}const last=Date.parse(saved.last_hourly_at||saved.started_at||data.started_at||'');if(!last||Date.now()-last>=60*60*1000){if(document.visibilityState==='visible'){notify(labels.hourly,id,'hourly');saved.last_hourly_at=new Date().toISOString();try{localStorage.setItem(storageKey(id),JSON.stringify(saved))}catch(_){}}}};
+   const tick=()=>{const fresh=getOrder(id),current=String(fresh?.service_state||fresh?.metadata?.service_state||'').toLowerCase();if(current&&current!=='in_progress'){clear(id);return}let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey(id))||'{}')}catch(_){}const last=Date.parse(saved.last_hourly_at||saved.started_at||data.started_at||'');if(!last||Date.now()-last>=60*60*1000){if(document.visibilityState==='visible'){notifyMissing(id,'hourly');saved.last_hourly_at=new Date().toISOString();try{localStorage.setItem(storageKey(id),JSON.stringify(saved))}catch(_){}}}};
    tick();const timer=setInterval(tick,60*1000);timers.set(id,timer);
  }
  window.FECHOU_V322_REMINDERS={
    started(id){const key=String(id);let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey(key))||'{}')}catch(_){};saved.started_at=new Date().toISOString();try{localStorage.setItem(storageKey(key),JSON.stringify(saved))}catch(_){};resume({id:key,service_state:'in_progress'})},
-   resume,finishing(id){Promise.resolve(window.FECHOU_VALIDATE_EVIDENCE?.(id,'complete')).then((counts)=>{const missing=!counts||counts.before<1||counts.during<1||counts.after<1;if(missing)notify(labels.finish,id,'finish')}).catch(()=>{})},finished(id){clear(id);try{localStorage.removeItem(storageKey(id))}catch(_){}},clear
+   resume,finishing(id){notifyMissing(id,'finish')},finished(id){clear(id);try{localStorage.removeItem(storageKey(id))}catch(_){}},clear
  };
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;getOrders().filter(o=>String(o.service_state||o.metadata?.service_state||'').toLowerCase()==='in_progress').forEach(resume)});
  window.addEventListener('beforeunload',()=>{for(const id of watches.keys())stopWatch(id)});
@@ -41456,33 +41478,65 @@ window.fechouNativeBtnClassV335 = function (name) {
   }
 
   function renderCompleteConfirm(ctx) {
-    const flags = evidenceFlags(ctx.orderId);
-    const rows = [
-      { phase: 'before', label: 'Antes' },
-      { phase: 'during', label: 'Durante' },
-      { phase: 'after', label: 'Depois' }
-    ].map((x) => `<div class="v335-check ${flags[x.phase] ? 'is-ok' : 'is-missing'}">${flags[x.phase] ? '✓' : '!'} Foto de ${x.label}: ${flags[x.phase] ? 'registrada' : 'faltando'}</div>`).join('');
-    const missing = !flags.before || !flags.during || !flags.after;
-    const ov = mountOverlay(`<section class="v335-event-dialog">
-      <div class="v335-event-icon is-warn" aria-hidden="true">✓</div>
-      <h2 id="v335-event-title">Finalizar serviço</h2>
-      <p>Confira as fotos obrigatórias antes de enviar a conclusão ao cliente.</p>
-      ${rows}
-      ${missing ? '<p class="v335-error">Registre a foto que falta no chat do serviço antes de finalizar.</p>' : ''}
-      ${photoFieldHtml('v335-finish-photo', 'Fotos extras (até 5, opcional)')}
-      <p class="v335-error" id="v335-finish-err" hidden></p>
-      <div class="v335-event-actions">
-        <button type="button" class="btn v335-btn-primary" data-v335-kind="confirm-complete" ${missing ? 'disabled' : ''}>Confirmar finalização</button>
-        ${voltarHtml()}
-        <button type="button" class="v335-event-close-link" data-v335-kind="close">Fechar</button>
-      </div>
-    </section>`, true);
-    const getFinishPhotos = bindPhotoLimit(ov, 'v335-finish-photo', 5, ov.querySelector('#v335-finish-err'));
+    const phases = [{phase:"before",label:"Antes"},{phase:"during",label:"Durante"},{phase:"after",label:"Depois"}];
+    const rows = phases.map(x => '<div class="v335-check is-pending" data-qa4-check="' + x.phase + '">… Foto de ' + x.label + ': verificando</div>').join('');
+    const ov = mountOverlay('<section class="v335-event-dialog">' +
+      '<div class="v335-event-icon is-warn" aria-hidden="true">✓</div>' +
+      '<h2 id="v335-event-title">Finalizar serviço</h2>' +
+      '<p data-qa4-evidence-status aria-live="polite">Sincronizando as fotos registradas…</p>' +
+      rows +
+      photoFieldHtml('v335-finish-photo', 'Fotos extras (até 5, opcional)') +
+      '<p class="v335-error" id="v335-finish-err" hidden></p>' +
+      '<div class="v335-event-actions">' +
+      '<button type="button" class="btn v335-btn-primary" data-v335-kind="confirm-complete" disabled>Confirmar finalização</button>' +
+      voltarHtml() +
+      '</div></section>', true);
+    const errorBox = ov.querySelector('#v335-finish-err');
+    const confirmButton = ov.querySelector('[data-v335-kind="confirm-complete"]');
+    const status = ov.querySelector('[data-qa4-evidence-status]');
+    const getFinishPhotos = bindPhotoLimit(ov, 'v335-finish-photo', 5, errorBox);
     bindCommon(ov, ctx, null, () => closeOverlay());
-    ov.querySelector('[data-v335-kind="confirm-complete"]').addEventListener('click', () => {
+    let checking = null;
+    async function syncEvidence() {
+      if (checking) return checking;
+      checking = (async () => {
+        confirmButton.disabled = true;
+        status.textContent = 'Sincronizando as fotos registradas…';
+        try {
+          await window.FECHOU_QA4_EVIDENCE?.wait?.(ctx.orderId);
+          const counts = await (window.FECHOU_QA4_EVIDENCE?.refresh?.(ctx.orderId)
+            || window.FECHOU_VALIDATE_EVIDENCE?.(ctx.orderId));
+          if (!counts) throw new Error('Não foi possível confirmar as fotos salvas.');
+          if (!ov.isConnected) return false;
+          const missing = phases.filter(x => Number(counts[x.phase] || 0) < 1);
+          phases.forEach(x => {
+            const row = ov.querySelector('[data-qa4-check="' + x.phase + '"]');
+            const present = Number(counts[x.phase] || 0) >= 1;
+            if (!row) return;
+            row.className = 'v335-check ' + (present ? 'is-ok' : 'is-missing');
+            row.textContent = (present ? '✓ ' : '! ') + 'Foto de ' + x.label + ': ' + (present ? 'registrada' : 'faltando');
+          });
+          status.textContent = missing.length ? 'Registre no chat as fotos que faltam antes de finalizar.' : 'As três etapas estão registradas e sincronizadas.';
+          confirmButton.disabled = missing.length > 0;
+          errorBox.hidden = true;
+          return !missing.length;
+        } catch (e) {
+          if (!ov.isConnected) return false;
+          status.textContent = 'Não foi possível sincronizar as fotos. Volte ao chat e tente novamente.';
+          errorBox.textContent = String(e?.message || 'Erro ao consultar as fotos.');
+          errorBox.hidden = false;
+          confirmButton.disabled = true;
+          return false;
+        } finally { checking = null; }
+      })();
+      return checking;
+    }
+    confirmButton.addEventListener('click', async () => {
+      if (!await syncEvidence()) return;
       ctx.photos = getFinishPhotos();
       submitKind('complete', ctx, () => renderSimpleSuccess(ctx, 'Serviço finalizado', 'A conclusão foi enviada ao cliente para aprovação ou contestação.', 'Abrir chat', 'chat'));
     });
+    syncEvidence();
   }
 
   function renderPayoutConfirm(ctx) {
