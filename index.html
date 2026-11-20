@@ -6694,7 +6694,30 @@ function renderServiceRecord(o, archive = false) {
             throw error;
           }
         }
+        // IO-20261119: chamadas concorrentes de sincronização usam apenas uma
+        // leitura em andamento; mudanças recebidas durante a leitura disparam
+        // obrigatoriamente uma passada final para não perder atualizações.
+        let ewSyncOrdersTask = null;
+        let ewSyncOrdersAgain = false;
         async function ewSyncOrders() {
+          if (ewSyncOrdersTask) {
+            ewSyncOrdersAgain = true;
+            return ewSyncOrdersTask;
+          }
+          const task = (async () => {
+            try {
+              do {
+                ewSyncOrdersAgain = false;
+                await ewSyncOrdersOnce();
+              } while (ewSyncOrdersAgain);
+            } finally {
+              ewSyncOrdersTask = null;
+            }
+          })();
+          ewSyncOrdersTask = task;
+          return task;
+        }
+        async function ewSyncOrdersOnce() {
           const previousView = ewOrderViewSignature();
           try {
             await ewLoadOrders();
