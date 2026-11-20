@@ -7434,6 +7434,11 @@ function renderServiceRecord(o, archive = false) {
           const user = authData?.user;
           if (authError || !user)
             return toast("Entre na sua conta antes de salvar o perfil.");
+          const emailField = document.querySelector("#app .fechou-r14-email-primary input[type=email], #app .panel .form input[type=email]");
+          const profileEmail = String(emailField?.value ?? (state.newEmail || user.email || "")).trim();
+          if (!/^\S+@\S+\.\S+$/.test(profileEmail))
+            return toast("Informe um e-mail válido no perfil antes de salvar.");
+          state.newEmail = profileEmail;
           const uiRole =
             roleExpected === "Profissional" ? "Profissional" : "Cliente";
           const role = uiRole === "Profissional" ? "professional" : "client";
@@ -7570,12 +7575,29 @@ function renderServiceRecord(o, archive = false) {
             return;
           }
 
-          state.supabaseUser = user;
+          let accountUser = user;
+          let saveMessage = "Perfil salvo com sucesso.";
+          if (profileEmail.toLowerCase() !== String(user.email || "").toLowerCase()) {
+            try {
+              const updated = await ewSupabase.auth.updateUser({ email: profileEmail });
+              if (updated.error) {
+                saveMessage = "Perfil salvo, mas a alteração do e-mail falhou: " + ewFriendlyError(updated.error);
+              } else {
+                accountUser = updated.data?.user || user;
+                const confirmed = String(accountUser.email || "").toLowerCase() === profileEmail.toLowerCase();
+                saveMessage = confirmed ? "Perfil e e-mail atualizados com sucesso." : "Perfil salvo. Confira seu e-mail para confirmar a alteração do endereço.";
+              }
+            } catch (emailError) {
+              saveMessage = "Perfil salvo, mas não foi possível solicitar a alteração do e-mail: " + ewFriendlyError(emailError);
+            }
+          }
+          state.supabaseUser = accountUser;
+          state.authEmail = accountUser.email || user.email || "";
           state.currentRole = uiRole;
           try {
             localStorage.setItem("ew_currentRole", uiRole);
           } catch (e) {}
-          toast("Perfil salvo com sucesso.");
+          toast(saveMessage);
           go("home");
         }
         document.addEventListener(
@@ -18366,42 +18388,8 @@ function renderServiceRecord(o, archive = false) {
           },
           true
         );
-        // Keep customer-created orders and proposal counts synchronized with Supabase in realtime.
-        if (typeof window.ewSyncOrders === "function") {
-          const previousSync = window.ewSyncOrders;
-          let previousClientProposalCount = null;
-          window.ewSyncOrders = async function () {
-            const before =
-              state.currentRole === "Cliente"
-                ? (state.orders || []).reduce(
-                    (n, o) => n + (o.proposals || []).length,
-                    0
-                  )
-                : 0;
-            const result = await previousSync.apply(this, arguments);
-            const after =
-              state.currentRole === "Cliente"
-                ? (state.orders || []).reduce(
-                    (n, o) => n + (o.proposals || []).length,
-                    0
-                  )
-                : 0;
-            if (
-              state.currentRole === "Cliente" &&
-              previousClientProposalCount !== null &&
-              after > before &&
-              state.page !== "proposals"
-            ) {
-              toast(
-                after - before === 1
-                  ? "Você recebeu uma nova proposta para um dos seus pedidos."
-                  : "Você recebeu novas propostas para seus pedidos."
-              );
-            }
-            previousClientProposalCount = after;
-            return result;
-          };
-        }
+        // O sincronizador nunca cria aviso de proposta por variação da contagem local.
+        // Avisos legítimos vêm de notificações persistidas e validadas.
         // Confirma explicitamente a concessão do desconto solicitado. O desconto é aplicado uma única vez ao valor de mão de obra + adicionais; materiais não entram nesta base.
         function confirmRequestedDiscount({ percent, before, after, amount, urgency, weekend, holiday }) {
           return new Promise((resolve) => {
@@ -41625,7 +41613,7 @@ window.fechouNativeBtnClassV335 = function (name) {
         return;
       }
       if (!p) return;
-      if (n.proposalCount > p.proposalCount && role() === 'client') window.fechouEmitEventV335({ type: 'proposal_received', ...base, entityId: 'pc-' + n.proposalCount });
+      // Contagem alterada não comprova uma proposta: nenhuma emissão aqui.
       if (n.acceptedProposal && n.acceptedProposal !== p.acceptedProposal) window.fechouEmitEventV335({ type: 'proposal_accepted', ...base, entityId: n.acceptedProposal });
       if (n.rejectedCount > p.rejectedCount) window.fechouEmitEventV335({ type: 'proposal_rejected', ...base, entityId: 'rj-' + n.rejectedCount });
       if (n.counterCount > p.counterCount) window.fechouEmitEventV335({ type: 'counterproposal', ...base, entityId: 'cp-' + n.counterCount });
@@ -41691,10 +41679,22 @@ window.fechouNativeBtnClassV335 = function (name) {
     const text = `${n.title || ''} ${n.body || n.message || ''}`.toLowerCase();
     const orderId = n.data?.order_id || n.order_id || n.data?.orderId || '';
     const base = { orderId, id: fallbackId, service: n.data?.service || '' };
+    if (String(n.type || '') === 'new_opportunity') return;
     /* R12 — 7.3: solicitação de cancelamento já tem seu popup imediato; não repetir nem afirmar cancelamento concluído. */
     if (/cancel/.test(text) && /solicita[cç][aã]o|em an[aá]lise|an[aá]lise/.test(text) && !/foi cancelad|cancelamento confirmado|pedido cancelado/.test(text)) return;
     if (/contraprop/.test(text)) return window.fechouEmitEventV335({ type: 'counterproposal', ...base });
-    if (/proposta/.test(text) && /receb|nova/.test(text)) return window.fechouEmitEventV335({ type: 'proposal_received', ...base });
+    if (String(n.type || '') === 'proposal_received') {
+      // Proposta só vira aviso ao cliente quando existe vínculo verificável no banco.
+      const proposalId = String(n.data?.proposal_id || n.metadata?.proposal_id || '');
+      const currentUser = uid();
+      const db = window.ewSupabase || window.__FECHOU_SUPABASE_CLIENT;
+      if (role() !== 'client' || !currentUser || !proposalId || !orderId || !db?.from) return;
+      Promise.resolve(db.from('proposals').select('id,order_id').eq('id', proposalId).eq('order_id', orderId).maybeSingle())
+        .then(({data,error}) => {if(!error && data && uid() === currentUser) window.fechouEmitEventV335({type:'proposal_received', ...base, entityId:proposalId});})
+        .catch(()=>{});
+      return;
+    }
+    // Texto genérico de "nova oportunidade" não é "proposta recebida".
     if (/proposta/.test(text) && /aceit/.test(text)) return window.fechouEmitEventV335({ type: 'proposal_accepted', ...base });
     if (/proposta/.test(text) && /recus/.test(text)) return window.fechouEmitEventV335({ type: 'proposal_rejected', ...base });
     if (/contrato/.test(text) && /duas partes|ambas/.test(text)) return window.fechouEmitEventV335({ type: 'contract_both_signed', ...base });
@@ -44355,11 +44355,10 @@ html body #app .v134-status.fechou-st-wait:not(#x):not(#r14){background:#3a2a14!
 html body #app .v134-status.fechou-st-ok:not(#x):not(#r14){background:#12331f!important;color:#49d58a!important;border-color:#2b7650!important}
 html body #app .v134-status.fechou-st-no:not(#x):not(#r14){background:#3b1d23!important;color:#ff8f98!important;border-color:#a84d59!important}
 #app .v335-hist-details small{display:block;font-size:12px;line-height:1.45;margin-top:4px;color:#a9bacb;overflow-wrap:anywhere}
-#app .fechou-r14-account{margin-top:12px;border:1px solid #344d65;border-radius:12px;padding:10px}
-#app .fechou-r14-account>summary{font-size:14px;font-weight:700}
-#app .fechou-r14-account .form{margin-top:12px}
-#app .fechou-r14-account .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-#app .fechou-r14-account .actions button{flex:1 1 120px;min-width:0;white-space:normal}
+#app .fechou-r14-email-primary{min-width:0}
+#app .fechou-r14-password-field{margin-top:12px;min-width:0}
+#app .fechou-r14-password-field>.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+#app .fechou-r14-password-field>.actions>button{flex:1 1 125px;min-width:0;white-space:normal;min-height:44px}
 html body #app button:focus-visible,html body .fechou-pop button:focus-visible,html body .fechou-pop input:focus-visible{outline:2px solid #8ac6fa;outline-offset:3px}
 
 </style>
@@ -44378,14 +44377,32 @@ html body #app button:focus-visible,html body .fechou-pop button:focus-visible,h
   const tone=financialTone(el.textContent);['no','wait','ok'].forEach(t=>el.classList.toggle('fechou-st-'+t,tone===t));
  });}
  function accountFields(){
-  const s=state();if(!s.supabaseUser||!['client','pro'].includes(s.page)||!s.__fechouEditingProfile)return;
+  const s=state();
+  if(!s.supabaseUser||!['client','pro'].includes(s.page)||!s.__fechouEditingProfile)return;
   const save=document.querySelector('#app [data-act="saveClient"],#app [data-act="addpro"]');
-  if(!save||document.querySelector('#app .fechou-r14-account'))return;
-  const root=document.createElement('details');root.className='fechou-r14-account';
-  root.innerHTML='<summary>E-mail e segurança da conta</summary><div class="form"><div class="field"><label for="fechou-r14-email">E-mail da conta</label><input id="fechou-r14-email" type="email" autocomplete="email" data-input="newEmail"><button class="btn secondary" type="button" data-act="updateEmail">Alterar e-mail</button></div><div class="field"><label for="fechou-r14-password">Nova senha</label><input id="fechou-r14-password" type="password" autocomplete="new-password" minlength="6" placeholder="Mínimo de 6 caracteres" data-input="newPassword"><div class="actions"><button class="btn secondary" type="button" data-act="updatePassword">Alterar senha</button><button class="btn secondary" type="button" data-act="resetPassword">Esqueci minha senha</button></div></div></div>';
-  root.querySelector('input[type=email]').value=s.newEmail||s.supabaseUser.email||'';
-  // O campo sensível é criado vazio e nunca persistido por este componente.
-  const actions=save.closest('.fx-profile-actions');(actions||save).insertAdjacentElement('beforebegin',root);
+  if(!save)return;
+  const form=save.closest('.panel')?.querySelector('.form');
+  if(form){
+    let email=form.querySelector('input[type="email"]');
+    if(!email){
+      const group=document.createElement('div');
+      group.className='field fechou-r14-email-primary';
+      group.innerHTML='<label for="fechou-profile-email">E-mail da conta</label><input id="fechou-profile-email" type="email" autocomplete="email" data-input="newEmail" aria-label="E-mail da conta">';
+      const nameField=form.querySelector(':scope > .field');
+      if(nameField)nameField.insertAdjacentElement('afterend',group);else form.prepend(group);
+      email=group.querySelector('input');
+      email.value=s.newEmail || s.supabaseUser.email || '';
+    } else {
+      // Se já houver e-mail na parte superior, usá-lo sem criar duplicata.
+      email.dataset.input='newEmail';
+    }
+  }
+  if(document.querySelector('#app .fechou-r14-password-field'))return;
+  const field=document.createElement('div');
+  field.className='field fechou-r14-password-field';
+  field.innerHTML='<label for="fechou-r14-password">Nova senha</label><input id="fechou-r14-password" type="password" autocomplete="new-password" minlength="6" placeholder="Mínimo de 6 caracteres" data-input="newPassword"><div class="actions"><button class="btn secondary" type="button" data-act="updatePassword">Alterar senha</button><button class="btn secondary" type="button" data-act="resetPassword">Esqueci minha senha</button></div>';
+  const actions=save.closest('.fx-profile-actions');
+  (actions||save).insertAdjacentElement('beforebegin',field);
  }
  function safeRefundLinks(){document.querySelectorAll('.v173-refund-panel a[href],.v335-hist-receipt[href]').forEach(a=>{
   try{const u=new URL(a.getAttribute('href'));if(u.protocol!=='https:'||u.username||u.password)throw new Error('invalid');a.rel='noopener noreferrer';}catch(_){a.removeAttribute('href');a.removeAttribute('target');}
