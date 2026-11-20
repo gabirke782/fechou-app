@@ -6644,14 +6644,86 @@ function renderServiceRecord(o, archive = false) {
         function ewOrderViewSignature() {
           return JSON.stringify(state.orders || [], (key,value) => /^(url|signedUrl|signed_url|expires_at)$/.test(key) ? undefined : value);
         }
+        // IO-20261119: URLs temporárias de mídia são reutilizadas por até 45 s,
+        // somente dentro da sessão em memória, por usuário, perfil e estado do pedido.
+        // Nunca reutilizar erros, decisões financeiras ou retornos entre contas.
+        const ewOrderMediaSignCache = new Map();
+        async function ewGetSignedMediaCached(o) {
+          const items = [
+            ...(Array.isArray(o.photos) ? o.photos : []),
+            ...(Array.isArray(o.metadata?.attachments) ? o.metadata.attachments : [])
+          ];
+          const manifests = items
+            .map(item => [
+              String(item?.path || item?.storage_path || item?.storagePath || ""),
+              String(item?.updated_at || item?.last_modified || item?.size || "")
+            ])
+            .filter(parts => parts[0])
+            .sort((a, b) => a[0].localeCompare(b[0]));
+          const key = JSON.stringify([
+            String(state.supabaseUser?.id || ""),
+            String(state.currentRole || ""),
+            String(o.id),
+            String(o.status || ""),
+            String(o.selected_proposal_id || o.selectedProposalId || ""),
+            String(o.service_started_at || ""),
+            String(o.payment_method || o.payment_flow || o.client_payment_preference || ""),
+            manifests
+          ]);
+          const cached = ewOrderMediaSignCache.get(key);
+          if (cached?.data && cached.expires > Date.now()) return cached.data;
+          if (cached?.pending) return cached.pending;
+          const pending = Promise.resolve().then(() =>
+            window.ewApi("orders/media", { order_id: String(o.id) })
+          );
+          ewOrderMediaSignCache.set(key, { pending });
+          try {
+            const result = await pending;
+            if (!Array.isArray(result?.photos) || !Array.isArray(result?.attachments)) {
+              throw new Error("Resposta de mídia incompleta; não armazenada em cache.");
+            }
+            ewOrderMediaSignCache.set(key, { data: result, expires: Date.now() + 45000 });
+            // Limite estrito de entradas: evita crescimento de memória em sessões longas.
+            if (ewOrderMediaSignCache.size > 256) {
+              const oldest = ewOrderMediaSignCache.keys().next().value;
+              if (oldest !== undefined) ewOrderMediaSignCache.delete(oldest);
+            }
+            return result;
+          } catch (error) {
+            if (ewOrderMediaSignCache.get(key)?.pending === pending) ewOrderMediaSignCache.delete(key);
+            throw error;
+          }
+        }
         async function ewSyncOrders() {
           const previousView = ewOrderViewSignature();
           try {
             await ewLoadOrders();
             await ewLoadOrderDetails();
-            if (ewSupabase && Array.isArray(state.orders)) {
-              for (const o of state.orders) {
-                if (!Array.isArray(o.photos)) continue;
+            // Primeiro, assinatura verificada no servidor. Não assinar as mesmas fotos
+            // diretamente no Storage antes de solicitar a mídia da API.
+            for (const o of state.orders || []) {
+              const photos = Array.isArray(o.photos) ? o.photos : [];
+              const attachments = Array.isArray(o.metadata?.attachments) ? o.metadata.attachments : [];
+              const hasStoredMedia = [...photos, ...attachments].some(
+                item => item?.path || item?.storage_path || item?.storagePath
+              );
+              if (!hasStoredMedia) continue;
+              let signedByServer = false;
+              if (typeof window.ewApi === "function") {
+                try {
+                  const signedMedia = await ewGetSignedMediaCached(o);
+                  // O servidor decide quais arquivos cada participante pode ver.
+                  o.photos = signedMedia.photos;
+                  if (o.metadata) o.metadata.attachments = signedMedia.attachments;
+                  signedByServer = true;
+                } catch (mediaError) {
+                  console.warn("V157: falha ao renovar mídia privada do pedido", mediaError);
+                }
+              }
+              // Compatibilidade: se a API estiver indisponível, preserva o antigo
+              // caminho de assinatura direta permitido pelas políticas do Storage.
+              // O fallback nunca é executado se o servidor devolveu uma decisão válida.
+              if (!signedByServer && ewSupabase && Array.isArray(o.photos)) {
                 for (const ph of o.photos) {
                   if (!ph || typeof ph !== "object") continue;
                   const path = ph.path || ph.storage_path || ph.storagePath;
@@ -6665,25 +6737,9 @@ function renderServiceRecord(o, archive = false) {
                       ph.signedUrl = su.data.signedUrl;
                     }
                   } catch (photoError) {
-                    console.warn(
-                      "Não foi possível atualizar URL da foto do pedido",
-                      photoError
-                    );
+                    console.warn("Não foi possível atualizar URL da foto do pedido", photoError);
                   }
                 }
-              }
-            }
-            // V157: the request-media bucket is private. The server verifies order participation
-            // and creates short-lived URLs for both the client and the selected professional.
-            if (typeof window.ewApi === "function") {
-              for (const o of state.orders || []) {
-                const hasStoredMedia = (o.photos || []).some((x) => x?.path || x?.storage_path || x?.storagePath) || (o.metadata?.attachments || []).some((x) => x?.path || x?.storage_path || x?.storagePath);
-                if (!hasStoredMedia) continue;
-                try {
-                  const signedMedia = await window.ewApi("orders/media", { order_id: String(o.id) });
-                  if (Array.isArray(signedMedia?.photos)) o.photos = signedMedia.photos;
-                  if (o.metadata && Array.isArray(signedMedia?.attachments)) o.metadata.attachments = signedMedia.attachments;
-                } catch (mediaError) { console.warn("V157: falha ao renovar mídia privada do pedido", mediaError); }
               }
             }
             if (typeof window.fechouNormalizePaymentData === "function") window.fechouNormalizePaymentData();
