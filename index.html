@@ -6736,8 +6736,8 @@ function renderServiceRecord(o, archive = false) {
                 try {
                   const signedMedia = await ewGetSignedMediaCached(o);
                   // O servidor decide quais arquivos cada participante pode ver.
-                  o.photos = signedMedia.photos;
-                  if (o.metadata) o.metadata.attachments = signedMedia.attachments;
+                  o.photos = signedMedia.photos.map(item => ({ ...item }));
+                  if (o.metadata) o.metadata.attachments = signedMedia.attachments.map(item => ({ ...item }));
                   signedByServer = true;
                 } catch (mediaError) {
                   console.warn("V157: falha ao renovar mídia privada do pedido", mediaError);
