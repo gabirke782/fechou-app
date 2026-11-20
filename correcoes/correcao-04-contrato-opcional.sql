@@ -95,6 +95,9 @@ declare
   v_status text;
 begin
   if new.selected_proposal_id is null then return new; end if;
+  if lower(coalesce(new.metadata->>'optional_direct_contract_status','')) in ('accepted','declined') then
+    return new; -- Uma decisão final jamais é revertida por sincronizações posteriores.
+  end if;
   if new.selected_proposal_id is not distinct from old.selected_proposal_id
      and (new.metadata->>'payment_mode_agreed') is not distinct from (old.metadata->>'payment_mode_agreed') then
     return new;
