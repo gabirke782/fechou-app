@@ -7640,13 +7640,9 @@ function renderServiceRecord(o, archive = false) {
           {
             const realRole = profile ? ewRoleUi(profile.role) : null;
             if (realRole && chosenRoleAtLogin && realRole !== chosenRoleAtLogin) {
-              try { await ewSupabase.auth.signOut(); } catch (_) {}
-              state.supabaseUser = null;
-              state.currentRole = chosenRoleAtLogin;
-              render();
-              return toast(realRole === "Profissional"
-                ? "Esta conta é de profissional. Para entrar, volte e escolha a opção Sou profissional."
-                : "Esta conta é de cliente. Para entrar, volte e escolha a opção Sou cliente.");
+              // A conta mantém seu papel persistido, não o perfil escolhido na tela.
+              state.currentRole = realRole;
+              try {localStorage.setItem("ew_currentRole",realRole);} catch(_){}
             }
           }
           if (profile) {
@@ -24367,10 +24363,16 @@ function renderServiceRecord(o, archive = false) {
             const payBtn = (client && accepted && prepaidMode && !["approved","received","confirmed","paid"].includes(String(o.payment_status || "").toLowerCase())) ? `<button class="fc-primary-action" type="button" data-v134-pay-contract="${esc121(o.id)}">Pagar serviço pelo aplicativo</button>` : "";
             const signedActions = `<button class="fc-primary-action" type="button" data-fechou-signed-pdf="open">Abrir PDF oficial</button><button class="fc-secondary-action" type="button" data-fechou-signed-pdf="download">Baixar PDF</button><button class="fc-secondary-action" type="button" data-fechou-signed-pdf="print">Imprimir PDF</button>`;
             contractContent = `<section class="fc-contract-card"><h3>Contrato da contratação</h3><p>${statusMsg}</p><div class="fc-contract-actions">${fullySignedForDisplay && prepaidMode ? signedActions : `${showSign ? `<button class="fc-primary-action" type="button" data-v121-accept-contract>${signLabel}</button>` : ""}${resendBtn}${remindBtn}<button class="fc-secondary-action" type="button" data-v121-print-contract>Baixar/Imprimir PDF</button>`}${payBtn}</div></section>`;
-          } else if (directAgreed && client) {
-            contractContent = `<section class="fc-contract-card"><h3>Pagamento direto entre as partes</h3><p>Esta contratação utiliza pagamento combinado diretamente entre cliente e profissional. O FECHOU não gera cobrança nem exige assinatura Clicksign nesta modalidade.</p>${directRequested ? `<p>Uma solicitação de formalização já foi registrada anteriormente; consulte o histórico da contratação.</p>` : ""}<button class="fc-secondary-action" type="button" data-v222-release-professional="${esc121(o.id)}">Retirar profissional</button></section>`;
-          } else if (directAgreed && !client && directRequested) {
-            contractContent = `<section class="fc-contract-card"><h3>Solicitação de contrato</h3><p>O cliente solicitou a formalização desta contratação.</p><div class="fc-contract-actions"><button class="fc-primary-action" type="button" data-v222-respond-direct-contract="accept">Preparar contrato</button><button class="fc-secondary-action" type="button" data-v222-respond-direct-contract="decline">Recusar solicitação</button></div></section>`;
+          } else if (directAgreed && directRequested && !hasContract && client) {
+            if (optionalContractStatus === "accepted") {
+              contractContent = '<section class="fc-contract-card"><h3>Contrato opcional autorizado</h3><p>Você aceitou a solicitação do profissional. Aguarde o documento para ler e assinar.</p></section>';
+            } else if (optionalContractStatus !== "declined") {
+              contractContent = '<section class="fc-contract-card"><h3>Solicitação de contrato do profissional</h3><p>O pagamento será combinado diretamente entre as partes. O profissional deseja formalizar o serviço por contrato. Você pode aceitar ou recusar; não haverá contrato sem sua autorização.</p><div class="fc-contract-actions"><button type="button" class="fc-primary-action" data-qa4-optional-contract="accept">Aceitar contrato</button><button type="button" class="fc-secondary-action" data-qa4-optional-contract="decline">Não quero contrato</button></div></section>';
+            }
+          } else if (directAgreed && directRequested && !hasContract && !client) {
+            contractContent = '<section class="fc-contract-card"><h3>Contrato opcional</h3><p>Aguarde a resposta do cliente para preparar o documento. Se houver recusa, a execução poderá seguir sem contrato pelo aplicativo.</p></section>';
+          } else if (modeOf(o) === "direct" && !hasContract) {
+            contractContent = "";
           } else {
             contractContent = `<section class="fc-contract-card"><h3>Condições da proposta selecionada</h3>${q ? `<p><b>Serviço:</b> ${esc121(o.service || o.category || "Serviço contratado")}</p><p><b>Valor acordado:</b> ${Number(q.price || o.total || 0).toLocaleString("pt-BR", {style:"currency",currency:"BRL"})}</p><p><b>Condições:</b> ${esc121(q.conditions || q.terms || q.special_conditions || q.message || q.description || q.details || "Não foram registradas condições adicionais na proposta.")}</p>${q.message && q.conditions && String(q.message).trim() !== String(q.conditions).trim() ? `<p><b>Mensagem original da proposta:</b> ${esc121(q.message)}</p>` : ""}<p><b>Materiais:</b> ${esc121(q.materials || q.included_materials || "A confirmar entre as partes.")}</p><p><b>Disponibilidade:</b> ${esc121(q.availability || q.schedule || "A combinar")}</p><p><b>Prazo:</b> ${esc121(q.deadline || q.estimated_deadline || "A combinar por escrito")}</p><p><b>Forma de pagamento:</b> ${esc121(q.paymentMethod || q.metadata?.payment_method || (modeOf(o)==="contract_prepaid" ? "Pagamento pelo aplicativo + contrato" : "Pagamento direto entre as partes"))}</p><small>Estas são as condições vinculadas à proposta selecionada. O contrato formal e os aceites serão exibidos quando forem gerados e registrados.</small>` : `<p>Não foi possível carregar a proposta vinculada. Atualize os pedidos para sincronizar as condições antes de prosseguir.</p>`}</section>`;
           }
@@ -29233,6 +29235,71 @@ body #app .fechou-profile-progress>div:first-child b {
 
         // Add service status and evidence widgets to the draggable conversation window.
         // R46: descarta respostas obsoletas, elimina registros repetidos e assina URLs em paralelo.
+        // Correção 04: leitura persistida e única das etapas, sem sobrepor outra galeria.
+        const qa4EvidenceCounts = new Map();
+        const qa4EvidenceOperations = new Map();
+        function qa4BeginEvidence(orderId) {
+          const key = String(orderId || "");
+          let done;
+          const promise = new Promise(resolve => { done = resolve; });
+          const pending = qa4EvidenceOperations.get(key) || new Set();
+          pending.add(promise);
+          qa4EvidenceOperations.set(key,pending);
+          return () => { pending.delete(promise); if(!pending.size)qa4EvidenceOperations.delete(key);done(); };
+        }
+        function qa4EvidenceButtons(overlay, counts) {
+          if (!overlay) return;
+          const orderId = String(overlay.dataset.orderId || "");
+          const order = (state.orders || []).find(o => String(o.id) === orderId);
+          const running = String(order?.service_state || order?.metadata?.service_state || "").toLowerCase() === "in_progress";
+          const professional = state.currentRole === "Profissional" && String(order?.client_id || "") !== String(currentUid() || "");
+          const names = { before:"Antes", during:"Durante", after:"Depois" };
+          overlay.querySelectorAll("[data-v134-evidence-button]").forEach(button => {
+            const phase = String(button.dataset.v134EvidenceButton || "");
+            if (!(phase in names)) return;
+            const n = Number(counts?.[phase] || 0);
+            const prerequisite = phase === "before" || (phase === "during" ? Number(counts?.before || 0) > 0 : Number(counts?.during || 0) > 0);
+            const allowed = professional && running && prerequisite && n < 5;
+            button.disabled = !allowed;
+            button.setAttribute("aria-disabled", String(!allowed));
+            button.textContent = (n >= 5 ? "✓" : "＋") + " " + names[phase] + " · " + n + "/5";
+            button.title = !professional ? "Disponível apenas para o profissional" :
+              !running ? "Inicie o serviço para registrar fotos" :
+              !prerequisite ? "Registre primeiro a foto de " + (phase === "during" ? "Antes" : "Durante") :
+              n >= 5 ? "Limite de cinco fotos atingido" : "Registrar foto de " + names[phase];
+            button.style.opacity = allowed ? "1" : "0.38";
+            button.style.cursor = allowed ? "pointer" : "not-allowed";
+          });
+        }
+        function qa4PublishEvidence(orderId, counts) {
+          const key = String(orderId || "");
+          const normalized = {before:Number(counts?.before||0),during:Number(counts?.during||0),after:Number(counts?.after||0)};
+          qa4EvidenceCounts.set(key,normalized);
+          const overlay = document.querySelector("#v121ChatOverlay");
+          if(String(overlay?.dataset?.orderId||"")===key)qa4EvidenceButtons(overlay,normalized);
+          window.dispatchEvent(new CustomEvent("fechou:qa4-evidence",{detail:{orderId:key,counts:normalized}}));
+          return normalized;
+        }
+        async function qa4RefreshEvidence(orderId) {
+          const db = getDb();
+          if (!db) throw new Error("Não foi possível consultar as fotos sem conexão.");
+          const {data,error} = await db.from("fechou_service_evidence").select("id,phase,storage_path").eq("order_id",String(orderId)).limit(1000);
+          if(error)throw error;
+          const counts={before:0,during:0,after:0},seen=new Set();
+          for(const item of data||[]){
+            const phase=String(item.phase||""),key=String(item.storage_path||item.id||"");
+            if(Object.prototype.hasOwnProperty.call(counts,phase)&&key&&!seen.has(key)){seen.add(key);counts[phase]++;}
+          }
+          return qa4PublishEvidence(orderId,counts);
+        }
+        window.FECHOU_QA4_EVIDENCE = {
+          get(orderId) {return qa4EvidenceCounts.get(String(orderId))||null;},
+          refresh: qa4RefreshEvidence,
+          async wait(orderId) {
+            const pending=Array.from(qa4EvidenceOperations.get(String(orderId))||[]);
+            if(pending.length)await Promise.allSettled(pending);
+          }
+        };
         async function loadEvidence(overlay) {
           const db = getDb();
           const orderId = String(overlay?.dataset?.orderId || "");
@@ -29263,6 +29330,7 @@ body #app .fechou-profile-progress>div:first-child b {
               phases[phase]++;
               if (phases[phase] <= 5) unique.push(item);
             }
+            qa4PublishEvidence(orderId,phases);
             // A interface tem no máximo 5 fotos por etapa; evitar centenas de URLs assinadas.
             const signed = await Promise.all(unique.map(async (item) => {
               try {
@@ -29299,14 +29367,7 @@ body #app .fechou-profile-progress>div:first-child b {
             }
             // Troca atômica: não acrescenta miniaturas enquanto o pedido ainda carrega.
             grid.replaceChildren(fragment);
-            host.querySelectorAll("[data-v134-evidence-button]").forEach((button) => {
-              const phase = String(button.dataset.v134EvidenceButton || "");
-              const count = Math.min(phases[phase] || 0, 5);
-              button.disabled = count >= 5;
-              button.setAttribute("aria-label", `${phaseLabels[phase] || "Etapa"}: ${count} de 5 fotos`);
-              button.textContent = `${count >= 5 ? "✓" : "＋"} ${phaseLabels[phase] || "Etapa"} · ${count}/5`;
-              button.title = count >= 5 ? "Limite de cinco fotos desta etapa atingido" : `${count} de 5 fotos registradas`;
-            });
+            qa4EvidenceButtons(overlay,phases);
           } catch (e) {
             console.warn("Evidências de serviço não carregadas:", e);
           }
@@ -29337,8 +29398,17 @@ body #app .fechou-profile-progress>div:first-child b {
           const phaseLabel={before:'Antes',during:'Durante',after:'Depois'}[phase];
           input.disabled=true;
           r6SavingEvidence=true;
+          const qa4End=qa4BeginEvidence(orderId);
           try {
             await window.fechouEnsureCompactSupabaseSession?.(db);
+            const serviceOrder=(state.orders||[]).find(o=>String(o.id)===orderId);
+            if(state.currentRole!=='Profissional'||String(serviceOrder?.client_id||'')===String(currentUid()||''))
+              throw new Error('Somente o profissional responsável pode registrar fotos.');
+            if(String(serviceOrder?.service_state||serviceOrder?.metadata?.service_state||'').toLowerCase()!=='in_progress')
+              throw new Error('Inicie o serviço antes de registrar fotos.');
+            const counts=await qa4RefreshEvidence(orderId);
+            if(phase==='during'&&counts.before<1)throw new Error('Registre primeiro a foto de Antes.');
+            if(phase==='after'&&counts.during<1)throw new Error('Registre primeiro a foto de Durante.');
             const countResp=await db.from('fechou_service_evidence').select('id').eq('order_id',orderId).eq('phase',phase).limit(5);
             if(countResp.error)throw countResp.error;
             const existing=(countResp.data||[]).length;
@@ -29371,7 +29441,8 @@ body #app .fechou-profile-progress>div:first-child b {
             const result=await Promise.allSettled(tasks);
             const saved=result.filter(x=>x.status==='fulfilled').length;
             if(saved) {
-              await loadEvidence(overlay);
+              try { await qa4RefreshEvidence(orderId); } catch(e) {console.warn('Recontagem pendente:',e);}
+              void loadEvidence(overlay).catch(e=>console.warn('Galeria pendente:',e));
               toast134(`${saved} foto(s) arquivada(s). ${Math.min(5,existing+saved)} de 5 nesta etapa.`);
             }
             const failures=result.filter(x=>x.status==='rejected');
@@ -29379,7 +29450,7 @@ body #app .fechou-profile-progress>div:first-child b {
           }catch(e){
             console.warn('Fotos do serviço FECHOU:',e);
             toast134(String(e?.message||'Não foi possível registrar as fotos.'));
-          }finally{input.value='';input.disabled=false;r6SavingEvidence=false;}
+          }finally{input.value='';input.disabled=false;r6SavingEvidence=false;qa4End();}
         }
 
         async function loadPaymentNegotiation(overlay) {
@@ -35406,11 +35477,20 @@ Object.keys(serviceDetails).forEach((service) => {
 });
 function examples(){return;const s=state();if(s.page!=='request'||s.currentRole==='Profissional')return;const input=$('#app [data-input="description"]');if(!input)return;const service=String(s.service||''),category=String(s.category||'');let text=serviceDetails[service];if(!text){const existing=input.placeholder;if(existing&&/^Ex\.:/.test(existing)&&existing.length>75&&!/descreva o serviço, o local/.test(existing))text=existing.replace(/^Ex\.:\s*/,'').replace(/[.]$/,'');else text=`solicitar ${service||'um serviço'} na área de ${category||'serviços gerais'}; informe o que precisa ser feito, a quantidade, o estado atual, o local e o prazo desejado`};const example='Exemplo: '+sentence(text);if(input.placeholder!==example)input.placeholder=example;let n=$('#exw-v8-service-example');if(!n){n=document.createElement('small');n.id='exw-v8-service-example';input.after(n)}n.classList.add('v189-service-examples');const guidance='Você também pode acrescentar medidas, materiais disponíveis, fotos e condições de acesso. Não publique senhas ou documentos pessoais.';if(n.textContent!==example+'\n'+guidance)n.textContent=example+'\n'+guidance;$$('.v34-description-example',input.parentElement).forEach(x=>{if(x!==n)x.hidden=true})}
 function factors(){const roots=$$('#v58-price-result,#v56-ai-analysis,#v56-service-analysis,.v56-estimate,.v56-accordion-content');for(const root of roots){for(const el of $$('p.v56-help',root)){if(!/^Fatores considerados\s*:/i.test(el.textContent||''))continue;const parts=el.textContent.replace(/^Fatores considerados\s*:\s*/i,'').split(/\s*·\s*/).filter(Boolean);const box=document.createElement('section');box.className='v56-help v189-factors';box.innerHTML='<b>Fatores considerados</b>'+parts.map(t=>'<p>'+esc(sentence(t))+'</p>').join('');el.replaceWith(box)}}}
-function wallet(){const w=$('#app .v134-wallet');if(!w)return;if(!w.dataset.v189Ready){w.dataset.v189Ready='1';const head=$('.v134-wallet-hero',w);if(head&&!$('[data-v189-wallet-eye]',w)){const eye=document.createElement('button');eye.type='button';eye.className='v189-eye';eye.dataset.v189WalletEye='1';eye.setAttribute('aria-label','Ocultar valores da carteira');eye.setAttribute('aria-pressed','false');eye.innerHTML=eyeSVG(false);head.after(eye)}const tabs=document.createElement('nav');tabs.className='v189-wallet-tabs';tabs.setAttribute('aria-label','Seções da carteira');tabs.innerHTML='<button type="button" data-v189-wallet-tab="statement">≡ Extrato</button><button type="button" data-v189-wallet-tab="refund">↩ Reembolsos</button><button type="button" data-v134-refresh-wallet>⟳ Atualizar</button>';(head||w.firstChild).after(tabs);
+function wallet(){const w=$('#app .v134-wallet');if(!w)return;if(!w.dataset.v189Ready){w.dataset.v189Ready='1';const head=$('.v134-wallet-hero',w);if(head&&!$('[data-v189-wallet-eye]',w)){const eye=document.createElement('button');eye.type='button';eye.className='v189-eye';eye.dataset.v189WalletEye='1';eye.setAttribute('aria-label','Ocultar valores da carteira');eye.setAttribute('aria-pressed','false');eye.innerHTML=eyeSVG(false);head.after(eye)}// Reutilizar a barra existente no topo, sem fabricar clones no rodapé.
+ const existingTabs=$$('#app .v189-wallet-tabs');
+ let tabs=existingTabs.find(el=>w.contains(el))||existingTabs[0];
+ if(!tabs){tabs=document.createElement('nav');tabs.className='v189-wallet-tabs';tabs.setAttribute('aria-label','Seções da carteira');tabs.innerHTML='<button type="button" data-v189-wallet-tab="statement">≡ Extrato</button><button type="button" data-v189-wallet-tab="refund">↩ Reembolsos</button><button type="button" data-v134-refresh-wallet>⟳ Atualizar</button>';}
+ existingTabs.forEach(el=>{if(el!==tabs)el.remove()});
+ const walletTop=w.querySelector(':scope > .v335-wallet-shell')||w;
+ if(walletTop.firstElementChild!==tabs)walletTop.insertBefore(tabs,walletTop.firstChild);
  const already=w.querySelector('details.v189-wallet-extra:not([data-v335-refund])');const extras=$$('.v134-wallet-flow,.v178-pro-wallet-details,.v169-wallet-pro-summary,.v169-wallet-client-summary,.v178-wallet-actions',w).filter(extra=>extra.tagName!=='DETAILS'&&!extra.closest('details'));if(extras.length){let fold=already;if(!fold){fold=document.createElement('details');fold.className='v189-wallet-extra';const summary=document.createElement('summary');summary.textContent='Informações complementares';extras[0].before(fold);fold.append(summary)}extras.forEach(extra=>fold.append(extra));if(!already)fold.open=false}const refund=w.querySelector('.v173-refund-panel');if(refund&&!refund.closest('details')){const fold=document.createElement('details');fold.className='v189-wallet-extra';fold.dataset.v335Refund='1';const summary=document.createElement('summary');summary.textContent='Reembolsos dos serviços';refund.before(fold);fold.append(summary,refund)}
  }
  $$('b,strong',w).forEach(el=>{if(/^R\$\s*[\d.,]+$/.test(el.textContent.trim())&&!el.dataset.v189Private)el.dataset.v189Private='1'});
  $$('button',w).forEach(el=>{if(/[👁🙈]/u.test(el.textContent)&&!el.dataset.v189WalletEye){el.innerHTML=eyeSVG(w.classList.contains('v189-wallet-hidden'));el.setAttribute('aria-label','Mostrar ou ocultar valores');el.dataset.v189WalletEye='1'}});
+ const allBars=$$('#app .v189-wallet-tabs'),bar=allBars.find(el=>w.contains(el))||allBars[0];
+ allBars.forEach(el=>{if(el!==bar)el.remove()});
+ if(bar){const host=w.querySelector(':scope > .v335-wallet-shell')||w;if(host.firstElementChild!==bar)host.insertBefore(bar,host.firstChild);}
  w.classList.toggle('v189-wallet-hidden',!!state().v189WalletHidden);
 }
 function eyeSVG(hidden){return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>${hidden?'<path d="m3 3 18 18"/>':''}</svg>`}
@@ -42985,7 +43065,8 @@ window.fechouNativeBtnClassV335 = function (name) {
       kind = 'already_completed';
     }
     if (kind === 'already_completed') renderAlreadyCompletedInfo(ctx);
-    else if (kind === 'approve') renderApproveConfirm(ctx);
+    else if (kind === 'approve') renderDecisionSheet(ctx);
+    else if (kind === 'approve_confirm') renderApproveConfirm(ctx);
     else if (kind === 'review') renderReviewForm(ctx);
     else if (kind === 'contest') renderContestForm(ctx);
     else if (kind === 'contest_reply') renderContestReplyForm(ctx);
