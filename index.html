@@ -23871,6 +23871,37 @@ function renderServiceRecord(o, archive = false) {
             })();
           });
         }
+        // Correção 04: cliente decide sobre contrato OPCIONAL solicitado na proposta direta.
+        document.addEventListener("click", async function(event) {
+          const button = event.target?.closest?.("[data-qa4-optional-contract]");
+          if (!button || !button.closest("#v121ChatOverlay")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          if (button.disabled) return;
+          const orderId = String(button.closest("#v121ChatOverlay")?.dataset?.orderId || "");
+          const answer = button.dataset.qa4OptionalContract === "accept";
+          if (!orderId) return safeToast("Não foi possível identificar a contratação.");
+          button.disabled = true;
+          const original = button.textContent;
+          button.textContent = "Registrando resposta…";
+          try {
+            const db = await window.fechouEnsureSupabaseClient();
+            const { data, error } = await db.rpc("fechou_qa4_respond_optional_contract", {
+              p_order_id: orderId, p_accept: answer
+            });
+            if (error) throw error;
+            if (!data?.ok) throw new Error("A resposta não foi confirmada.");
+            await window.ewSyncOrders?.();
+            await window.__fechouOpenChatByOrder?.(orderId);
+            safeToast(answer ? "Contrato autorizado. O profissional foi notificado." : "Contrato recusado. O profissional foi notificado e o serviço pode continuar sem contrato.");
+          } catch (error) {
+            button.disabled = false;
+            button.textContent = original;
+            safeToast(String(error?.message || "Não foi possível registrar a resposta."));
+          }
+        }, true);
+
         function renderChatOverlay() {
           const old = $("#v121ChatOverlay");
           if (!chatOrderId) { old?.remove(); return; }
@@ -23937,8 +23968,14 @@ function renderServiceRecord(o, archive = false) {
           );
           const directRequested = q?.metadata?.generate_contract === true || q?.metadata?.contract_requested === true || q?.metadata?.generate_contract === "yes";
           const directAgreed = modeOf(o) === "direct" && o.metadata?.payment_mode_agreed === "direct";
+          const optionalContractStatus = String(o.metadata?.optional_direct_contract_status || "").toLowerCase();
+          const optionalContractAccepted = optionalContractStatus === "accepted";
+          const directContractVisible = directAgreed && directRequested &&
+            optionalContractStatus !== "declined";
+          const contractEnabled = modeOf(o) !== "direct" || hasContract || directContractVisible;
+          if (!contractEnabled) contractDrawerOpen = false;
           const canGenerate = !client && !!q && String(q.professional_id) === currentUserId && String(selectedId || "") === String(q.id) && !hasContract &&
-            (modeOf(o) === "contract_prepaid" || (directAgreed && directRequested));
+            (modeOf(o) === "contract_prepaid" || (directAgreed && directRequested && optionalContractAccepted));
           const clientSignedNow = (typeof window.fechouClientSigned === "function") ? window.fechouClientSigned(o) : !!(o.contract?.client_signed_at || o.contract?.client_accepted_at);
           const professionalSignedNow = (typeof window.fechouProfessionalSigned === "function") ? window.fechouProfessionalSigned(o) : !!(o.contract?.professional_signed_at || (modeOf(o) !== "contract_prepaid" && o.contract?.professional_accepted_at));
           const accepted = (typeof window.fechouBothSigned === "function") ? window.fechouBothSigned(o) : !!(clientSignedNow && professionalSignedNow);
@@ -24012,10 +24049,16 @@ function renderServiceRecord(o, archive = false) {
             const resendBtn = (prepaidMode && !currentPartySigned) ? `<button class="fc-secondary-action" type="button" data-fechou-resend-sign>Reenviar código de assinatura</button>` : "";
             const payBtn = (client && accepted && prepaidMode && !["approved","received","confirmed","paid"].includes(String(o.payment_status || "").toLowerCase())) ? `<button class="fc-primary-action" type="button" data-v134-pay-contract="${esc121(o.id)}">Pagar serviço pelo aplicativo</button>` : "";
             contractContent = `<section class="fc-contract-card"><h3>Contrato da contratação</h3><p>${statusMsg}</p><div class="fc-contract-actions">${showSign ? `<button class="fc-primary-action" type="button" data-v121-accept-contract>${signLabel}</button>` : ""}${resendBtn}${remindBtn}<button class="fc-secondary-action" type="button" data-v121-print-contract>Baixar/Imprimir PDF</button>${payBtn}</div></section>`;
-          } else if (directAgreed && client) {
-            contractContent = `<section class="fc-contract-card"><h3>Contrato da contratação</h3><p>${directRequested ? "A solicitação de contrato foi enviada ao profissional." : "Solicite ao profissional o contrato desta contratação."}</p>${!directRequested ? `<button class="fc-primary-action" type="button" data-v222-request-direct-contract>Solicitar contrato ao profissional</button>` : ""}<button class="fc-secondary-action" type="button" data-v222-release-professional="${esc121(o.id)}">Retirar profissional</button></section>`;
-          } else if (directAgreed && !client && directRequested) {
-            contractContent = `<section class="fc-contract-card"><h3>Solicitação de contrato</h3><p>O cliente solicitou a formalização desta contratação.</p><div class="fc-contract-actions"><button class="fc-primary-action" type="button" data-v222-respond-direct-contract="accept">Preparar contrato</button><button class="fc-secondary-action" type="button" data-v222-respond-direct-contract="decline">Recusar solicitação</button></div></section>`;
+          } else if (directAgreed && directRequested && !hasContract && client) {
+            if (optionalContractStatus === "accepted") {
+              contractContent = '<section class="fc-contract-card"><h3>Contrato opcional autorizado</h3><p>Você aceitou a solicitação do profissional. Aguarde o documento para ler e assinar.</p></section>';
+            } else if (optionalContractStatus !== "declined") {
+              contractContent = '<section class="fc-contract-card"><h3>Solicitação de contrato do profissional</h3><p>O pagamento será combinado diretamente entre as partes. O profissional deseja formalizar o serviço por contrato. Você pode aceitar ou recusar; não haverá contrato sem sua autorização.</p><div class="fc-contract-actions"><button type="button" class="fc-primary-action" data-qa4-optional-contract="accept">Aceitar contrato</button><button type="button" class="fc-secondary-action" data-qa4-optional-contract="decline">Não quero contrato</button></div></section>';
+            }
+          } else if (directAgreed && directRequested && !hasContract && !client) {
+            contractContent = '<section class="fc-contract-card"><h3>Contrato opcional</h3><p>O pedido de contrato foi apresentado ao cliente. Aguarde a resposta para preparar o documento. Se houver recusa, a execução poderá seguir sem contrato pelo aplicativo.</p></section>';
+          } else if (modeOf(o) === "direct" && !hasContract) {
+            contractContent = "";
           } else {
             contractContent = `<section class="fc-contract-card"><h3>Condições da proposta selecionada</h3>${q ? `<p><b>Serviço:</b> ${esc121(o.service || o.category || "Serviço contratado")}</p><p><b>Valor acordado:</b> ${Number(q.price || o.total || 0).toLocaleString("pt-BR", {style:"currency",currency:"BRL"})}</p><p><b>Condições:</b> ${esc121(q.conditions || q.terms || q.special_conditions || q.message || q.description || q.details || "Não foram registradas condições adicionais na proposta.")}</p>${q.message && q.conditions && String(q.message).trim() !== String(q.conditions).trim() ? `<p><b>Mensagem original da proposta:</b> ${esc121(q.message)}</p>` : ""}<p><b>Materiais:</b> ${esc121(q.materials || q.included_materials || "A confirmar entre as partes.")}</p><p><b>Disponibilidade:</b> ${esc121(q.availability || q.schedule || "A combinar")}</p><p><b>Prazo:</b> ${esc121(q.deadline || q.estimated_deadline || "A combinar por escrito")}</p><p><b>Forma de pagamento:</b> ${esc121(q.paymentMethod || q.metadata?.payment_method || (modeOf(o)==="contract_prepaid" ? "Pagamento pelo aplicativo + contrato" : "Pagamento direto entre as partes"))}</p><small>Estas são as condições vinculadas à proposta selecionada. O contrato formal e os aceites serão exibidos quando forem gerados e registrados.</small>` : `<p>Não foi possível carregar a proposta vinculada. Atualize os pedidos para sincronizar as condições antes de prosseguir.</p>`}</section>`;
           }
@@ -24072,14 +24115,14 @@ function renderServiceRecord(o, archive = false) {
             <div class="fc-chat-scroll">
               <div class="fc-chat-thread" id="v121ChatMessages" aria-live="polite">${renderedMessages}</div>
               <section class="v134-evidence fc-evidence" hidden><button type="button" class="v148-fold-head fc-evidence-head" aria-expanded="false"><span><b>Fotos do serviço</b><small>Antes · durante · depois</small></span><span>⌄</span></button><div class="v148-fold-body" hidden><p>Registre pelo menos uma foto em cada etapa (Antes, Durante e Depois). Você pode anexar até cinco por etapa.</p><div class="v134-evidence-actions"><button type="button" data-v134-evidence-button="before">＋ Antes</button><button type="button" data-v134-evidence-button="during">＋ Durante</button><button type="button" data-v134-evidence-button="after">＋ Depois</button><input type="file" accept="image/*" capture="environment" multiple hidden data-v134-evidence-input="1"></div><div class="v134-evidence-grid"></div></div></section>
-              <section class="fc-contract-drawer ${contractDrawerOpen ?"open" : ""}" id="fc-chat-contract-drawer" ${contractDrawerOpen ? "" : "hidden"}><div class="fc-contract-drawer-head"><strong>Contrato e condições</strong><button type="button" data-fc-contract-close aria-label="Fechar painel de contrato">×</button></div><div class="v149-stage-slot">${contractContent}</div></section>
+              <section class="fc-contract-drawer ${contractEnabled && contractDrawerOpen ?"open" : ""}" id="fc-chat-contract-drawer" ${contractEnabled && contractDrawerOpen ? "" : "hidden"}><div class="fc-contract-drawer-head"><strong>Contrato e condições</strong><button type="button" data-fc-contract-close aria-label="Fechar painel de contrato">×</button></div><div class="v149-stage-slot">${contractContent}</div></section>
               <section class="v185-payment-negotiation-slot" aria-label="Negociação de pagamento"></section>
             </div>
             <div class="fc-chat-action-bridge" hidden aria-hidden="true">${waitingClient && client ? `<button type="button" class="btn" data-v134-service-action="approve" data-order-id="${esc121(o.id)}">Aprovar serviço</button><button type="button" class="btn secondary" data-v134-service-action="contest" data-order-id="${esc121(o.id)}">Contestar</button>` : (serviceAction ? `<button type="button" data-v134-service-action="${serviceAction}" data-order-id="${esc121(o.id)}">${esc121(serviceLabel)}</button>` : "")}</div>
             <div class="fc-chat-tools" aria-label="Ferramentas da conversa">
               <button type="button" class="fc-chat-tools-toggle" data-fc-tools-toggle aria-expanded="${expanded}" title="Recolher ou expandir ferramentas" aria-label="${expanded ? "Recolher" : "Expandir"} ferramentas"><span>${expanded ? "⌃" : "⌄"}</span></button>
               <div class="fc-chat-tools-grid ${expanded ?"" : "collapsed"}">
-                <button type="button" data-fc-tool="contract"><span aria-hidden="true">${window.fechouChatIcon("contract")}</span>Contrato</button>
+                <button type="button" data-fc-tool="contract" ${contractEnabled ? "" : "disabled aria-disabled=\"true\" title=\"Sem contrato nesta contratação\" style=\"opacity:.32;cursor:not-allowed\""}><span aria-hidden="true">${window.fechouChatIcon("contract")}</span>Contrato</button>
                 <button type="button" data-fc-tool="service" class="fc-tool-service" ${serviceAction ? "" : "disabled"}><span aria-hidden="true">${window.fechouChatIcon(serviceAction || "start")}</span>${esc121(serviceLabel)}</button>
                 <button type="button" data-fc-tool="attach"><span aria-hidden="true">${window.fechouChatIcon("attach")}</span>Anexar arquivo</button>
                 <button type="button" data-fc-tool="attachments"><span aria-hidden="true">${window.fechouChatIcon("attachments")}</span>Ver anexos</button>
