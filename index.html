@@ -28472,6 +28472,20 @@ body #app .fechou-profile-progress>div:first-child b {
         // FECHOU R22: leitura de evidências coalescida, sem resultados antigos ou miniaturas duplicadas.
         // Correção 04: contagem confirmada no Supabase é a fonte única para chat, lembretes e finalização.
         const qa4EvidenceCounts = new Map();
+        const qa4EvidenceOperations = new Map();
+        function qa4BeginEvidence(orderId) {
+          const key = String(orderId || "");
+          let done;
+          const promise = new Promise(resolve => { done = resolve; });
+          const group = qa4EvidenceOperations.get(key) || new Set();
+          group.add(promise);
+          qa4EvidenceOperations.set(key, group);
+          return () => {
+            group.delete(promise);
+            if (!group.size) qa4EvidenceOperations.delete(key);
+            done();
+          };
+        }
         function qa4EvidenceButtons(overlay, counts) {
           if (!overlay) return;
           const orderId = String(overlay.dataset.orderId || "");
@@ -28520,7 +28534,7 @@ body #app .fechou-profile-progress>div:first-child b {
           refresh: qa4RefreshEvidence,
           async wait(orderId) {
             const prefix = String(orderId) + "|";
-            const pending = Array.from(fechouEvidenceQueues.entries()).filter(([key]) => key.startsWith(prefix)).map(([,task]) => task);
+            const pending = [...Array.from(qa4EvidenceOperations.get(String(orderId)) || []), ...Array.from(fechouEvidenceQueues.entries()).filter(([key]) => key.startsWith(prefix)).map(([,task]) => task)];
             if (pending.length) await Promise.allSettled(pending);
           }
         };
@@ -28651,6 +28665,8 @@ body #app .fechou-profile-progress>div:first-child b {
           if (!files.length) return;
           const overlay = input.closest("#v121ChatOverlay") || $("#v121ChatOverlay");
           const orderId = String(overlay?.dataset?.orderId || "");
+          const qa4End = qa4BeginEvidence(orderId);
+          try {
           const phase = String(input.dataset.v134EvidencePhase || "during");
           const db = getDb(), user = currentUser();
           if (!db || !user || !orderId) return toast134("Abra uma conversa válida antes de registrar evidências.");
@@ -28738,7 +28754,7 @@ body #app .fechou-profile-progress>div:first-child b {
                 );
               } finally { fechouEvidencePending.delete(fingerprint); }
             }
-            await loadEvidence(overlay, true);
+            void loadEvidence(overlay, true).catch(error => console.warn("A galeria será atualizada na próxima leitura.", error));
             if (savedCount) toast134(savedCount + " foto(s) arquivada(s). " + phaseCount + " de 5 nesta etapa.");
             return savedCount;
           });
@@ -28748,6 +28764,7 @@ body #app .fechou-profile-progress>div:first-child b {
             accepted.forEach(item => fechouEvidencePending.delete(item.fingerprint));
             if (fechouEvidenceQueues.get(phaseKey) === work) fechouEvidenceQueues.delete(phaseKey);
           }
+          } finally { qa4End(); }
         }
         async function loadPaymentNegotiation(overlay) {
           const orderId = String(overlay?.dataset?.orderId || "");
@@ -39274,9 +39291,9 @@ body.fechou-guest-public-only .wrap > footer.footer {
    return null;
  }
  function distance(a,b){const R=6371000,rad=x=>x*Math.PI/180,dLat=rad(b.lat-a.lat),dLon=rad(b.lon-a.lon),x=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
- function notify(message,orderId,kind){
+ function notify(message,orderId,kind,phase){
    if((window.__fechouV178GetState?.()||{}).currentRole!=='Profissional')return;
-   const overlay=document.querySelector('#v121ChatOverlay'),box=document.createElement('div');box.className='v322-reminder';box.dataset.orderId=String(orderId);box.setAttribute('role','status');box.setAttribute('aria-live','polite');
+   const overlay=document.querySelector('#v121ChatOverlay'),box=document.createElement('div');box.className='v322-reminder';box.dataset.orderId=String(orderId);box.dataset.phase=String(phase||'');box.setAttribute('role','status');box.setAttribute('aria-live','polite');
    box.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 13px;margin:10px;border:1px solid #42678c;border-radius:12px;background:#132438;color:#eef6ff;font-size:13px;line-height:1.45;z-index:99999';
    const text=document.createElement('span');text.textContent=message;text.style.flex='1 1 190px';box.append(text);
    const open=document.createElement('button');open.type='button';open.textContent='Abrir conversa';open.style.cssText='border:1px solid #6c9bc9;border-radius:8px;background:#1b4264;color:#fff;padding:7px 10px;font-weight:700';open.addEventListener('click',async()=>{try{await window.__fechouOpenChatByOrder?.(String(orderId));box.remove()}catch(error){if(typeof window.safeToast==='function')window.safeToast(String(error?.message||'Não foi possível abrir a conversa.'))}});
@@ -39305,7 +39322,7 @@ body.fechou-guest-public-only .wrap > footer.footer {
      const message = kind === 'hourly'
        ? 'Você ainda está executando este serviço? Registre a foto de ' + phaseLabel + ' no chat.'
        : 'Registre a foto de ' + phaseLabel + ' no chat antes de finalizar o serviço.';
-     notify(message, orderId, kind);
+     notify(message, orderId, kind, next);
    } catch (error) {
      console.warn('Lembrete suspenso: fotos não sincronizadas.', error);
    }
@@ -39315,7 +39332,7 @@ body.fechou-guest-public-only .wrap > footer.footer {
    const counts = event.detail?.counts;
    const box = document.getElementById('fechou-v322-reminder-global');
    if (!box || !counts || !id || box.dataset.orderId !== id) return;
-   if (['before','during','after'].every(phase => Number(counts[phase] || 0) > 0)) box.remove();
+   if (Number(counts[box.dataset.phase] || 0) > 0) box.remove();
  });
  function stopWatch(id){const key=String(id);if(watches.has(key)){try{navigator.geolocation.clearWatch(watches.get(key))}catch(_){}watches.delete(key)}}
  function startArrivalWatch(id){
