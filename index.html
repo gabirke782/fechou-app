@@ -7374,9 +7374,16 @@ function renderServiceRecord(o, archive = false) {
           }
           if (profile) {
             // Login válido com perfil existente: sair da tela de autenticação e abrir o painel correspondente.
-            const destination = "home";
-            toast("Login realizado. Bem-vindo ao aplicativo.");
+            const destination = state.currentRole === "Profissional" ? "professionaljobs" : "home";
+            state.page = destination;
+            state.authMode = "login";
+            document.getElementById("exylonWelcome")?.classList.remove("show");
             go(destination);
+            if (state.page !== destination || document.querySelector('#app [data-act="authLogin"]')) {
+              state.page = destination;
+              render();
+            }
+            toast("Login realizado. Bem-vindo ao aplicativo.");
             return;
           }
           // A conta pode existir no Auth sem ainda ter uma linha na tabela profiles.
@@ -7742,7 +7749,7 @@ function renderServiceRecord(o, archive = false) {
               await ewLoadProfile(data.session.user, false);
               await window.ewSyncOrders();
               if (state.currentRole) {
-                state.page = "home";
+                state.page = state.currentRole === "Profissional" ? "professionaljobs" : "home";
                 try {
                   document
                     .getElementById("exylonWelcome")
@@ -22672,7 +22679,9 @@ function renderServiceRecord(o, archive = false) {
                 );
               if (pe) console.warn("Perfil ausente após login", pe);
             }
-            state.page = "home";
+            state.page = state.currentRole === "Profissional" ? "professionaljobs" : "home";
+            state.authMode = "login";
+            document.getElementById("exylonWelcome")?.classList.remove("show");
             render();
             safeToast("Login realizado com sucesso. Bem-vindo à nossa rede!");
           } catch (err) {
@@ -28418,6 +28427,60 @@ body #app .fechou-profile-progress>div:first-child b {
 
         // Add service status and evidence widgets to the draggable conversation window.
         // FECHOU R22: leitura de evidências coalescida, sem resultados antigos ou miniaturas duplicadas.
+        // Correção 04: contagem confirmada no Supabase é a fonte única para chat, lembretes e finalização.
+        const qa4EvidenceCounts = new Map();
+        function qa4EvidenceButtons(overlay, counts) {
+          if (!overlay) return;
+          const orderId = String(overlay.dataset.orderId || "");
+          const order = (state.orders || []).find(o => String(o.id) === orderId);
+          const running = String(order?.service_state || order?.metadata?.service_state || "").toLowerCase() === "in_progress";
+          const professional = state.currentRole === "Profissional" && String(order?.client_id || "") !== String(currentUid() || "");
+          const phaseLabels = { before:"Antes", during:"Durante", after:"Depois" };
+          overlay.querySelectorAll("[data-v134-evidence-button]").forEach(button => {
+            const phase = String(button.dataset.v134EvidenceButton || "");
+            if (!(phase in phaseLabels)) return;
+            const n = Number(counts?.[phase] || 0);
+            const prerequisite = phase === "before" || (phase === "during" ? Number(counts?.before || 0) > 0 : Number(counts?.during || 0) > 0);
+            const allowed = professional && running && prerequisite && n < 5;
+            button.disabled = !allowed;
+            button.setAttribute("aria-disabled", String(!allowed));
+            button.textContent = (n >= 5 ? "✓" : "＋") + " " + phaseLabels[phase] + " · " + n + "/5";
+            button.title = !professional ? "Disponível apenas para o profissional" :
+              !running ? "Inicie o serviço para registrar fotos" :
+              !prerequisite ? "Registre primeiro a foto de " + (phase === "during" ? "Antes" : "Durante") :
+              n >= 5 ? "Limite de cinco fotos atingido" : "Registrar foto de " + phaseLabels[phase];
+            button.style.opacity = allowed ? "1" : "0.38";
+            button.style.cursor = allowed ? "pointer" : "not-allowed";
+          });
+        }
+        function qa4PublishEvidence(orderId, counts) {
+          const key = String(orderId || "");
+          const normalized = { before: Number(counts?.before || 0), during: Number(counts?.during || 0), after: Number(counts?.after || 0) };
+          qa4EvidenceCounts.set(key, normalized);
+          const active = document.querySelector("#v121ChatOverlay");
+          if (String(active?.dataset?.orderId || "") === key) qa4EvidenceButtons(active, normalized);
+          window.dispatchEvent(new CustomEvent("fechou:qa4-evidence", { detail: { orderId: key, counts: normalized } }));
+          return normalized;
+        }
+        async function qa4RefreshEvidence(orderId) {
+          const db = getDb();
+          if (!db) throw new Error("Não foi possível sincronizar as fotos sem conexão.");
+          const { data, error } = await db.from("fechou_service_evidence").select("phase")
+            .eq("order_id", String(orderId)).limit(100);
+          if (error) throw error;
+          const counts = { before:0, during:0, after:0 };
+          for (const item of data || []) if (Object.prototype.hasOwnProperty.call(counts, item.phase)) counts[item.phase]++;
+          return qa4PublishEvidence(orderId, counts);
+        }
+        window.FECHOU_QA4_EVIDENCE = {
+          get(orderId) { return qa4EvidenceCounts.get(String(orderId)) || null; },
+          refresh: qa4RefreshEvidence,
+          async wait(orderId) {
+            const prefix = String(orderId) + "|";
+            const pending = Array.from(fechouEvidenceQueues.entries()).filter(([key]) => key.startsWith(prefix)).map(([,task]) => task);
+            if (pending.length) await Promise.allSettled(pending);
+          }
+        };
         const fechouEvidenceReads = new WeakMap();
         let fechouEvidenceGeneration = 0;
         async function loadEvidence(overlay, force = false) {
@@ -28446,6 +28509,14 @@ body #app .fechou-profile-progress>div:first-child b {
                 seen.add(identity);
                 items.push(item);
               }
+              const counts = { before: 0, during: 0, after: 0 };
+              items.forEach(item => { counts[item.phase]++; });
+              qa4PublishEvidence(orderId, counts);
+              const stableSignature = items.map(item => String(item.id || item.storage_path)).sort().join("|");
+              if (grid.dataset.qa4Signature === stableSignature && grid.querySelectorAll(".v134-evidence-item").length === items.length) {
+                qa4EvidenceButtons(overlay, counts);
+                return;
+              }
               // Um único pedido de URLs assinadas em vez de uma chamada sequencial por foto.
               const storage = db.storage.from("eworkers-service-evidence");
               let urls = [];
@@ -28468,10 +28539,8 @@ body #app .fechou-profile-progress>div:first-child b {
               // Leituras antigas jamais podem acrescentar fotos após uma atualização recente.
               if (fechouEvidenceReads.get(overlay)?.generation !== generation ||
                   String(overlay.dataset.orderId || "") !== orderId || !grid.isConnected) return;
-              const counts = { before: 0, during: 0, after: 0 };
               const fragment = document.createDocumentFragment();
               items.forEach((item, index) => {
-                counts[item.phase]++;
                 const url = urls[index];
                 if (!url) return;
                 const box = document.createElement("a");
@@ -28486,15 +28555,16 @@ body #app .fechou-profile-progress>div:first-child b {
                 fragment.appendChild(box);
               });
               grid.replaceChildren(fragment);
+              grid.dataset.qa4Signature = stableSignature;
               const labels = { before: "Antes", during: "Durante", after: "Depois" };
               host.querySelectorAll("[data-v134-evidence-button]").forEach(button => {
                 const phase = String(button.dataset.v134EvidenceButton || "");
                 const count = counts[phase] || 0;
-                button.disabled = count >= 5;
                 button.setAttribute("aria-label", (labels[phase] || "Etapa") + ": " + count + " de 5 fotos");
                 button.textContent = (count >= 5 ? "✓" : "＋") + " " + (labels[phase] || "Etapa") + " · " + count + "/5";
                 button.title = count >= 5 ? "Limite de cinco fotos desta etapa atingido" : count + " de 5 fotos registradas";
               });
+              qa4EvidenceButtons(overlay, counts);
             } catch (e) {
               console.warn("Evidências de serviço não carregadas:", e);
             }
@@ -28542,6 +28612,16 @@ body #app .fechou-profile-progress>div:first-child b {
           const db = getDb(), user = currentUser();
           if (!db || !user || !orderId) return toast134("Abra uma conversa válida antes de registrar evidências.");
           if (!["before", "during", "after"].includes(phase)) return toast134("Etapa de evidência inválida.");
+          const serviceOrder = (state.orders || []).find(o => String(o.id) === orderId);
+          if (state.currentRole !== "Profissional" || String(serviceOrder?.client_id || "") === String(currentUid() || ""))
+            return toast134("Somente o profissional responsável pode registrar as fotos.");
+          if (String(serviceOrder?.service_state || serviceOrder?.metadata?.service_state || "").toLowerCase() !== "in_progress")
+            return toast134("Inicie o serviço antes de registrar fotos.");
+          let currentCounts;
+          try { currentCounts = await qa4RefreshEvidence(orderId); }
+          catch (error) { return toast134("Não foi possível conferir as fotos registradas. Verifique a conexão e tente novamente."); }
+          if (phase === "during" && currentCounts.before < 1) return toast134("Registre primeiro a foto de Antes.");
+          if (phase === "after" && currentCounts.during < 1) return toast134("Registre primeiro a foto de Durante.");
           const phaseKey = orderId + "|" + phase;
           const accepted = [];
           for (const file of files) {
@@ -28603,6 +28683,8 @@ body #app .fechou-profile-progress>div:first-child b {
                 }
                 savedCount++;
                 phaseCount++;
+                const committed = qa4EvidenceCounts.get(orderId) || { before:0, during:0, after:0 };
+                qa4PublishEvidence(orderId, { ...committed, [phase]: Math.max(phaseCount, committed[phase] || 0) });
                 fechouEvidenceRecent.set(fingerprint, Date.now());
               } catch (e) {
                 console.error("Evidência FECHOU:", e);
@@ -28707,6 +28789,7 @@ body #app .fechou-profile-progress>div:first-child b {
             else win.appendChild(evidence);
           }
           setupChatCompactPanels(overlay);
+          qa4EvidenceButtons(overlay, qa4EvidenceCounts.get(String(overlay.dataset.orderId || "")) || { before:0, during:0, after:0 });
           loadEvidence(overlay);
           loadPaymentNegotiation(overlay);
           addServiceActions(overlay);
@@ -28731,6 +28814,7 @@ body #app .fechou-profile-progress>div:first-child b {
           function (ev) {
             const b = ev.target.closest("[data-v134-evidence-button]");
             if (b) {
+              if (b.disabled) { ev.preventDefault(); return; }
               const host = b.closest(".v134-evidence");
               const input = host?.querySelector("[data-v134-evidence-input]");
               if (input) {
