@@ -31660,7 +31660,18 @@ const esc=(v)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":
 const currentPhoto=()=>state.currentRole==="Profissional"?(state.proPhotoData||state.proPhoto||""):(state.clientProfile?.photoData||state.clientProfile?.photo||"");
 const currentName=()=>state.currentRole==="Profissional"?(state.proName||"Profissional"):(state.clientProfile?.name||"Cliente FECHOU");
 const profileData=()=>state.currentRole==="Profissional"?{name:currentName(),role:"Profissional",category:(state.professionalCategories||[]).join(" · ")||state.proCategory||"Serviços profissionais",city:state.proCity||"Região não informada",rating:Number(state.proRating||0),reviews:Number(state.proReviews||0),description:state.proDescription||"Este profissional ainda não adicionou uma apresentação pública.",experience:state.proExperience||"",courses:state.proCourses||"",services:state.professionalServices||[]}:{name:currentName(),role:"Cliente",category:state.clientProfile?.type||"Cliente",city:state.clientProfile?.city||"Região não informada",rating:Number(state.clientProfile?.rating||0),reviews:Number(state.clientProfile?.reviews||0),description:state.clientProfile?.description||"Perfil de cliente do aplicativo.",experience:"",services:[]};
-function goProfile(){state.__fechouViewingForeignProfile=false;state.__fechouEditingProfile=false;state.selectedProfile=profileData();state.page="profileview";if(typeof render==="function")render();}
+function goProfile(){
+  // A aba do perfil já aberto não deve remontar nem piscar o layout legado.
+  if(state.page==="profileview"&&!state.__fechouEditingProfile&&!state.__fechouViewingForeignProfile&&$("#app .fechou-profile-social")){
+    footerFix();
+    return;
+  }
+  state.__fechouViewingForeignProfile=false;
+  state.__fechouEditingProfile=false;
+  state.selectedProfile=profileData();
+  state.page="profileview";
+  if(typeof render==="function")render();
+}
 function footerFix(){
   const app = $("#app");
   if (!app || !state.currentRole) return;
@@ -31828,7 +31839,16 @@ function removeExposedPageMarkers(){
   });
  }finally{window.__fechouCleaningMarkers=false;}
 }
-const oldRender=window.render;if(typeof oldRender==="function"&&!oldRender.__fechouV143User){const wrapped=function(){const r=oldRender.apply(this,arguments);setTimeout(post,0);return r};wrapped.__fechouV143User=true;window.render=wrapped;}
+const oldRender=window.render;if(typeof oldRender==="function"&&!oldRender.__fechouV143User){
+  const wrapped=function(){
+    const r=oldRender.apply(this,arguments);
+    // Aplicar a tela vigente antes do próximo paint; não expor um frame legado.
+    post();
+    return r;
+  };
+  wrapped.__fechouV143User=true;
+  window.render=wrapped;
+}
 document.addEventListener('click',e=>{
  const item=e.target.closest('.bottom-nav [data-page]');
  if(!item)return;
@@ -34512,11 +34532,31 @@ Object.keys(serviceDetails).forEach((service) => {
 });
 function examples(){const s=state();if(s.page!=='request'||s.currentRole==='Profissional')return;const input=$('#app [data-input="description"]');if(!input)return;const service=String(s.service||''),category=String(s.category||'');let text=serviceDetails[service];if(!text){const existing=input.placeholder;if(existing&&/^Ex\.:/.test(existing)&&existing.length>75&&!/descreva o serviço, o local/.test(existing))text=existing.replace(/^Ex\.:\s*/,'').replace(/[.]$/,'');else text=`solicitar ${service||'um serviço'} na área de ${category||'serviços gerais'}; informe o que precisa ser feito, a quantidade, o estado atual, o local e o prazo desejado`};const example='Exemplo: '+sentence(text);if(input.placeholder!==example)input.placeholder=example;let n=$('#exw-v8-service-example');if(!n){n=document.createElement('small');n.id='exw-v8-service-example';input.after(n)}n.classList.add('v189-service-examples');const guidance='Você também pode acrescentar medidas, materiais disponíveis, fotos e condições de acesso. Não publique senhas ou documentos pessoais.';if(n.textContent!==example+'\n'+guidance)n.textContent=example+'\n'+guidance;$$('.v34-description-example',input.parentElement).forEach(x=>{if(x!==n)x.hidden=true})}
 function factors(){const roots=$$('#v58-price-result,#v56-ai-analysis,#v56-service-analysis,.v56-estimate,.v56-accordion-content');for(const root of roots){for(const el of $$('p.v56-help',root)){if(!/^Fatores considerados\s*:/i.test(el.textContent||''))continue;const parts=el.textContent.replace(/^Fatores considerados\s*:\s*/i,'').split(/\s*·\s*/).filter(Boolean);const box=document.createElement('section');box.className='v56-help v189-factors';box.innerHTML='<b>Fatores considerados</b>'+parts.map(t=>'<p>'+esc(sentence(t))+'</p>').join('');el.replaceWith(box)}}}
-function wallet(){const w=$('#app .v134-wallet');if(!w)return;if(!w.dataset.v189Ready){w.dataset.v189Ready='1';const head=$('.v134-wallet-hero',w);if(head&&!$('[data-v189-wallet-eye]',w)){const eye=document.createElement('button');eye.type='button';eye.className='v189-eye';eye.dataset.v189WalletEye='1';eye.setAttribute('aria-label','Ocultar valores da carteira');eye.setAttribute('aria-pressed','false');eye.innerHTML=eyeSVG(false);head.after(eye)}const tabs=document.createElement('nav');tabs.className='v189-wallet-tabs';tabs.setAttribute('aria-label','Seções da carteira');tabs.innerHTML='<button type="button" data-v189-wallet-tab="statement">≡ Extrato</button><button type="button" data-v189-wallet-tab="refund">↩ Reembolsos</button><button type="button" data-v134-refresh-wallet>⟳ Atualizar</button>';const walletShell=w.querySelector(':scope > .v335-wallet-shell');if(walletShell)walletShell.insertBefore(tabs,walletShell.firstChild);else (head||w.firstChild).after(tabs);
+function wallet(){const w=$('#app .v134-wallet');if(!w)return;if(!w.dataset.v189Ready){w.dataset.v189Ready='1';const head=$('.v134-wallet-hero',w);if(head&&!$('[data-v189-wallet-eye]',w)){const eye=document.createElement('button');eye.type='button';eye.className='v189-eye';eye.dataset.v189WalletEye='1';eye.setAttribute('aria-label','Ocultar valores da carteira');eye.setAttribute('aria-pressed','false');eye.innerHTML=eyeSVG(false);head.after(eye)}// Uma única barra real de ações para a carteira: não duplicar no rodapé.
+ const existingTabs=$$('#app .v189-wallet-tabs');
+ let tabs=existingTabs.find(el=>w.contains(el))||existingTabs[0];
+ if(!tabs){
+   tabs=document.createElement('nav');
+   tabs.className='v189-wallet-tabs';
+   tabs.setAttribute('aria-label','Seções da carteira');
+   tabs.innerHTML='<button type="button" data-v189-wallet-tab="statement">≡ Extrato</button><button type="button" data-v189-wallet-tab="refund">↩ Reembolsos</button><button type="button" data-v134-refresh-wallet>⟳ Atualizar</button>';
+ }
+ existingTabs.forEach(el=>{if(el!==tabs)el.remove()});
+ const walletShell=w.querySelector(':scope > .v335-wallet-shell');
+ const walletTop=walletShell||w;
+ if(walletTop.firstElementChild!==tabs)walletTop.insertBefore(tabs,walletTop.firstChild);
  const already=w.querySelector('details.v189-wallet-extra:not([data-v335-refund])');const extras=$$('.v134-wallet-flow,.v178-pro-wallet-details,.v169-wallet-pro-summary,.v169-wallet-client-summary,.v178-wallet-actions',w).filter(extra=>extra.tagName!=='DETAILS'&&!extra.closest('details'));if(extras.length){let fold=already;if(!fold){fold=document.createElement('details');fold.className='v189-wallet-extra';const summary=document.createElement('summary');summary.textContent='Informações complementares';extras[0].before(fold);fold.append(summary)}extras.forEach(extra=>fold.append(extra));if(!already)fold.open=false}const refund=w.querySelector('.v173-refund-panel');if(refund&&!refund.closest('details')){const fold=document.createElement('details');fold.className='v189-wallet-extra';fold.dataset.v335Refund='1';const summary=document.createElement('summary');summary.textContent='Reembolsos dos serviços';refund.before(fold);fold.append(summary,refund)}
  }
  $$('b,strong',w).forEach(el=>{if(/^R\$\s*[\d.,]+$/.test(el.textContent.trim())&&!el.dataset.v189Private)el.dataset.v189Private='1'});
  $$('button',w).forEach(el=>{if(/[👁🙈]/u.test(el.textContent)&&!el.dataset.v189WalletEye){el.innerHTML=eyeSVG(w.classList.contains('v189-wallet-hidden'));el.setAttribute('aria-label','Mostrar ou ocultar valores');el.dataset.v189WalletEye='1'}});
+ // Renderizações tardias da carteira: preservar só a barra superior.
+ const actionBars=$$('#app .v189-wallet-tabs');
+ const firstBar=actionBars.find(el=>w.contains(el))||actionBars[0];
+ actionBars.forEach(el=>{if(el!==firstBar)el.remove()});
+ if(firstBar){
+   const host=w.querySelector(':scope > .v335-wallet-shell')||w;
+   if(host.firstElementChild!==firstBar)host.insertBefore(firstBar,host.firstChild);
+ }
  w.classList.toggle('v189-wallet-hidden',!!state().v189WalletHidden);
 }
 function eyeSVG(hidden){return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>${hidden?'<path d="m3 3 18 18"/>':''}</svg>`}
