@@ -9682,7 +9682,7 @@ function renderServiceRecord(o, archive = false) {
           }
           if (!uploadFailures) state.videos = [];
           if (uploadFailures) {
-            throw new Error('O pedido foi registrado. O envio dos anexos não foi concluído. Confira Meus pedidos antes de tentar novamente.');
+            throw Object.assign(new Error('O pedido foi registrado. O envio dos anexos não foi concluído. Confira Meus pedidos antes de tentar novamente.'), { code: "REQUEST_MEDIA_PENDING" });
           }
           return created;
         };
@@ -13117,7 +13117,8 @@ function renderServiceRecord(o, archive = false) {
               .filter(Boolean)
               .join(" — ");
             say(
-              /row-level security|permission denied|not allowed/i.test(msg)
+              e?.code === "REQUEST_MEDIA_PENDING" ? e.message
+                : /row-level security|permission denied|not allowed/i.test(msg)
                 ? "Pedido não publicado — bloqueio RLS: " + detail
                 : /null value|not-null constraint/i.test(msg)
                 ? "Pedido não publicado — campo obrigatório: " + detail
