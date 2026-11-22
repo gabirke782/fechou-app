@@ -4797,7 +4797,7 @@ function renderServiceRecord(o, archive = false) {
           const avg = positive(meta.regionalPriceAverage ?? order?.regionalPriceAverage ?? meta.regional_price_average);
           const high = positive(meta.regionalPriceHigh ?? order?.regionalPriceHigh ?? meta.regional_price_high);
           if (low && high && low <= high && (!avg || (low <= avg && avg <= high))) {
-            return `<aside class="r30-quote-guide" role="note"><b>◇ Sugestão de preço para sua proposta</b><strong>${money(low)} a ${money(high)}</strong><span>Faixa de mão de obra informada ao cliente neste pedido, antes do desconto solicitado. Use-a como referência para negociar. Materiais são separados. Seu preço final é definido por você.</span></aside>`;
+            return `<aside class="r30-quote-guide" role="note"><b>◇ Sugestão de preço para sua proposta</b><strong>${money(low)} a ${money(high)}</strong>${avg ? `<small>Média: ${money(avg)}</small>` : ""}<span>Faixa de mão de obra informada ao cliente neste pedido, antes do desconto solicitado. Use-a como referência para negociar. Materiais são separados. Seu preço final é definido por você.</span></aside>`;
           }
           return `<aside class="r30-quote-guide" role="note"><b>◇ Sugestão de preço para sua proposta</b><p>Faixa de preços não registrada neste pedido antigo.</p><span>Não há mínimo e máximo confirmados para este serviço. Informe livremente o valor final que deseja propor.</span></aside>`;
         }
