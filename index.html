@@ -6964,47 +6964,93 @@ function renderServiceRecord(o, archive = false) {
         function ewOrderViewSignature() {
           return JSON.stringify(state.orders || [], (key,value) => /^(url|signedUrl|signed_url|expires_at|last_seen_at|lastSeenAt|last_active_at|lastActiveAt|is_online|online|presence|peer_presence|server_time|fetched_at)$/.test(key) ? undefined : value);
         }
+        let requestMediaRefresh = null;
+        const requestMediaCache = new Map();
+        const requestMediaPath = item => item?.path || item?.storage_path || item?.storagePath || "";
+        const requestMediaFiles = files => Array.isArray(files) ? files : [];
+        const requestMediaKey = order => JSON.stringify([
+          requestMediaFiles(order.photos).map(requestMediaPath),
+          requestMediaFiles(order.metadata?.attachments).map(requestMediaPath)
+        ]);
+        function applyRequestMedia(order, media) {
+          if (Array.isArray(media.photos)) order.photos = media.photos;
+          if (order.metadata && Array.isArray(media.attachments)) order.metadata.attachments = media.attachments;
+        }
+        function refreshRequestMediaInBackground() {
+          const userId = state.supabaseUser?.id;
+          if (!userId) {
+            requestMediaCache.clear();
+            return;
+          }
+          for (const [id, cached] of requestMediaCache) {
+            if (cached.userId !== userId || cached.expires <= Date.now() ||
+                !(state.orders || []).some(order => order.id === id)) requestMediaCache.delete(id);
+          }
+          const pending = [];
+          for (const order of state.orders || []) {
+            const hasMedia = requestMediaFiles(order.photos).some(requestMediaPath) ||
+              requestMediaFiles(order.metadata?.attachments).some(requestMediaPath);
+            if (!hasMedia) continue;
+            const key = requestMediaKey(order);
+            const cached = requestMediaCache.get(order.id);
+            if (cached?.key === key) applyRequestMedia(order, cached.media);
+            else pending.push({order, key});
+          }
+          if (requestMediaRefresh?.userId === userId || !pending.length) return;
+          const refresh = {userId};
+          requestMediaRefresh = refresh;
+          let cursor = 0;
+          let renderQueued = false;
+          const redraw = () => {
+            if (renderQueued) return;
+            renderQueued = true;
+            setTimeout(() => {
+              renderQueued = false;
+              if (state.supabaseUser?.id === userId) render();
+            }, 0);
+          };
+          const worker = async () => {
+            while (cursor < pending.length && state.supabaseUser?.id === userId) {
+              const {order, key} = pending[cursor++];
+              let media;
+              try {
+                if (typeof window.ewApi === "function") {
+                  media = await window.ewApi("orders/media", {order_id: String(order.id)});
+                }
+              } catch (error) {
+                console.warn("Não foi possível renovar os anexos do pedido.", error?.message || error);
+              }
+              if (!Array.isArray(media?.photos) && ewSupabase && state.supabaseUser?.id === userId) {
+                const photos = [];
+                for (const photo of requestMediaFiles(order.photos)) {
+                  const path = requestMediaPath(photo);
+                  if (!path || state.supabaseUser?.id !== userId) { photos.push(photo); continue; }
+                  try {
+                    const result = await window.fechouR47SignedUrl(ewSupabase, "eworkers-chat", path, 3600);
+                    const url = result.data?.signedUrl;
+                    photos.push(url ? {...photo, url, signedUrl: url} : photo);
+                  } catch (_) { photos.push(photo); }
+                }
+                media = {...media, photos};
+              }
+              const current = (state.orders || []).find(item => item.id === order.id);
+              if (state.supabaseUser?.id !== userId || !current || requestMediaKey(current) !== key ||
+                  (!Array.isArray(media?.photos) && !Array.isArray(media?.attachments))) continue;
+              applyRequestMedia(current, media);
+              requestMediaCache.set(order.id, {userId, key: requestMediaKey(current), media, expires: Date.now() + 60000});
+              redraw();
+            }
+          };
+          void Promise.allSettled(Array.from({length: Math.min(3, pending.length)}, worker))
+            .then(() => { if (requestMediaRefresh === refresh) requestMediaRefresh = null; });
+        }
         async function ewSyncOrders() {
           const previousView = ewOrderViewSignature();
           try {
             await ewLoadOrders();
             await ewLoadOrderDetails();
-            if (ewSupabase && Array.isArray(state.orders)) {
-              for (const o of state.orders) {
-                if (!Array.isArray(o.photos)) continue;
-                for (const ph of o.photos) {
-                  if (!ph || typeof ph !== "object") continue;
-                  const path = ph.path || ph.storage_path || ph.storagePath;
-                  if (!path) continue;
-                  try {
-                    const su = await window.fechouR47SignedUrl(ewSupabase, "eworkers-chat", path, 60 * 60);
-                    if (!su.error && su.data?.signedUrl) {
-                      ph.url = su.data.signedUrl;
-                      ph.signedUrl = su.data.signedUrl;
-                    }
-                  } catch (photoError) {
-                    console.warn(
-                      "Não foi possível atualizar URL da foto do pedido",
-                      photoError
-                    );
-                  }
-                }
-              }
-            }
-            // V157: the request-media bucket is private. The server verifies order participation
-            // and creates short-lived URLs for both the client and the selected professional.
-            if (typeof window.ewApi === "function") {
-              for (const o of state.orders || []) {
-                const hasStoredMedia = (o.photos || []).some((x) => x?.path || x?.storage_path || x?.storagePath) || (o.metadata?.attachments || []).some((x) => x?.path || x?.storage_path || x?.storagePath);
-                if (!hasStoredMedia) continue;
-                try {
-                  const signedMedia = await window.ewApi("orders/media", { order_id: String(o.id) });
-                  if (Array.isArray(signedMedia?.photos)) o.photos = signedMedia.photos;
-                  if (o.metadata && Array.isArray(signedMedia?.attachments)) o.metadata.attachments = signedMedia.attachments;
-                } catch (mediaError) { console.warn("V157: falha ao renovar mídia privada do pedido", mediaError); }
-              }
-            }
             if (typeof window.fechouNormalizePaymentData === "function") window.fechouNormalizePaymentData();
+            refreshRequestMediaInBackground();
             if (previousView !== ewOrderViewSignature()) render();
           } catch (e) {
             console.error("ewSyncOrders", e);
