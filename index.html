@@ -6828,7 +6828,7 @@ function renderServiceRecord(o, archive = false) {
           return !!status && !["", "absent", "not_started", "none", "cancelled", "canceled"].includes(status);
         }
         function fechouEsignHint(o) {
-          const st = o && o.__fechouEsignStatus;
+          const st = o && (window.fechouVerifiedSignatureStatus?.(o) || o.__fechouEsignStatus);
           return st && typeof st === "object" ? st : null;
         }
         function fechouClientSigned(o) {
@@ -24756,17 +24756,17 @@ function renderServiceRecord(o, archive = false) {
           renderChatOverlay();
           const openingOrderId = String(o.id);
           const openingProposalId = String(q.id);
+          if (options?.openContract) {
+            contractDrawerOpen = true;
+            renderChatOverlay();
+          }
           if (typeof window.fechouEnsureContract === "function") {
-            try {
-              const updated = await window.fechouEnsureContract(o, { force: false });
-              if (updated && String(chatOrderId || "") === openingOrderId) renderChatOverlay();
-              if (options && options.openContract) {
-                contractDrawerOpen = true;
-                renderChatOverlay();
-              }
-            } catch (contractError) {
+            void window.fechouEnsureContract(o, { force: false }).then(() => {
+              if (String(chatOrderId || "") === openingOrderId &&
+                  String(chatProposalId || "") === openingProposalId) renderChatOverlay();
+            }).catch(contractError => {
               console.warn("FECHOU: não foi possível atualizar o contrato ao abrir o chat.", contractError);
-            }
+            });
           }
           const [partyResult, messagesResult] = await Promise.allSettled([
             loadPartyData(o),
@@ -24818,10 +24818,29 @@ function renderServiceRecord(o, archive = false) {
           return true;
         };
         window.__fechouOpenChatByOrder = async function (orderId) {
-          const order = findOrder(orderId);
+          let order = findOrder(orderId);
           if (!order) throw new Error("Não foi possível localizar esta contratação.");
-          const proposalId = order.selected_proposal_id || order.selectedProposalId || order.selectedProposal?.id;
-          const proposal = proposalForCurrentUser(order, proposalId);
+          const selectedId = o => o.selected_proposal_id || o.selectedProposalId || o.selectedProposal?.id;
+          const proposalId = selectedId(order);
+          let proposal = proposalForCurrentUser(order, proposalId);
+          if (proposalId && String(proposal?.id || "") !== String(proposalId)) {
+            const userId = uid();
+            const db = supa();
+            if (!userId || !db) throw new Error("Entre na conta para abrir a conversa.");
+            const { data, error } = await db.from("proposals").select("*")
+              .eq("id", String(proposalId)).eq("order_id", String(orderId)).maybeSingle();
+            order = findOrder(orderId);
+            if (error || !data || !order || uid() !== userId || String(selectedId(order)) !== String(proposalId) ||
+                (String(order.client_id) !== userId && String(data.professional_id) !== userId)) {
+              throw new Error("Não foi possível recuperar a proposta selecionada deste pedido.");
+            }
+            proposal = {
+              ...data,
+              name: data.metadata?.name || data.professional_name || String(data.message || "").split("\n")[0] || "Profissional",
+              conditions: data.conditions || data.metadata?.conditions || data.message || ""
+            };
+            order.selectedProposal = proposal;
+          }
           if (!proposal?.id) throw new Error("Não foi possível identificar a proposta desta conversa.");
           return openChat(order.id, proposal.id, { showInbox: false });
         };
@@ -35734,20 +35753,29 @@ function eyeSVG(hidden){return `<svg viewBox="0 0 24 24" aria-hidden="true"><pat
 function cards(){for(const card of $$('.order,article.order,.v132-order-card,.order-card,.job-card')){const ribbon=$('.v134-payment-ribbon',card);if(!ribbon)continue;const id=card.dataset.v148OrderId||card.dataset.orderId||card.querySelector('[data-order-id]')?.dataset.orderId||card.querySelector('[data-v134-order-id]')?.dataset.v134OrderId;let o=id?active(id):null;if(!o){const ids=$$('[data-act]',card).map(x=>x.dataset.act.split(':').at(-1));o=(state().orders||[]).find(x=>ids.includes(String(x.id)))}if(!o)continue;const isPaid=mode(o)==='contract_prepaid'&&paid(o);ribbon.classList.toggle('paid',isPaid);const text=isPaid?'SERVIÇO JÁ PAGO. APROVEITE A OPORTUNIDADE!':mode(o)==='contract_prepaid'?'PAGAMENTO PELO APLICATIVO':'PAGAMENTO DIRETO ENTRE AS PARTES';if(ribbon.textContent!==text)ribbon.textContent=text;}}
 function isStarted(o){const status=String(o?.service_state||o?.metadata?.service_state||o?.service_status||o?.status||'').toLowerCase();return !!(o?.started_at||o?.service_started_at||o?.metadata?.service_started_at)||['in_progress','started','completed','completed_pending_client','released','serviço em execução','serviço concluído'].includes(status)}
 const verifiedSignatures=new Map(),signatureLoading=new Set();
-function signatureFor(o){const cached=verifiedSignatures.get(String(o.id));if(cached&&Date.now()-cached.at<30000)return cached.data;return null}
+const signatureKey=o=>JSON.stringify([uid(),String(o.id),o.selected_proposal_id||o.selectedProposalId||o.selectedProposal?.id||'']);
+function signatureFor(o){
+ const cached=verifiedSignatures.get(signatureKey(o));
+ if(cached&&(cached.data?.signature_status==='signed'||Date.now()-cached.at<30000))return cached.data;
+ return null;
+}
+window.fechouVerifiedSignatureStatus=signatureFor;
 async function updateSignature(o){
- const key=String(o.id);
+ const orderId=String(o.id);
+ const key=signatureKey(o);
  if(signatureLoading.has(key)||(verifiedSignatures.get(key)&&Date.now()-verifiedSignatures.get(key).at<4000))return;
  signatureLoading.add(key);
  try{
   const previous=verifiedSignatures.get(key)?.data?.signature_status;
-  const r=await api('contracts/esign-status',{order_id:key});
+  const r=await api('contracts/esign-status',{order_id:orderId});
   verifiedSignatures.set(key,{at:Date.now(),data:r});
   // Assinatura confirmada pela Clicksign libera o chat sem esperar o PDF definitivo.
   if(r?.signature_status==='signed'){
-   const current=active(key);
-   if(current) current.__fechouEsignStatus=r;
-   if(previous!=='signed') window.renderV121ChatOverlay?.();
+   const current=active(orderId);
+   if(current&&signatureKey(current)===key&&$('#v121ChatOverlay')?.dataset.orderId===orderId){
+    current.__fechouEsignStatus=r;
+    if(previous!=='signed') window.renderV121ChatOverlay?.();
+   }
   }
  }catch(_){verifiedSignatures.set(key,{at:Date.now(),data:null})}
  finally{signatureLoading.delete(key);schedule()}
