@@ -13036,6 +13036,15 @@ function renderServiceRecord(o, archive = false) {
             return say("Selecione a categoria e o tipo de serviço.");
           if (!String(state.location || "").trim())
             return say("Informe o endereço, bairro e cidade do serviço.");
+          const range = state.confirmedAIRange;
+          const low = Number(range?.low);
+          const average = Number(range?.average);
+          const high = Number(range?.high);
+          const hasRange = Number.isFinite(low) && Number.isFinite(average) &&
+            Number.isFinite(high) && low > 0 && low <= average && average <= high;
+          if (state.currentRole === "Cliente" && state.page === "request" && !hasRange) {
+            return say("Refaça a análise de preço da região antes de publicar.");
+          }
           const calculated = state.calculated || {
             total: BASE?.[state.service] || 150,
           };
@@ -13060,6 +13069,7 @@ function renderServiceRecord(o, archive = false) {
             quantity: Math.max(1, Number(state.quantity) || 1),
             total: referencePrice,
             referencePrice,
+            ...(hasRange ? { regionalPriceLow: low, regionalPriceAverage: average, regionalPriceHigh: high } : {}),
             clientDiscount: requested,
             photos: (state.photos || []).map((x) => ({
               url: x.url,
