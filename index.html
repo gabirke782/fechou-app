@@ -9609,85 +9609,67 @@ function renderServiceRecord(o, archive = false) {
             ...(state.videos || []).map((v) => v && v.file).filter(Boolean),
           ];
           if (!files.length) return created;
-          const uploaded = [];
           let uploadFailures = 0;
-          const sent = new Array(Math.min(files.length,10));
-          let nextMediaIndex=0,mediaFinished=0;
-          const mediaLoading=window.__fechouMediaProgress?.('Enviando anexos do pedido: 0/'+sent.length);
+          const progress = window.__fechouMediaProgress?.("Preparando anexos do pedido…");
           try {
-          await Promise.all(Array.from({length:Math.min(3,sent.length)},async()=>{
-          while(true){
-            const mediaIndex=nextMediaIndex++;
-            if(mediaIndex>=sent.length) return;
-            const originalFile=files[mediaIndex];
-            try {
-              const f=await window.fechouPrepareRequestFile(originalFile);
-              const safe = (f.name || "arquivo").replace(
-                /[^a-zA-Z0-9._-]+/g,
-                "_"
-              );
-              const path =
-                state.supabaseUser.id +
-                "/" +
-                created.id +
-                "/request_" +
-                Date.now() +
-                "_" +
-                safe;
-              const up = await ewSupabase.storage
-                .from("eworkers-chat")
-                .upload(path, f, {
-                  upsert: false,
-                  contentType: f.type || undefined,
-                });
-              if (up.error) throw up.error;
-              const su = await ewSupabase.storage
-                .from("eworkers-chat")
-                .createSignedUrl(path, 60 * 60 * 24 * 30);
-              if (su.error) throw su.error;
-              sent[mediaIndex] = {
-                name: f.name,
-                type: f.type.startsWith("image/")
-                  ? "image"
-                  : f.type.startsWith("audio/")
-                  ? "audio"
-                  : f.type.startsWith("video/")
-                  ? "video"
-                  : "file",
-                mime_type: f.type || "application/octet-stream",
-                size: Number(f.size) || 0,
-                path,
-                url: su.data?.signedUrl || "",
-              };
-            } catch (e) {
-              uploadFailures++;
-              console.error("media upload", e);
-            } finally {mediaFinished++;mediaLoading?.update('Enviando anexos do pedido: '+mediaFinished+'/'+sent.length)}
-          }
-          }));
-          } finally {mediaLoading?.close()}
-          uploaded.push(...sent.filter(Boolean));
-          if (uploaded.length) {
-            try {
-              if (typeof window.ewApi !== "function")
-                throw new Error("Não foi possível enviar o anexo agora. Tente novamente.");
-              const savedMedia = await window.ewApi("orders/update-media", {
-                order_id: String(created.id),
-                attachments: uploaded.map((x) => ({
-                  name: x.name || "Arquivo",
-                  type: x.type || "file",
-                  mime_type: x.mime_type || "application/octet-stream",
-                  path: x.path,
-                  size: Number(x.size) || 0
-                }))
-              });
-              created.photos = savedMedia.photos || uploaded.filter((x) => x.type === "image");
-              created.attachments = savedMedia.attachments || uploaded;
-              created.metadata = { ...(created.metadata || {}), attachments: created.attachments };
-            } catch (savedMediaError) {
-              console.error("Não foi possível vincular os anexos ao pedido salvo", savedMediaError);
-              uploadFailures += uploaded.length;
+            const preparedFiles = new Array(files.length);
+            const stored = new Array(files.length);
+            let cursor = 0;
+            const runWorkers = async (work) => {
+              cursor = 0;
+              const results = await Promise.allSettled(Array.from({length: Math.min(3, files.length)}, async () => {
+                while (cursor < files.length) await work(cursor++);
+              }));
+              const failed = results.find(result => result.status === "rejected");
+              if (failed) throw failed.reason;
+            };
+            await runWorkers(async index => {
+              preparedFiles[index] = await window.fechouPrepareRequestFile(files[index]);
+            });
+            const media = preparedFiles.map(file => ({
+              name: file.name,
+              size: file.size,
+              mime: file.type
+            }));
+            const { uploads } = await window.ewApi("orders/media-upload-urls", {
+              order_id: String(created.id),
+              upload_session: crypto.randomUUID(),
+              media
+            });
+            if (!Array.isArray(uploads) || uploads.length !== files.length) {
+              throw new Error("Não foi possível preparar todos os anexos.");
             }
+            let finished = 0;
+            progress?.update("Enviando 0 de " + files.length + " arquivos do pedido…");
+            await runWorkers(async index => {
+              const target = uploads[index];
+              const prefix = String(created.client_id || state.supabaseUser.id) + "/" + created.id + "/request_";
+              if (!target?.path?.startsWith(prefix)) throw new Error("Destino de anexo inválido.");
+              const { error } = await ewSupabase.storage.from("eworkers-chat").uploadToSignedUrl(
+                target.path, target.token, preparedFiles[index], { contentType: target.mime }
+              );
+              if (error) throw error;
+              stored[index] = {
+                name: target.name,
+                type: target.mime.split("/")[0],
+                mime_type: target.mime,
+                path: target.path,
+                size: target.size
+              };
+              progress?.update("Enviando " + (++finished) + " de " + files.length + " arquivos do pedido…");
+            });
+            const mediaResult = await window.ewApi("orders/update-media", {
+              order_id: String(created.id),
+              attachments: stored
+            });
+            created.photos = mediaResult.photos || [];
+            created.attachments = mediaResult.attachments || [];
+            created.metadata = { ...created.metadata, attachments: created.attachments };
+          } catch (error) {
+            uploadFailures = files.length;
+            console.error("FECHOU: erro ao anexar mídia ao pedido registrado.", error);
+          } finally {
+            progress?.close();
           }
           if (!uploadFailures) {
             state._requestPhotoFiles = [];
@@ -9700,7 +9682,7 @@ function renderServiceRecord(o, archive = false) {
           }
           if (!uploadFailures) state.videos = [];
           if (uploadFailures) {
-            throw new Error('Pedido registrado, mas '+uploadFailures+' arquivo(s) não foram salvos. A solicitação foi preservada; confira o pedido antes de repetir o envio, para não criar outro pedido.');
+            throw new Error('O pedido foi registrado. O envio dos anexos não foi concluído. Confira Meus pedidos antes de tentar novamente.');
           }
           return created;
         };
