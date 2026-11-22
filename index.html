@@ -23460,7 +23460,7 @@ function renderServiceRecord(o, archive = false) {
         // 5. Chat em tela inteira com histórico remoto, anexos e contrato.
         let chatOrderId = null,
           chatFiles = [],
-          chatBusy = false,
+          chatSendPending = null,
           chatUnread = 0,
           chatInboxOpen = false,
           contractDrawerOpen = false,
@@ -24924,7 +24924,21 @@ function renderServiceRecord(o, archive = false) {
           return { update(message){ if(ov.isConnected)txt.textContent=message }, close(){ov.remove()} };
         };
         async function sendChatMessage(options = {}) {
-          if (chatBusy) return;
+          const orderId = String(chatOrderId || "");
+          if (chatSendPending) {
+            if (chatSendPending.orderId === orderId && chatSendPending.userId === uid()) return chatSendPending.promise;
+            throw new Error("Aguarde o término do envio na outra conversa.");
+          }
+          const pending = { orderId, userId: uid(), promise: performChatSend(options) };
+          chatSendPending = pending;
+          try {
+            return await pending.promise;
+          } finally {
+            if (chatSendPending === pending) chatSendPending = null;
+          }
+        }
+
+        async function performChatSend(options) {
           const o=findOrder(chatOrderId);
           if(!o||!canSeeChat(o))throw new Error('Chat indisponível para esta conta.');
           const db=supa(),q=proposalForCurrentUser(o,chatProposalId),draft=$('#v121ChatDraft'),input=$('#v121ChatFiles'),text=options.attachmentsOnly?'':String(draft?.value||'').trim(),files=Array.from(input?.files?.length?input.files:(chatFiles||[]));
@@ -24938,7 +24952,7 @@ function renderServiceRecord(o, archive = false) {
           if(state.v121ChatPendingSignature!==payloadSignature){state.v121ChatPendingSignature=payloadSignature;state.v121ChatPendingKey=makeUuid();}
           const messageKey=state.v121ChatPendingKey;
           await window.fechouEnsureCompactSupabaseSession?.(db);
-          chatBusy=true;let saved=false;const progress=files.length?window.__fechouMediaProgress?.('Enviando '+files.length+' anexo(s) do chat…'):null;const submit=$('#v121ChatForm button[type="submit"]');
+          let saved=false;const progress=files.length?window.__fechouMediaProgress?.('Enviando '+files.length+' anexo(s) do chat…'):null;const submit=$('#v121ChatForm button[type="submit"]');
           if(submit){submit.disabled=true;submit.dataset.oldText=submit.textContent;submit.textContent='Enviando…';}
           try{
             // A mesma tentativa reutiliza o UUID; uma resposta lenta não cria mensagens duplicadas.
@@ -24992,16 +25006,20 @@ function renderServiceRecord(o, archive = false) {
             if(typeof window.ewLoadNotificationsV85==='function')window.ewLoadNotificationsV85().catch(err=>console.warn('Notificações serão atualizadas depois.',err));
           }finally{
             progress?.close();
-            chatBusy=false;
             if(submit?.isConnected){submit.disabled=false;submit.textContent=submit.dataset.oldText||'Enviar';delete submit.dataset.oldText;}
             if(!saved&&draft&&draft.value===text&&String(chatOrderId||"")===String(o.id)&&String(chatProposalId||"")===String(q.id))state.v121ChatDraft=text;
           }
         }
 
         window.__fechouFlushChatDocuments = async function(orderId) {
-          if(String(chatOrderId||'')!==String(orderId||''))return;
-          if(chatBusy)throw new Error('Um anexo está sendo enviado. Aguarde a confirmação antes de finalizar.');
-          if(chatFiles.length)await sendChatMessage({attachmentsOnly:true});
+          const expectedOrderId = String(orderId || "");
+          if (String(chatOrderId || "") !== expectedOrderId) return;
+          const userId = uid();
+          const pending = chatSendPending;
+          if (pending?.orderId === expectedOrderId && pending.userId === userId) await pending.promise;
+          if (String(chatOrderId || "") !== expectedOrderId || uid() !== userId)
+            throw new Error("A conversa mudou. Abra o serviço novamente para finalizar.");
+          if (chatFiles.length) await sendChatMessage({ attachmentsOnly: true });
         };
         function printContract(reservedPrintWindow = null, orderOverride = null, proposalOverride = null) {
           const o = orderOverride || findOrder(chatOrderId);
@@ -26680,7 +26698,7 @@ body #app .fechou-profile-progress>div:first-child b {
           if (note) note.textContent = chatFiles.length ? `${chatFiles.length}/5 · ${chatFiles.map(file => file.name).join(", ")}` : "";
           // O arquivo escolhido não fica apenas em um rascunho visual.
           // O servidor confirma o salvamento antes de aparecer em Ver anexos.
-          if (chatFiles.length && !chatBusy) {
+          if (chatFiles.length && !chatSendPending) {
             void sendChatMessage({attachmentsOnly:true}).catch(error=>{
               console.error('Anexo do chat não enviado:',error);
               safeToast('Documento ainda não foi salvo: '+String(error?.message||error));
