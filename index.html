@@ -21590,39 +21590,7 @@ function renderServiceRecord(o, archive = false) {
             total: Math.round((urgency + weekend) * 100) / 100,
           };
         }
-        const oldCreateBudget = window.createBudget;
-        if (typeof oldCreateBudget === "function")
-          window.createBudget = async function () {
-            const before = (state.orders || []).length;
-            const result = await oldCreateBudget.apply(this, arguments);
-            const o = state.budget;
-            if (o?.publication_status === "awaiting_payment") return result;
-            if (
-              o && !o.id && // Apenas rascunhos sem identidade persistida podem receber ajuste local.
-              ((state.orders || []).length > before ||
-                String(o.id || "").startsWith("demo-"))
-            ) {
-              // The base returned by the AI already represents labor only; apply the surcharge exactly once.
-              const base = Number(
-                o.laborAverage || o.referencePrice || o.total || 0
-              );
-              const fee = surcharge(base, o);
-              o.laborAverage = base;
-              o.urgencyAdd = fee.urgency;
-              o.weekendAdd = fee.weekend;
-              o.referencePrice = Math.round((base + fee.total) * 100) / 100;
-              o.total = o.referencePrice;
-              o.metadata = {
-                ...(o.metadata || {}),
-                laborAverage: base,
-                urgencyAdd: fee.urgency,
-                weekendAdd: fee.weekend,
-                weekendSurcharge: fee.weekend > 0,
-              };
-              // A composição persistida é atualizada apenas pela RPC validada fechou_update_request_pricing.
-            }
-            return result;
-          };
+        // O servidor é a fonte de verdade dos valores publicados. Não recalcular o pedido no navegador após o INSERT.
 
         // Proposal surcharge is applied in the authoritative V85 submit handler above.
 
