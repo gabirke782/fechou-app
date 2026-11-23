@@ -24961,8 +24961,8 @@ function renderServiceRecord(o, archive = false) {
             if(existing.data){saved=true;}
             else{
               const attachments=[];
-              for(const f of files){
-                const path='order/'+String(o.id)+'/'+String(q.professional_id)+'/'+uid()+'/'+messageKey+'-'+String(f.name||'arquivo').replace(/[^\w.\-]+/g,'_');
+              for(const [fileIndex, f] of files.entries()){
+                const path='order/'+String(o.id)+'/'+String(q.professional_id)+'/'+uid()+'/'+messageKey+'-'+fileIndex+'-'+String(f.name||'arquivo').replace(/[^\w.\-]+/g,'_');
                 // Cada mensagem usa um caminho único. INSERT sem upsert dispensa políticas
                 // de UPDATE para arquivos privados e evita 403 no envio de PDFs.
                 const ext=String(f.name||'').split('.').pop().toLowerCase();
