@@ -75,3 +75,21 @@
 - **Release:** mudanças **não mescladas em main** e **não implantadas no Cloudflare** para não substituir sem homologação o aplicativo usado por clientes.
 
 **Estado:** alguns bugs foram corrigidos diretamente no Supabase e na branch, com verificações SQL e sintaxe; **39/39 testes de ponta a ponta continuam não homologados**. Dependências reais: navegador autenticado, revisão das respostas 403/503, mídia, contratos, notificações, serviço e carteira. 
+
+
+## Continuação 23/11/2026 — sem TinyFish (pedido expresso do responsável)
+
+**Procedimentos:** GitHub conectado, Supabase SQL/logs/Edge Functions e verificação JavaScript no mecanismo V8; navegador TinyFish não utilizado nesta continuação. Nenhum teste visual autenticado nesta etapa nem pagamento, saque ou estorno real.
+
+### Correções verificáveis
+
+1. **Frontend: integridade de preços após publicação.** Commit `efd6ede69ad2f4982cedb90e73ce99702d220a0f` removeu o wrapper legado que recalculava `o.total` e `o.referencePrice` somente no estado de memória **após** o servidor confirmar a criação, causando divergência entre valor exibido e valor persistido.
+2. **Frontend: normalização e recuperação da faixa regional.** Commit `bc1bbb9057a4d7cc4b19078602016045f3f5a4cf` faz `ewNormalizeOrder` priorizar `orders.total` como valor autoritativo e hidrata explicitamente `regionalPriceLow`, `regionalPriceAverage`, `regionalPriceHigh` do JSON `metadata`. Teste unitário executado com linha artificial: total servidor 1250, labor_reference_price 1100, faixa [900,1100,1700] => normaliza para total 1250 e a mesma faixa; linha histórica sem faixa => 0/0/0 (sem inventar dados). Verificação: 144 scripts executáveis parseados sem erros.
+3. **Webhook Clicksign no Supabase PRODUÇÃO.** Versão **59 ACTIVE**, código versionado no GitHub no commit `a87a5f52be0c7c10598833e3b2214642c186750c`, arquivo `supabase/functions/clicksign-webhook/index.ts`. Evita que contratações `temporary_test_price` criem crédito de repasse profissional na finalização de assinatura; preserva contrato e comprovante, marca repasse de teste como bloqueado e altera as duas verificações de notificação de `.maybeSingle()` para resposta em lista com `limit(1)`. Código sintaticamente compilado antes do deploy; pós-deploy, API Supabase confirmou versão 59 ativa. **Ainda não houve novo teste Clicksign E2E após o deploy.**
+4. **Reconciliação de registros de webhook já concluídos:** havia 78 eventos sem `processed_at`. Após JOIN rigoroso de `fechou_electronic_signatures`, `orders`, `storage.objects`, com assinatura dos dois participantes, contrato `contract_accepted=true`, PDF assinado presente no bucket correto e flag de teste, foram marcados como concluídos **18 eventos realmente finalizados**, sem qualquer execução financeira. A nova contagem foi confirmada em **60 pendentes**. Permanecem, entre outros, 30 com erro de PDF indisponível, 15 com falha de consulta de notificação, 11 com erro de vínculo do envelope, além de outros erros; esses **não** foram considerados concluídos.
+5. **Log de APIs últimas 24h:** 132 respostas 403 no `eworkers-api` (a causa concreta de cada requisição não foi validada); o código do handler inclui controle CORS por origens permitidas. Não foram alteradas as permissões nem desabilitada a autenticação para disfarçar os erros. Linter Supabase health: nenhum aviso; linter de security recomenda inspeção de 24 funções SECURITY DEFINER expostas e duas tabelas com RLS sem policies; nenhuma alteração agressiva em grants ou triggers.
+
+### Limites
+- O HTML desta branch **não foi mesclado à main nem publicado no Cloudflare**. A produção frontend ainda pode ter divergências. 
+- A versão **59 do webhook foi publicada no Supabase**, mas os 60 eventos pendentes precisam de investigação/reprocessamento legítimo. Não os marcar como aprovados sem vinculação, assinatura e PDF reais.
+- 39/39 itens não estão homologados end-to-end. Só o que foi confirmado por SQL, código e status real é relatado acima. **Não usar TinyFish nas próximas rodadas.**
