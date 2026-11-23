@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html data-fechou-correction="unificada-auditada" data-fechou-revision="R32-2026-11-18-retirada-fiscal-visual" data-fechou-build="R48-CORE-CONSOLIDADO-20261119" data-fechou-version="1.0.17" lang="pt-BR">
 <head>
+<meta name="description" content="FECHOU: encontre profissionais, solicite serviços, receba propostas e acompanhe suas contratações com segurança.">
 <!-- R47: warm TLS/DNS connections while HTML/CSS is parsed. Preserve exact SDK version. -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
@@ -7059,6 +7060,14 @@ function renderServiceRecord(o, archive = false) {
         window.ewLoadOrders = ewLoadOrders;
         window.ewLoadOrderDetails = ewLoadOrderDetails;
         async function ewCreateOrderRemote(o) {
+          // Faixa regional confirmada obrigatória no último ponto de criação.
+          const priceBand = [
+            Number(o?.regionalPriceLow ?? o?.metadata?.regionalPriceLow),
+            Number(o?.regionalPriceAverage ?? o?.metadata?.regionalPriceAverage),
+            Number(o?.regionalPriceHigh ?? o?.metadata?.regionalPriceHigh)
+          ];
+          if (!(priceBand[0] > 0 && priceBand[0] <= priceBand[1] && priceBand[1] <= priceBand[2]))
+            throw new Error("Refaça a análise de preço regional antes de publicar. Nenhum pedido foi enviado.");
           if (!ewSupabase)
             throw new Error(
               "Não foi possível conectar agora. Atualize o aplicativo e tente novamente."
@@ -12666,6 +12675,7 @@ function renderServiceRecord(o, archive = false) {
               const rows = [
                 {
                   client_id: state.supabaseUser.id,
+                  metadata: { ...(o.metadata || {}), clientCreationId: o.clientCreationId || o.metadata?.clientCreationId || null, regionalPriceLow: Number(o.regionalPriceLow ?? o.metadata?.regionalPriceLow), regionalPriceAverage: Number(o.regionalPriceAverage ?? o.metadata?.regionalPriceAverage), regionalPriceHigh: Number(o.regionalPriceHigh ?? o.metadata?.regionalPriceHigh) },
                   title: o.service || o.category || "Solicitação de serviço",
                   category: o.category,
                   service: o.service,
@@ -12680,6 +12690,7 @@ function renderServiceRecord(o, archive = false) {
                 },
                 {
                   client_id: state.supabaseUser.id,
+                  metadata: { ...(o.metadata || {}), clientCreationId: o.clientCreationId || o.metadata?.clientCreationId || null, regionalPriceLow: Number(o.regionalPriceLow ?? o.metadata?.regionalPriceLow), regionalPriceAverage: Number(o.regionalPriceAverage ?? o.metadata?.regionalPriceAverage), regionalPriceHigh: Number(o.regionalPriceHigh ?? o.metadata?.regionalPriceHigh) },
                   title: o.service || o.category || "Solicitação de serviço",
                   category: o.category,
                   service: o.service,
@@ -12692,6 +12703,7 @@ function renderServiceRecord(o, archive = false) {
                 },
                 {
                   client_id: state.supabaseUser.id,
+                  metadata: { ...(o.metadata || {}), clientCreationId: o.clientCreationId || o.metadata?.clientCreationId || null, regionalPriceLow: Number(o.regionalPriceLow ?? o.metadata?.regionalPriceLow), regionalPriceAverage: Number(o.regionalPriceAverage ?? o.metadata?.regionalPriceAverage), regionalPriceHigh: Number(o.regionalPriceHigh ?? o.metadata?.regionalPriceHigh) },
                   title: o.service || o.category || "Solicitação de serviço",
                   category: o.category,
                   service: o.service,
@@ -13102,6 +13114,7 @@ function renderServiceRecord(o, archive = false) {
             Math.max(0, Number(state.clientDiscount) || 0)
           );
           const budget = {
+            clientCreationId: state.__fechouOrderCreationNonce || (state.__fechouOrderCreationNonce = crypto.randomUUID()),
             id: Date.now(),
             category: state.category,
             service: state.service,
@@ -13140,6 +13153,7 @@ function renderServiceRecord(o, archive = false) {
               );
             state.budget = remote;
             state.activeOrderId = remote.id;
+            state.__fechouOrderCreationNonce = null;
             if (String(remote.publication_status || "").toLowerCase() === "awaiting_payment") {
               // Rascunho privado: o checkout Asaas já foi aberto pelo V189.
               // Não inserir em pedidos publicados nem exibir confirmação prematura.
