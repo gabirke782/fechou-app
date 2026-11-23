@@ -55,3 +55,23 @@
 
 ## Conclusão operacional
 **Não há evidência de 39/39 retestes end-to-end concluídos.** O login e navegação com os dois perfis passaram; verificações reais de banco e uma correção de código foram executadas. O commit não foi mesclado à `main` nem implantado no Cloudflare. Faltam operações integradas com mídias, contratos Clicksign, mensagens bidirecionais, ciclo do serviço e mudanças de carteira. Nenhuma cobrança, saque, assinatura ou exclusão reais foram executados.
+
+
+## Rodada adicional — 22/11 23h (horário de Brasília)
+
+**Correções aplicadas e evidência separada de homologação:**
+
+- **Supabase PRODUÇÃO — corrigido:** a função `public.fechou_update_request_pricing` descartava a faixa regional, pois sua whitelist só permitia outros campos da composição. Atualizada com `regionalPriceLow`, `regionalPriceAverage` e `regionalPriceHigh`, gravando a faixa somente quando os três números são positivos e ordenados. Consulta pós-alteração confirma que os campos passaram a constar da definição. Teste SQL do predicado: faixa 900/1100/1600 aceita; 900/1800/1600 rejeitada. Nenhum pedido foi alterado nesta etapa, e os 132 pedidos históricos não foram preenchidos com preços inventados.
+- **GitHub branch — commit `54093eaad770e31a2eed72fc82c3c97ced7f5263`:** validação obrigatória de faixa no ponto final da criação direta do pedido; identificador idempotente por tentativa de publicação; fallback de schema preserva a faixa e a identidade em `metadata`; metatag de descrição. Também mantém as correções da rodada anterior para publicação direta e checkout protegido.
+- **SQL reproduzível:** `db/patches/fechou_pricing_range_20261122.sql` registra a função aplicada no banco; terminador SQL conferido, commit `5354608604ffaff14b381a9f34d5ec54b0fedefb`.
+- **Robots:** `robots.txt` válido na branch, commit `33e78d64972fd813e5322e753d2c826615d58c70`.
+- **Sintaxe:** após as alterações do frontend, 144 scripts inline compilados com `new Function`: **144 sucesso, 0 erros**. Isto **não comprova** chamadas reais, temporização, uploads, comportamento visual, login ou sincronização.
+- **Site oficial, auditoria externa de desempenho móvel (Supermetrics):** desempenho 70/100, acessibilidade 94/100, boas práticas 100/100 e SEO 82/100; LCP 5,2 s; FCP 4,1 s. Achados: JavaScript/CSS não utilizados, recursos bloqueantes, ausência da descrição e `robots.txt` inválido no site ATUAL. Os dois últimos têm correções preparadas na branch, não implantadas.
+- **Supabase logs últimas 24h:** 132 respostas HTTP 403 em `/functions/v1/eworkers-api`, 5 respostas 503 em `clicksign-webhook`; múltiplas respostas 400 de links temporários Storage. Não há causa específica confirmada para cada código; não alterar autenticação/webhook às cegas.
+- **Integridade dos arquivos do pedido:** 91 fotos registradas em `orders.photos`, 32 com caminho de Storage e nenhuma dessas 32 com caminho ausente no bucket; 22 registros antigos contêm URLs `blob:` locais, que não são persistentes após recarregar o navegador. É necessário testar a recuperação do arquivo de origem e o fluxo de upload; não foram removidos os registros.
+- **Chat do pedido `#ffd6d7cb`:** SQL confirma proposta selecionada, status `accepted`, profissional consistente e vínculo pedido/proposta íntegro. A falha de abertura do chat reportada anteriormente não foi reproduzida nesta rodada; ainda requer teste em navegador autenticado.
+- **Bloqueio do navegador nesta rodada:** o provedor de automação TinyFish recusou iniciar o teste porque a carteira está em **US$ -0,16**. Não houve nova execução, login, envio de documentos ou assinatura em navegador nesta etapa. Os testes reais das duas contas citados antes pertencem à rodada anterior.
+- **Lovable:** a única aplicação localizada no workspace conectado é **EXY Central de Agentes**; ela é projeto separado, não foi alterada nem clonada para FECHOU.
+- **Release:** mudanças **não mescladas em main** e **não implantadas no Cloudflare** para não substituir sem homologação o aplicativo usado por clientes.
+
+**Estado:** alguns bugs foram corrigidos diretamente no Supabase e na branch, com verificações SQL e sintaxe; **39/39 testes de ponta a ponta continuam não homologados**. Dependências reais: navegador autenticado, revisão das respostas 403/503, mídia, contratos, notificações, serviço e carteira. 
