@@ -93,3 +93,14 @@
 - O HTML desta branch **não foi mesclado à main nem publicado no Cloudflare**. A produção frontend ainda pode ter divergências. 
 - A versão **59 do webhook foi publicada no Supabase**, mas os 60 eventos pendentes precisam de investigação/reprocessamento legítimo. Não os marcar como aprovados sem vinculação, assinatura e PDF reais.
 - 39/39 itens não estão homologados end-to-end. Só o que foi confirmado por SQL, código e status real é relatado acima. **Não usar TinyFish nas próximas rodadas.**
+
+
+### Retificação da reconciliação Clicksign — 23/11 (após a nota anterior)
+
+O JOIN preliminar por `envelope_id` não identificava parte dos eventos porque 60 registros históricos têm `envelope_id` nulo, mas possuem `document_id` válido. O cruzamento correto por `document_id` encontrou **60 eventos distribuídos por 11 pedidos de teste**, todos com:
+- `fechou_electronic_signatures.signature_status='signed'`;
+- `client_signed_at` e `professional_signed_at` preenchidos;
+- `orders.contract_accepted=true`, `orders.payment_status='approved'` e `orders.metadata.temporary_test_price='true'`;
+- objeto físico do PDF assinado encontrado em `storage.objects` no bucket `fechou-signed-contracts`.
+
+Os 60 registros foram reconciliados exclusivamente no diário de webhooks (`processed_at=now(), processing_error=null`) com predicado SQL que exige todas essas condições; nenhuma operação Asaas ou repasse foi realizada. Somados aos 18 eventos anteriores, foram regularizados **78 eventos já comprovadamente concluídos**. Consulta de confirmação: `SELECT count(*) FROM fechou_clicksign_webhook_events WHERE processed_at IS NULL` retornou **0**. Este número prova a limpeza da fila histórica consultada, mas **não comprova novo webhook ponta a ponta** nem que não surgirão novos erros.
