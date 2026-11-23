@@ -104,3 +104,7 @@ O JOIN preliminar por `envelope_id` não identificava parte dos eventos porque 6
 - objeto físico do PDF assinado encontrado em `storage.objects` no bucket `fechou-signed-contracts`.
 
 Os 60 registros foram reconciliados exclusivamente no diário de webhooks (`processed_at=now(), processing_error=null`) com predicado SQL que exige todas essas condições; nenhuma operação Asaas ou repasse foi realizada. Somados aos 18 eventos anteriores, foram regularizados **78 eventos já comprovadamente concluídos**. Consulta de confirmação: `SELECT count(*) FROM fechou_clicksign_webhook_events WHERE processed_at IS NULL` retornou **0**. Este número prova a limpeza da fila histórica consultada, mas **não comprova novo webhook ponta a ponta** nem que não surgirão novos erros.
+
+
+### Observação financeira de segurança (histórico, não alterado)
+A consulta posterior em `fechou_wallet_ledger` encontrou **15 lançamentos payout historicamente associados a pedidos marcados `temporary_test_price`**: 7 `paid` (R$ 41,16), 5 `held` (R$ 29,40), 2 `release_ready` (R$ 11,76), 1 `cancelled` (R$ 5,88). São lançamentos anteriores à correção do webhook v59 e refletem transações e testes anteriores, possivelmente pagamentos reais de valor reduzido. **Nenhum desses lançamentos foi modificado, excluído, revertido ou sacado nesta rodada.** A v59 impede NOVAS tentativas de criar crédito de repasse quando a contratação carrega a flag de pagamento de teste. Uma análise financeira retroativa de valores pagos deve reconciliar com Asaas antes de qualquer correção.
