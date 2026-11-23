@@ -5086,8 +5086,7 @@ function renderServiceRecord(o, archive = false) {
           Number.isFinite(bandLow) && bandLow > 0 &&
           Number.isFinite(bandAvg) && bandLow <= bandAvg &&
           Number.isFinite(bandHigh) && bandAvg <= bandHigh;
-        if (state.currentRole === "Cliente" && state.page === "request" &&
-            state.priceAnalysisDone && !hasConfirmedRange) {
+        if (state.currentRole === "Cliente" && !hasConfirmedRange) {
           toast("A faixa de preços da IA não foi preservada. Refaça a análise antes de publicar.");
           return;
         }
@@ -13088,7 +13087,7 @@ function renderServiceRecord(o, archive = false) {
           const high = Number(range?.high);
           const hasRange = Number.isFinite(low) && Number.isFinite(average) &&
             Number.isFinite(high) && low > 0 && low <= average && average <= high;
-          if (state.currentRole === "Cliente" && state.page === "request" && !hasRange) {
+          if (state.currentRole === "Cliente" && !hasRange) {
             return say("Refaça a análise de preço da região antes de publicar.");
           }
           const calculated = state.calculated || {
@@ -35396,6 +35395,8 @@ async function createDraft(order){
  const temporaryTestPrice=s.__fechouTemporaryTestPrice===true;
  if(temporaryTestPrice)estimate={...estimate,gross:6,discount:0,total:6};
  const payload={...order,payment_method:'contract_prepaid',payment_flow:'contract_prepaid',client_payment_preference:'contract_prepaid',referencePrice:temporaryTestPrice?6:(estimate.gross||order.referencePrice),clientDiscount:temporaryTestPrice?0:estimate.discount,total:temporaryTestPrice?6:(estimate.total||order.total),metadata:{...order.metadata,regionalPriceLow:Number(order.regionalPriceLow||order.metadata?.regionalPriceLow||s.confirmedAIRange?.low||0),regionalPriceAverage:Number(order.regionalPriceAverage||order.metadata?.regionalPriceAverage||s.confirmedAIRange?.average||0),regionalPriceHigh:Number(order.regionalPriceHigh||order.metadata?.regionalPriceHigh||s.confirmedAIRange?.high||0),publication_flow_version:189,publication_status:'awaiting_payment',priceComposition:estimate,...(temporaryTestPrice?{temporary_test_price:true,temporary_test_payment_only:true,temporary_test_price_brl:6}:{})}};
+ const rangeLow=Number(payload.metadata.regionalPriceLow),rangeAverage=Number(payload.metadata.regionalPriceAverage),rangeHigh=Number(payload.metadata.regionalPriceHigh);
+ if(!(rangeLow>0&&rangeLow<=rangeAverage&&rangeAverage<=rangeHigh))throw new Error('Refaça a análise de preço regional antes de publicar. O pedido não foi enviado.');
  const fingerprint=JSON.stringify([uid(),payload.service,payload.description,payload.location,payload.total,payload.clientDiscount,payload.date,payload.photos,(s.videos||[]).map(v=>[v.file?.name,v.file?.size,v.file?.lastModified]),[s._requestAudioFile?.name||s.audioFile?.name,s._requestAudioFile?.size||s.audioFile?.size,s._requestAudioFile?.lastModified||s.audioFile?.lastModified]]);
  if(draftFingerprint!==fingerprint){draftFingerprint=fingerprint;draftKey=crypto.randomUUID()}
  draftInFlight=(async()=>{await sessionReady();const files=[...(s._requestPhotoFiles||[]),...(s.photos||[]).map(x=>x?.file),...(s.videos||[]).map(x=>x?.file),s._requestAudioFile||s.audioFile].filter((f,i,a)=>f instanceof File&&a.indexOf(f)===i);const media=await uploadRequestMedia(files);payload.photos=(payload.photos||[]).filter(x=>x?.path||/^https:\/\//.test(String(x?.url||'')));const r=await api('orders/prepublish',{protocol_version:189,idempotency_key:draftKey,order:payload,media});const o=r?.order;
