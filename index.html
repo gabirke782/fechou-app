@@ -21598,7 +21598,7 @@ function renderServiceRecord(o, archive = false) {
             const o = state.budget;
             if (o?.publication_status === "awaiting_payment") return result;
             if (
-              o &&
+              o && !o.id && // Apenas rascunhos sem identidade persistida podem receber ajuste local.
               ((state.orders || []).length > before ||
                 String(o.id || "").startsWith("demo-"))
             ) {
