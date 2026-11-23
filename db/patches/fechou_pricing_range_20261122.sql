@@ -89,7 +89,7 @@ begin
 
   return jsonb_build_object('ok',true,'order',to_jsonb(v_order));
 end;
-$function$
+$function$;
 
 -- Alteração aplicada em 22/11/2026 no projeto ziubcqxmxialhmwevtiy.
 -- Preserva a faixa regional somente se mínimo <= médio <= máximo e todos positivos.
