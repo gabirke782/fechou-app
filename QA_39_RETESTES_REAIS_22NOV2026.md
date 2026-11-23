@@ -108,3 +108,6 @@ Os 60 registros foram reconciliados exclusivamente no diário de webhooks (`proc
 
 ### Observação financeira de segurança (histórico, não alterado)
 A consulta posterior em `fechou_wallet_ledger` encontrou **15 lançamentos payout historicamente associados a pedidos marcados `temporary_test_price`**: 7 `paid` (R$ 41,16), 5 `held` (R$ 29,40), 2 `release_ready` (R$ 11,76), 1 `cancelled` (R$ 5,88). São lançamentos anteriores à correção do webhook v59 e refletem transações e testes anteriores, possivelmente pagamentos reais de valor reduzido. **Nenhum desses lançamentos foi modificado, excluído, revertido ou sacado nesta rodada.** A v59 impede NOVAS tentativas de criar crédito de repasse quando a contratação carrega a flag de pagamento de teste. Uma análise financeira retroativa de valores pagos deve reconciliar com Asaas antes de qualquer correção.
+
+### Alcance do erro de total normalizado
+Comparação SQL de `orders.labor_reference_price` com `orders.total` em 132 pedidos: **4 linhas** têm os dois valores diferentes e seriam potencialmente exibidas com valor incorreto pelo normalizador anterior. **Nenhuma das quatro tem `payment_status='approved'`.** Esta contagem não prova a tela real, mas dimensiona o defeito na base atual.
