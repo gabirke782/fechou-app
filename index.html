@@ -6666,7 +6666,7 @@ function renderServiceRecord(o, archive = false) {
             urgency: r.urgency || meta.urgency || "Normal",
             date: r.desired_date || meta.date || "",
             quantity: Number(r.quantity || meta.quantity || 1),
-            total: Number(r.labor_reference_price || meta.laborReferencePrice || meta.priceComposition?.labor_requested || r.requested_price || meta.requestedPrice || r.total || meta.total || r.reference_price || 0),
+            total: Number(r.total ?? meta.total ?? r.requested_price ?? meta.requestedPrice ?? r.reference_price ?? meta.referencePrice ?? 0),
             referencePrice: Number(
               r.reference_price || meta.grossReferencePrice || meta.referencePrice || r.total || 0
             ),
@@ -6681,6 +6681,9 @@ function renderServiceRecord(o, archive = false) {
             weekendAdd: Number(meta.weekendAdd || 0),
             weekendSurcharge: !!meta.weekendSurcharge,
             laborAverage: Number(meta.laborAverage || 0),
+            regionalPriceLow: Number(meta.regionalPriceLow ?? meta.regional_price_low ?? r.regionalPriceLow ?? 0),
+            regionalPriceAverage: Number(meta.regionalPriceAverage ?? meta.regional_price_average ?? r.regionalPriceAverage ?? 0),
+            regionalPriceHigh: Number(meta.regionalPriceHigh ?? meta.regional_price_high ?? r.regionalPriceHigh ?? 0),
             includeMaterialsEstimate: !!meta.includeMaterialsEstimate,
             materialsEstimate: meta.materialsEstimate || null,
             materialsBreakdown: Array.isArray(meta.materialsBreakdown)
